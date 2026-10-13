@@ -19,26 +19,37 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            padding: 20px 10px;
+            padding: 10px;
         }
 
         #hymn-player-wrapper {
-            width: 100%;
-            max-width: 680px;
+            width: 95vw;
+            max-width: 850px;
+            max-height: 98vh;
             background: linear-gradient(180deg, #5c080d 0%, #300204 35%, #180203 100%);
             border: 2px solid #7d1016;
             border-radius: 12px;
-            padding: 20px;
+            padding: clamp(10px, 2.5vw, 20px);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             position: relative;
+            overflow-y: auto;
+        }
+
+        /* Personalización de scrollbar para el contenedor */
+        #hymn-player-wrapper::-webkit-scrollbar {
+            width: 6px;
+        }
+        #hymn-player-wrapper::-webkit-scrollbar-thumb {
+            background: #7d1016;
+            border-radius: 3px;
         }
 
         .player-title {
             text-align: center;
-            font-size: 1.35rem;
+            font-size: clamp(1.1rem, 2.5vw, 1.4rem);
             font-weight: 700;
             color: #ffffff;
             text-shadow: 0 2px 4px rgba(0,0,0,0.7);
@@ -75,15 +86,15 @@
             align-items: center;
             text-align: center;
             z-index: 10;
-            padding: 20px;
+            padding: 15px;
             box-sizing: border-box;
             user-select: none;
         }
 
         .poster-title-main {
-            font-size: 2.5rem;
+            font-size: clamp(1.8rem, 5vw, 2.8rem);
             font-weight: 900;
-            letter-spacing: 4px;
+            letter-spacing: 3px;
             color: #ffffff;
             text-shadow: 0 0 15px rgba(255, 255, 255, 0.5), 0 0 25px rgba(230, 57, 70, 0.8);
             margin-bottom: 2px;
@@ -91,43 +102,45 @@
         }
 
         .poster-title-sub {
-            font-size: 0.95rem;
-            letter-spacing: 8px;
+            font-size: clamp(0.75rem, 2vw, 0.95rem);
+            letter-spacing: 6px;
             color: #ffaaaa;
             text-transform: uppercase;
-            margin-bottom: 28px;
         }
 
+        /* Crédito en letras pequeñas y posicionado en la parte inferior */
         .poster-credit {
-            font-size: 0.8rem;
-            letter-spacing: 2px;
-            color: #ffebaa;
-            font-weight: 600;
+            position: absolute;
+            bottom: 10px;
+            font-size: 0.3rem;
+            letter-spacing: 1px;
+            color: rgba(255, 235, 170, 0.85);
+            font-weight: 500;
             text-transform: uppercase;
-            background: rgba(0, 0, 0, 0.45);
-            padding: 6px 18px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 235, 170, 0.3);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.4);
+            padding: 4px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 235, 170, 0.2);
         }
 
         #playerControls {
             background: #150304;
-            padding: 12px 16px;
+            padding: 10px 14px;
             border-radius: 0 0 8px 8px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-top: 1px solid #7d1016;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
 
         .controls-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.88rem;
+            font-size: clamp(0.78rem, 2vw, 0.88rem);
             color: #ffaaaa;
+            gap: 10px;
         }
 
         .timeline-container {
@@ -156,17 +169,18 @@
             align-items: center;
             justify-content: space-between;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn-ctrl {
             background: #821016;
             color: white;
             border: none;
-            padding: 8px 14px;
+            padding: 7px 12px;
             border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.88rem;
+            font-size: clamp(0.78rem, 2vw, 0.88rem);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -182,6 +196,7 @@
             align-items: center;
             gap: 8px;
             font-size: 0.85rem;
+            margin-left: auto;
         }
 
         .volume-slider {
@@ -192,8 +207,8 @@
 
         .search-input {
             width: 100%;
-            padding: 10px 14px;
-            font-size: 0.95rem;
+            padding: 9px 12px;
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
             border: 1px solid #d1d1d1;
             border-radius: 5px;
             background-color: #fbfbfb;
@@ -208,20 +223,20 @@
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 10px;
-            padding: 10px 14px;
+            padding: 8px 12px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 8px;
-            font-size: 0.88rem;
+            font-size: clamp(0.78rem, 2vw, 0.88rem);
         }
 
         .select-pantalla {
             background: #250508;
             color: #ffffff;
             border: 1px solid #9c151c;
-            padding: 6px 10px;
+            padding: 5px 8px;
             border-radius: 6px;
-            font-size: 0.85rem;
+            font-size: clamp(0.75rem, 1.8vw, 0.85rem);
             outline: none;
             cursor: pointer;
             max-width: 260px;
@@ -232,11 +247,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 5px;
+            margin-top: 2px;
         }
 
         .playlist-label {
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.8px;
@@ -244,7 +259,7 @@
         }
 
         .mode-badge {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             background: #821016;
             padding: 3px 8px;
             border-radius: 4px;
@@ -254,7 +269,8 @@
 
         #playlist {
             list-style: none;
-            max-height: 320px;
+            max-height: 30vh;
+            min-height: 120px;
             overflow-y: auto;
             background: rgba(0, 0, 0, 0.35);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -275,9 +291,9 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 9px 12px;
+            padding: 8px 12px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.9rem;
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
             cursor: pointer;
             transition: background 0.15s;
         }
@@ -328,7 +344,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 24px;
+            padding: 20px;
             text-align: center;
             z-index: 1000;
             backdrop-filter: blur(4px);
@@ -337,17 +353,17 @@
         .modal-card {
             background: #230406;
             border: 2px solid #821016;
-            padding: 24px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.8);
             max-width: 480px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             align-items: center;
         }
 
-        /* --- ESTILOS DE PANTALLA COMPLETA EN PANTALLA ÚNICA --- */
+        /* ESTILOS DE PANTALLA COMPLETA EN PANTALLA ÚNICA */
         #hymn-player-wrapper:fullscreen,
         #hymn-player-wrapper:-webkit-full-screen {
             width: 100vw !important;
@@ -405,7 +421,6 @@
 </head>
 <body>
 
-<!-- Contenedor Principal del Reproductor -->
 <div id="hymn-player-wrapper">
     <div id="permissionModal" class="modal-overlay" style="display: none;">
         <div class="modal-card">
@@ -421,7 +436,7 @@
     <div id="playerContainer">
         <h3 class="player-title">Himnario Adventista en Línea – Video</h3>
         
-        <!-- Video Container con la Portada Original -->
+        <!-- Video Container con la Portada -->
         <div class="video-container">
             <div id="posterOverlay" class="poster-overlay">
                 <div class="poster-title-main">HIMNARIO<br>ADVENTISTA</div>
@@ -541,7 +556,7 @@
         return urls;
     }
 
-    // MANEJO DE PANTALLA COMPLETA EN MODO PANTALLA ÚNICA
+    // PANTALLA COMPLETA EN MODO PANTALLA ÚNICA
     function solicitarPantallaCompletaSiUnica() {
         const isSecondaryChecked = document.getElementById('secondaryScreenCheckbox').checked;
         const wrapper = document.getElementById('hymn-player-wrapper');
@@ -564,7 +579,7 @@
         }
     }
 
-    // MANEJO DE PANTALLAS MÚLTIPLES
+    // GESTIÓN DE PANTALLAS MÚLTIPLES
     async function solicitarPermisoPantallas() {
         if ('getScreenDetails' in window) {
             try {
@@ -753,7 +768,6 @@
             mainVideo.pause();
         }
 
-        // Al finalizar el video: salir de pantalla completa y volver a la vista normal
         mainVideo.onended = () => {
             salirPantallaCompleta();
             stopHymn();
@@ -824,10 +838,10 @@
         if (secondaryWin && !secondaryWin.closed) {
             secondaryWin.document.body.innerHTML = `
                 <style>
-                    body { margin: 0; background: #0b0203; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100vw; height: 100vh; overflow: hidden; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; }
+                    body { margin: 0; background: #0b0203; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100vw; height: 100vh; overflow: hidden; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; position: relative; }
                     .sec-title { font-size: 3rem; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 20px rgba(230, 57, 70, 0.8); }
                     .sec-sub { font-size: 1.2rem; letter-spacing: 8px; color: #ffaaaa; text-transform: uppercase; margin-top: 10px; }
-                    .sec-credit { font-size: 0.85rem; letter-spacing: 2px; color: #ffebaa; font-weight: 600; text-transform: uppercase; margin-top: 25px; background: rgba(0,0,0,0.5); padding: 8px 22px; border-radius: 20px; border: 1px solid rgba(255,235,170,0.3); }
+                    .sec-credit { font-size: 0.7rem; letter-spacing: 1px; color: rgba(255, 235, 170, 0.85); font-weight: 500; text-transform: uppercase; position: absolute; bottom: 15px; background: rgba(0,0,0,0.4); padding: 4px 14px; border-radius: 12px; border: 1px solid rgba(255,235,170,0.2); }
                 </style>
                 <div class="sec-title">HIMNARIO<br>ADVENTISTA</div>
                 <div class="sec-sub">EN LÍNEA</div>
