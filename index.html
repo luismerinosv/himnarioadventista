@@ -1,140 +1,77 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Himnario Adventista Online</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; background-color: #121212; color: #fff; margin: 20px; }
-        .container { max-width: 800px; margin: auto; }
-        video { width: 100%; max-height: 450px; background: #000; border-radius: 8px; }
-        .controls { margin: 20px 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        input, select, button { padding: 10px; font-size: 16px; border-radius: 5px; border: none; }
-        input[type="number"] { width: 80px; }
-        button { cursor: pointer; background-color: #008cba; color: white; }
-        label { margin-left: 10px; font-size: 16px; display: inline-flex; align-items: center; cursor: pointer; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h2 id="tituloHimno">Cargando Himnario...</h2>
-    
-    <video id="reproductor" controls autoplay>
-        Tu navegador no soporta el reproductor de video.
-    </video>
-
-    <div class="controls">
-        <input type="number" id="numInput" min="1" max="613" placeholder="N°">
-        <button onclick="reproducirPorNumero()">Buscar Himno</button>
-        <select id="selectHimnos" onchange="seleccionarDeLista()"></select>
-
-        <label>
-            <input type="checkbox" id="chkInstrumental" onchange="cambiarModoTrack()"> 
-            Modo Instrumental (Pista)
-        </label>
-    </div>
-</div>
-
-<script>
-    let titulosMap = {};
-    let himnoActualNum = 1;
-    const baseURL = "https://files.recursos-biblicos.com/Himnario/mp4";
-
-    const videoNode = document.getElementById('reproductor');
-    const selectNode = document.getElementById('selectHimnos');
-    const tituloNode = document.getElementById('tituloHimno');
-    const numInputNode = document.getElementById('numInput');
-    const chkInstrumental = document.getElementById('chkInstrumental');
-
-    // 1. Cargar el mapa exacto titulos.json generado
-    async function cargarTitulos() {
-        try {
-            const resp = await fetch('titulos.json');
-            titulosMap = await resp.json();
-            poblarListaDesplegable();
-            reproducirHimno(1); // Cargar Himno 1 al iniciar
-        } catch (err) {
-            tituloNode.innerText = "Error cargando titulos.json. Asegúrate de haberlo subido a GitHub.";
-            console.error(err);
-        }
-    }
-
-    function poblarListaDesplegable() {
-        selectNode.innerHTML = "";
-        for (let i = 1; i <= 613; i++) {
-            const numPad = String(i).padStart(3, '0');
-            const tit = titulosMap[i] || titulosMap[numPad] || `Himno ${i}`;
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.textContent = `${numPad} - ${tit}`;
-            selectNode.appendChild(opt);
-        }
-    }
-
-    // 2. Construir la URL exacta e inyectarla en el reproductor
-    function cargarVideoConFallbacks(num, esPista, intento = 0) {
-        const numPad = String(num).padStart(3, '0');
-        const tituloReal = titulosMap[num] || titulosMap[numPad] || "";
-        
-        let subCarpeta = esPista ? "Instrumental" : "Cantado";
-        let sufijo = "";
-
-        // En modo pista, probar variaciones de sufijo si el archivo tiene otra convención
-        if (esPista) {
-            const sufijosPosibles = ["_pista.mp4", "_PISTA.mp4", ".mp4"];
-            sufijo = sufijosPosibles[intento] || "_pista.mp4";
-        } else {
-            sufijo = ".mp4";
-        }
-
-        let nombreArchivo = tituloReal ? `${numPad} ${tituloReal}${sufijo}` : `${numPad}${sufijo}`;
-        let finalURL = `${baseURL}/${subCarpeta}/${encodeURIComponent(nombreArchivo)}`;
-
-        videoNode.src = finalURL;
-        
-        // Manejador de errores para reintentar con sufijo alternativo si 404
-        videoNode.onerror = () => {
-            if (esPista && intento < 2) {
-                console.warn(`Reintentando instrumental para himno ${num} (intento ${intento + 1})...`);
-                cargarVideoConFallbacks(num, esPista, intento + 1);
-            } else {
-                console.error(`No se pudo cargar el vídeo: ${finalURL}`);
+// Carga dinámica de títulos
+async function cargarTitulosDinamicos() {
+    try {
+        const resp = await fetch('titulos.json?v=' + Date.now()); // Evita caché antigua
+        if (resp.ok) {
+            const data = await resp.json();
+            for (const k in data) {
+                const n = parseInt(k, 10);
+                if (n >= 1 && n <= 613) {
+                    titulosOficiales[n] = data[k];
+                    titulosOficiales[String(n)] = data[k];
+                }
             }
-        };
+        }
+    } catch (e) {
+        console.warn("No se pudo cargar titulos.json local, usando catálogo base.", e);
     }
 
-    function reproducirHimno(num) {
-        if (num < 1 || num > 613) return;
-        himnoActualNum = num;
-        
-        const numPad = String(num).padStart(3, '0');
-        const tituloReal = titulosMap[num] || titulosMap[numPad] || `Himno ${num}`;
-        
-        tituloNode.innerText = `Himno ${numPad}: ${tituloReal}`;
-        selectNode.value = num;
-        numInputNode.value = num;
-
-        cargarVideoConFallbacks(num, chkInstrumental.checked);
+    himnos.length = 0;
+    for (let i = 1; i <= 613; i++) {
+        const numStr = String(i).padStart(3, '0');
+        const titleStr = titulosOficiales[i] || titulosOficiales[String(i)] || `Himno ${numStr}`;
+        himnos.push({ num: numStr, title: titleStr });
     }
+    renderList(getFilteredList());
+}
 
-    function reproducirPorNumero() {
-        const val = parseInt(numInputNode.value);
-        if (val) reproducirHimno(val);
-    }
+// Generador optimizado de URLs rápidas sin reintentos lentos
+function getHymnCandidateUrls(h, isInstrumental) {
+    if (!h) return [];
+    
+    const numPad = h.num; // "132"
+    const numInt = parseInt(h.num, 10).toString(); // "132"
+    const titleRaw = h.title.trim();
+    const titleNoAcc = removeAccents(titleRaw);
+    const titleLower = titleNoAcc.toLowerCase();
+    const titleCleanPunct = cleanPunctuation(titleRaw);
 
-    function seleccionarDeLista() {
-        const val = parseInt(selectNode.value);
-        if (val) reproducirHimno(val);
-    }
+    const folder = isInstrumental ? 'Instrumental' : 'Cantado';
+    const baseUrl = `https://files.recursos-biblicos.com/Himnario/mp4/${folder}`;
 
-    function cambiarModoTrack() {
-        reproducirHimno(himnoActualNum);
-    }
+    // Variantes de títulos registradas en el servidor
+    const titleVariants = Array.from(new Set([
+        titleRaw,
+        titleNoAcc,
+        titleLower,
+        titleCleanPunct
+    ])).filter(Boolean);
 
-    // Inicializar app
-    window.addEventListener('DOMContentLoaded', cargarTitulos);
-</script>
+    const numVariants = Array.from(new Set([numPad, numInt]));
+    const fileNames = [];
 
-</body>
-</html>
+    numVariants.forEach(nv => {
+        titleVariants.forEach(tv => {
+            if (isInstrumental) {
+                fileNames.push(`${nv} ${tv}_pista.mp4`);
+                fileNames.push(`${nv} ${tv}_PISTA.mp4`);
+                fileNames.push(`${nv} ${tv}.mp4`);
+            } else {
+                fileNames.push(`${nv} ${tv}.mp4`);
+            }
+        });
+
+        // Fallbacks por número directo
+        if (isInstrumental) {
+            fileNames.push(`${nv}_pista.mp4`);
+            fileNames.push(`${nv}_PISTA.mp4`);
+            fileNames.push(`${nv}.mp4`);
+        } else {
+            fileNames.push(`${nv}.mp4`);
+        }
+    });
+
+    // Construir URLs limpias apuntando exclusivamente al servidor activo
+    const urlsUnicas = Array.from(new Set(fileNames)).map(fn => `${baseUrl}/${encodeURIComponent(fn)}`);
+    return urlsUnicas;
+}
