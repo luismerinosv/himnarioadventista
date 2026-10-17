@@ -170,6 +170,35 @@
                 padding: 2px 4px;
                 font-size: 0.72rem;
             }
+
+            .controls-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                justify-content: space-between;
+            }
+
+            /* Fila 1: 5 botones (Ant, Pausa/Reproducir, Detener, Sig, Full) */
+            .controls-buttons > .btn-ctrl:nth-child(-n+5) {
+                flex: 1 1 calc(20% - 4px);
+                min-width: 0;
+                padding: 5px 2px !important;
+                font-size: clamp(0.68rem, 2.5vw, 0.75rem) !important;
+                justify-content: center;
+                text-align: center;
+            }
+
+            /* Fila 2: Compartir y Volumen */
+            #shareBtn {
+                flex: 0 0 auto;
+                padding: 4px 8px !important;
+                font-size: 0.75rem !important;
+            }
+
+            .volume-container {
+                margin-left: auto !important;
+                gap: 4px;
+            }
         }
 
         /* --- EXCLUSIVO MÓVIL EN HORIZONTAL (LANDSCAPE FIJO) --- */
