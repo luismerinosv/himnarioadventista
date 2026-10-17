@@ -51,6 +51,7 @@
             overflow: hidden; 
             box-shadow: 0 4px 18px rgba(0,0,0,0.7); 
             flex-shrink: 0; 
+            container-type: inline-size;
         }
 
         .video-element {
@@ -86,22 +87,23 @@
         }
 
         .poster-logo {
-            max-width: 120px;
-            max-height: 120px;
-            margin-bottom: 10px;
+            max-width: min(120px, 28cqw);
+            max-height: min(120px, 28cqw);
+            margin-bottom: 8px;
             object-fit: contain;
             filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4));
         }
 
         .poster-title-main { 
-            font-size: clamp(1.2rem, 3vw, 2rem); 
+            font-size: clamp(0.75rem, 5.2cqw, 1.8rem); 
             font-weight: 900; 
-            letter-spacing: 2px; 
+            letter-spacing: 1px; 
             color: #fcecd2; 
             text-shadow: 0 0 15px rgba(248, 203, 133, 0.5), 0 0 25px rgba(184, 103, 22, 0.8); 
             margin-bottom: 2px; 
             line-height: 1.1; 
             white-space: nowrap;
+            max-width: 95%;
         }
         
         #playerControls { background: #231203; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(217, 155, 56, 0.25); display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
@@ -314,13 +316,13 @@
             }
 
             .poster-logo {
-                max-width: 55px;
-                max-height: 55px;
+                max-width: min(55px, 22cqw);
+                max-height: min(55px, 22cqw);
                 margin-bottom: 2px;
             }
 
             .poster-title-main {
-                font-size: 0.95rem;
+                font-size: clamp(0.65rem, 4.8cqw, 1.1rem);
             }
         }
     </style>
