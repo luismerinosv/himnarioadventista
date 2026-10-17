@@ -602,3 +602,243 @@
             });
         }
     }
+
+    function syncPlayerLoop() {
+        if (!currentHimno) return;
+        const mainVideo = getActiveVideo();
+        const cur = mainVideo.currentTime || 0;
+        const dur = mainVideo.duration || 0;
+
+        document.getElementById('timeCurrent').innerText = formatTime(cur);
+        document.getElementById('timeTotal').innerText = formatTime(dur);
+        if (dur > 0 && !isSeeking) {
+            document.getElementById('progressSlider').value = (cur / dur) * 100;
+        }
+        document.getElementById('playBtn').innerText = mainVideo.paused ? '▶ Reproducir' : '⏸ Pausa';
+
+        syncSecondary();
+    }
+
+    function formatTime(sec) {
+        if (isNaN(sec) || sec < 0) return "00:00";
+        const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+        return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function userSeek(val) {
+        const mainVideo = getActiveVideo();
+        if (mainVideo && mainVideo.duration) {
+            mainVideo.currentTime = (val / 100) * mainVideo.duration;
+            syncSecondary();
+        }
+    }
+
+    function setVolume(val) {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        const vol = val / 100;
+        v1.volume = vol; v2.volume = vol;
+        v1.muted = (val == 0); v2.muted = (val == 0);
+        document.getElementById('muteBtn').innerText = (val == 0 ? '🔇' : '🔊');
+    }
+
+    function toggleMute() {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        const isMuted = !v1.muted;
+        v1.muted = isMuted; v2.muted = isMuted;
+        document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+    }
+
+    function prevHymn() {
+        let newIdx = (currentIndex <= 0) ? himnosList.length - 1 : currentIndex - 1;
+        reproducirHimno(himnosList[newIdx], true);
+    }
+
+    function nextHymn() {
+        let newIdx = (currentIndex < 0 || currentIndex >= himnosList.length - 1) ? 0 : currentIndex + 1;
+        reproducirHimno(himnosList[newIdx], true);
+    }
+
+    function cambiarModoAudio() {
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
+        renderList(getFilteredList());
+    }
+
+    function getFilteredList() {
+        const rawQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+        if (!rawQuery) return himnosList;
+        const cleanQuery = removeAccents(rawQuery);
+        return himnosList.filter(h => 
+            h.num.includes(cleanQuery) || 
+            parseInt(h.num, 10).toString().includes(cleanQuery) ||
+            removeAccents(h.title.toLowerCase()).includes(cleanQuery)
+        );
+    }
+
+    function filtrarHimnos() { renderList(getFilteredList()); }
+    function manejarTeclaBusqueda(e) { if (e.key === 'Enter') { const l = getFilteredList(); if (l.length > 0) reproducirHimno(l[0], true); } }
+
+    function togglePantallaCompleta() {
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        if (!document.fullscreenElement) wrapper.requestFullscreen();
+        else document.exitFullscreen();
+    }
+
+    function compartirApp() {
+        const shareData = {
+            title: 'Himnario Adventista en Línea',
+            text: currentHimno ? `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista` : 'Te comparto el Himnario Adventista en Línea',
+            url: window.location.href
+        };
+
+        if (navigator.share) {
+            navigator.share(shareData).catch((err) => console.log('Error al compartir:', err));
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert('¡Enlace copiado al portapapeles! Puedes pegarlo en tus redes sociales.');
+        }
+    }
+
+    function getSelectedDisplay() {
+        const select = document.getElementById('screenSelect');
+        return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
+    }
+
+    function actualizarModoProyeccion() {
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const badge = document.getElementById('projectionStatusBadge');
+        const targetDisplay = getSelectedDisplay();
+
+        if (!chk.checked) {
+            badge.innerText = 'Pantalla Única';
+            badge.style.background = 'rgba(217, 155, 56, 0.2)';
+            badge.style.color = '#fff';
+
+            if (projectionWindow && !projectionWindow.closed) {
+                projectionWindow.close();
+            }
+            syncChannel.postMessage({ action: 'close' });
+            projectionWindow = null;
+            return;
+        }
+
+        badge.innerText = 'Proyectando (Ventana Externa)';
+        badge.style.background = '#2ecc71';
+        badge.style.color = '#000';
+
+        if (!projectionWindow || projectionWindow.closed) {
+            const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
+            const top = targetDisplay ? (targetDisplay.top || 0) : 0;
+            const width = targetDisplay ? (targetDisplay.width || 1280) : 1280;
+            const height = targetDisplay ? (targetDisplay.height || 720) : 720;
+
+            const windowFeatures = `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
+            projectionWindow = window.open('', 'HimnarioProyeccion', windowFeatures);
+
+            if (projectionWindow) {
+                projectionWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html lang="es">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Proyección - Himnario Adventista</title>
+                        <style>
+                            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; }
+                            video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
+                            .poster-overlay { 
+                                position: absolute; 
+                                inset: 0; 
+                                background: radial-gradient(circle at center, #9e5b15 0%, #4a2608 65%, #1d0c02 100%); 
+                                display: flex; 
+                                flex-direction: column; 
+                                justify-content: center; 
+                                align-items: center; 
+                                text-align: center; 
+                                z-index: 10; 
+                                padding: 10px; 
+                                user-select: none; 
+                            }
+                            .poster-logo {
+                                max-width: 180px;
+                                max-height: 180px;
+                                margin-bottom: 15px;
+                                object-fit: contain;
+                                filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4));
+                            }
+                            .poster-title-main { 
+                                font-size: clamp(1.8rem, 4vw, 3rem); 
+                                font-weight: 900; 
+                                letter-spacing: 3px; 
+                                color: #fcecd2; 
+                                text-shadow: 0 0 15px rgba(248, 203, 133, 0.5), 0 0 25px rgba(184, 103, 22, 0.8); 
+                                margin-bottom: 2px; 
+                                line-height: 1.1; 
+                                white-space: nowrap;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="projPoster" class="poster-overlay">
+                            <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
+                            <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
+                        </div>
+                        <video id="projVideo" autoplay crossorigin="anonymous"></video>
+                        <script>
+                            const bc = new BroadcastChannel('hymn_projection_sync');
+                            const v = document.getElementById('projVideo');
+                            const poster = document.getElementById('projPoster');
+                            
+                            bc.onmessage = (e) => {
+                                const data = e.data;
+                                if (data.action === 'close') {
+                                    window.close();
+                                    return;
+                                }
+                                if (!data.videoUrl) {
+                                    v.pause();
+                                    v.removeAttribute('src');
+                                    v.load();
+                                    poster.style.display = 'flex';
+                                } else {
+                                    poster.style.display = 'none';
+                                    if (v.src !== data.videoUrl) {
+                                        v.src = data.videoUrl;
+                                    }
+                                    if (Math.abs(v.currentTime - data.currentTime) > 0.4) {
+                                        v.currentTime = data.currentTime;
+                                    }
+                                    if (data.isPaused && !v.paused) v.pause();
+                                    if (!data.isPaused && v.paused) v.play().catch(()=>{});
+                                }
+                            };
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+            }
+        }
+
+        syncSecondary();
+    }
+
+    function alSeleccionarPantalla() {
+        actualizarModoProyeccion();
+    }
+
+    window.addEventListener('beforeunload', () => {
+        syncChannel.postMessage({ action: 'close' });
+        if (projectionWindow && !projectionWindow.closed) {
+            projectionWindow.close();
+        }
+    });
+
+    window.onload = async () => {
+        await cargarCalculoLocal();
+        setInterval(syncPlayerLoop, 250);
+    };
+</script>
+</body>
+</html>
