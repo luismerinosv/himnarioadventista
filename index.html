@@ -173,18 +173,19 @@
                 overflow: hidden;
             }
 
-            /* Sección flexbox contenedora para centrado vertical perfecto */
+            /* Alineación del reproductor en la parte superior de la columna izquierda */
             .video-section {
                 grid-area: video;
                 width: 100%;
                 height: 100%;
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 justify-content: center;
                 overflow: hidden;
+                padding-top: 0;
             }
 
-            /* El reproductor de video se ajusta al flexbox centrado */
+            /* El reproductor de video se ajusta al ancho completo en la parte superior */
             .video-container {
                 width: 100%;
                 max-width: 100%;
