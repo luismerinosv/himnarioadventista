@@ -214,7 +214,6 @@
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
 
-    // Canal de comunicación en tiempo real
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
     let projectionWindow = null;
 
@@ -590,7 +589,6 @@
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
 
-            // Cerrar ventana proyectada si se desmarca el checkbox
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
             }
@@ -620,15 +618,51 @@
                         <meta charset="UTF-8">
                         <title>Proyección - Himnario Adventista</title>
                         <style>
-                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
-                            video { width: 100vw; height: 100vh; object-fit: contain; }
+                            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; }
+                            video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
+                            .poster-overlay { 
+                                position: absolute; 
+                                inset: 0; 
+                                background: radial-gradient(circle at center, #9e5b15 0%, #4a2608 65%, #1d0c02 100%); 
+                                display: flex; 
+                                flex-direction: column; 
+                                justify-content: center; 
+                                align-items: center; 
+                                text-align: center; 
+                                z-index: 10; 
+                                padding: 10px; 
+                                user-select: none; 
+                            }
+                            .poster-logo {
+                                max-width: 180px;
+                                max-height: 180px;
+                                margin-bottom: 15px;
+                                object-fit: contain;
+                                filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4));
+                            }
+                            .poster-title-main { 
+                                font-size: clamp(1.8rem, 4vw, 3rem); 
+                                font-weight: 900; 
+                                letter-spacing: 3px; 
+                                color: #fcecd2; 
+                                text-shadow: 0 0 15px rgba(248, 203, 133, 0.5), 0 0 25px rgba(184, 103, 22, 0.8); 
+                                margin-bottom: 2px; 
+                                line-height: 1.1; 
+                                white-space: nowrap;
+                            }
                         </style>
                     </head>
                     <body>
+                        <div id="projPoster" class="poster-overlay">
+                            <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
+                            <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
+                        </div>
                         <video id="projVideo" autoplay crossorigin="anonymous"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
                             const v = document.getElementById('projVideo');
+                            const poster = document.getElementById('projPoster');
                             
                             bc.onmessage = (e) => {
                                 const data = e.data;
@@ -638,8 +672,11 @@
                                 }
                                 if (!data.videoUrl) {
                                     v.pause();
-                                    v.src = '';
+                                    v.removeAttribute('src');
+                                    v.load();
+                                    poster.style.display = 'flex';
                                 } else {
+                                    poster.style.display = 'none';
                                     if (v.src !== data.videoUrl) {
                                         v.src = data.videoUrl;
                                     }
@@ -664,7 +701,6 @@
         actualizarModoProyeccion();
     }
 
-    // CIERRE AUTOMÁTICO AL CERRAR O RECARGAR LA PÁGINA PRINCIPAL
     window.addEventListener('beforeunload', () => {
         syncChannel.postMessage({ action: 'close' });
         if (projectionWindow && !projectionWindow.closed) {
