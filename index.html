@@ -142,7 +142,7 @@
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
         #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
 
-        /* --- VISTA HORIZONTAL PARA MÓVILES --- */
+        /* --- DISEÑO HORIZONTAL EN MÓVILES (SOLO VIDEO A LA IZQUIERDA, TODO A LA DERECHA) --- */
         @media (orientation: landscape) and (max-height: 600px) {
             #hymn-player-wrapper {
                 padding: 4px 8px;
@@ -150,27 +150,40 @@
 
             #playerContainer {
                 display: grid;
-                grid-template-columns: 1.15fr 0.85fr;
-                grid-template-rows: 32px auto 22px 1fr;
+                grid-template-columns: 1.1fr 0.9fr;
+                grid-template-rows: auto auto auto auto 1fr;
                 grid-template-areas:
                     "video search"
+                    "video controls"
                     "video checkboxes"
-                    "controls header"
-                    "controls playlist";
+                    "video header"
+                    "video playlist";
                 gap: 4px;
                 height: 100%;
                 overflow: hidden;
             }
 
+            /* Video centrado en toda la columna izquierda */
             .video-container {
                 grid-area: video;
                 width: 100%;
                 max-width: 100%;
-                max-height: 48vh;
+                max-height: 100%;
                 aspect-ratio: 16 / 9;
-                margin: 0;
+                margin: auto 0;
+                align-self: center;
             }
 
+            /* Barra de búsqueda delgada en la columna derecha */
+            .search-input {
+                grid-area: search;
+                height: 32px !important;
+                padding: 2px 8px;
+                font-size: 0.75rem;
+                align-self: start;
+            }
+
+            /* Controles del reproductor debajo de la búsqueda */
             #playerControls {
                 grid-area: controls;
                 padding: 4px 6px;
@@ -178,7 +191,7 @@
             }
 
             .controls-header {
-                font-size: 0.68rem;
+                font-size: 0.65rem;
             }
 
             .timeline-container {
@@ -186,8 +199,8 @@
             }
 
             .time-text {
-                font-size: 0.65rem;
-                min-width: 32px;
+                font-size: 0.62rem;
+                min-width: 30px;
             }
 
             .progress-slider {
@@ -199,33 +212,23 @@
             }
 
             .btn-ctrl {
-                padding: 2px 6px;
-                font-size: 0.68rem;
+                padding: 2px 5px;
+                font-size: 0.65rem;
             }
 
             .volume-container {
                 gap: 4px;
-                font-size: 0.72rem;
+                font-size: 0.68rem;
             }
 
             .volume-slider {
-                width: 50px;
-            }
-
-            /* Mantiene la barra de búsqueda delgada */
-            .search-input {
-                grid-area: search;
-                height: 32px !important;
-                padding: 2px 8px;
-                font-size: 0.75rem;
-                align-self: start;
+                width: 45px;
             }
 
             .checkbox-container {
                 grid-area: checkboxes;
                 padding: 2px 6px;
                 font-size: 0.68rem;
-                align-self: start;
             }
 
             .select-pantalla {
@@ -267,13 +270,13 @@
             }
 
             .poster-logo {
-                max-width: 60px;
-                max-height: 60px;
+                max-width: 65px;
+                max-height: 65px;
                 margin-bottom: 2px;
             }
 
             .poster-title-main {
-                font-size: 1rem;
+                font-size: 1.1rem;
             }
         }
     </style>
