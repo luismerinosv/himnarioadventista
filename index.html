@@ -150,8 +150,8 @@
 
             #playerContainer {
                 display: grid;
-                grid-template-columns: 1.1fr 0.9fr;
-                grid-template-rows: auto auto auto auto 1fr;
+                grid-template-columns: 1.15fr 0.85fr;
+                grid-template-rows: 32px auto auto 20px 1fr;
                 grid-template-areas:
                     "video search"
                     "video controls"
@@ -163,18 +163,19 @@
                 overflow: hidden;
             }
 
-            /* Video centrado en toda la columna izquierda */
+            /* Video centrado únicamente en la columna izquierda */
             .video-container {
                 grid-area: video;
                 width: 100%;
                 max-width: 100%;
+                height: 100%;
                 max-height: 100%;
                 aspect-ratio: 16 / 9;
                 margin: auto 0;
                 align-self: center;
             }
 
-            /* Barra de búsqueda delgada en la columna derecha */
+            /* Barra de búsqueda delgada a la derecha */
             .search-input {
                 grid-area: search;
                 height: 32px !important;
@@ -183,7 +184,7 @@
                 align-self: start;
             }
 
-            /* Controles del reproductor debajo de la búsqueda */
+            /* Controles a la derecha debajo de la búsqueda */
             #playerControls {
                 grid-area: controls;
                 padding: 4px 6px;
@@ -208,7 +209,7 @@
             }
 
             .controls-buttons {
-                gap: 4px;
+                gap: 3px;
             }
 
             .btn-ctrl {
@@ -405,8 +406,18 @@
         himnosList.length = 0;
         for (let i = 1; i <= 613; i++) {
             const numStr = String(i).padStart(3, '0');
-            const titleStr = titulosDiccionario[i] || titulosDiccionario[String(i)] || `Himno ${i}`;
-            himnosList.push({ num: numStr, title: titleStr });
+            const rawEntry = titulosDiccionario[i] || titulosDiccionario[String(i)] || titulosDiccionario[numStr];
+            let titleStr = `Himno ${i}`;
+            
+            if (typeof rawEntry === 'string') {
+                titleStr = rawEntry;
+            } else if (rawEntry && typeof rawEntry === 'object') {
+                if (typeof rawEntry.titulo === 'string') titleStr = rawEntry.titulo;
+                else if (typeof rawEntry.title === 'string') titleStr = rawEntry.title;
+                else if (typeof rawEntry.nombre === 'string') titleStr = rawEntry.nombre;
+            }
+
+            himnosList.push({ num: numStr, title: String(titleStr) });
         }
 
         renderList(getFilteredList());
@@ -524,8 +535,15 @@
 
         let videoUrl = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
         const localTargetMap = isInstrumental ? instrumentalFilesMap : cantadoFilesMap;
+        
         if (localTargetMap && localTargetMap[h.num]) {
             videoUrl = localTargetMap[h.num];
+        } else {
+            const rawEntry = titulosDiccionario[parseInt(h.num, 10)] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
+            if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
+                const suffix = isInstrumental ? '_pista.mp4' : '.mp4';
+                videoUrl = `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`;
+            }
         }
 
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
