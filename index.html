@@ -340,8 +340,8 @@
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline autopictureinpicture></video>
-                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline autopictureinpicture></video>
+                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline></video>
             </div>
         </div>
 
@@ -364,7 +364,6 @@
                 <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
-                <button class="btn-ctrl" id="pipBtn" onclick="togglePiP()">📺 PiP</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
@@ -430,21 +429,40 @@
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
-    /* --- LÓGICA DE VENTANA FLOTANTE (PICTURE-IN-PICTURE) --- */
-    async function togglePiP() {
-        const mainVideo = getActiveVideo();
-        try {
-            if (document.pictureInPictureElement) {
-                await document.exitPictureInPicture();
-            } else if (mainVideo) {
-                await mainVideo.requestPictureInPicture();
-            }
-        } catch (error) {
-            console.log("Picture-in-Picture no disponible o denegado:", error);
-        }
-    }
+    /* --- REPRODUCTOR DE AUDIO EN SEGUNDO PLANO --- */
+    const bgAudio = new Audio();
+    bgAudio.preload = 'auto';
 
-    /* --- CONFIGURACIÓN PARA REPRODUCCIÓN EN SEGUNDO PLANO (MEDIA SESSION API) --- */
+    bgAudio.onended = () => {
+        nextHymn();
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        const mainVideo = getActiveVideo();
+        if (document.hidden) {
+            if (mainVideo && !mainVideo.paused && mainVideo.src) {
+                bgAudio.src = mainVideo.src;
+                bgAudio.currentTime = mainVideo.currentTime;
+                bgAudio.volume = mainVideo.volume;
+                bgAudio.muted = mainVideo.muted;
+                bgAudio.play().catch(err => console.log("Bg audio error:", err));
+                mainVideo.pause();
+            }
+        } else {
+            if (!bgAudio.paused && bgAudio.src) {
+                if (mainVideo) {
+                    mainVideo.currentTime = bgAudio.currentTime;
+                    mainVideo.play().catch(() => {});
+                }
+                bgAudio.pause();
+                bgAudio.removeAttribute('src');
+            } else if (mainVideo && bgAudio.currentTime > 0) {
+                mainVideo.currentTime = bgAudio.currentTime;
+            }
+        }
+    });
+
+    /* --- CONFIGURACIÓN PARA CONTROLES DE PANTALLA DE BLOQUEO (MEDIA SESSION API) --- */
     function setupMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
@@ -452,11 +470,11 @@
             navigator.mediaSession.setActionHandler('previoustrack', () => { prevHymn(); });
             navigator.mediaSession.setActionHandler('nexttrack', () => { nextHymn(); });
             navigator.mediaSession.setActionHandler('seekto', (details) => {
-                const mainVideo = getActiveVideo();
-                if (details.fastSeek && ('fastSeek' in mainVideo)) {
-                    mainVideo.fastSeek(details.seekTime);
+                const activeMedia = document.hidden ? bgAudio : getActiveVideo();
+                if (details.fastSeek && ('fastSeek' in activeMedia)) {
+                    activeMedia.fastSeek(details.seekTime);
                 } else {
-                    mainVideo.currentTime = details.seekTime;
+                    activeMedia.currentTime = details.seekTime;
                 }
             });
         }
@@ -648,6 +666,16 @@
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
         updateMediaSessionMetadata();
 
+        if (document.hidden) {
+            bgAudio.src = videoUrl;
+            bgAudio.currentTime = 0;
+            bgAudio.volume = getActiveVideo().volume;
+            bgAudio.muted = getActiveVideo().muted;
+            if (autoPlay) bgAudio.play().catch(() => {});
+            updateActiveListItem();
+            return;
+        }
+
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
@@ -696,9 +724,15 @@
 
     function togglePlay() {
         if (!currentHimno) { reproducirHimno(himnosList[0], true); return; }
-        const mainVideo = getActiveVideo();
-        if (mainVideo.paused) mainVideo.play();
-        else mainVideo.pause();
+        
+        if (document.hidden) {
+            if (bgAudio.paused) bgAudio.play();
+            else bgAudio.pause();
+        } else {
+            const mainVideo = getActiveVideo();
+            if (mainVideo.paused) mainVideo.play();
+            else mainVideo.pause();
+        }
 
         syncSecondary();
     }
@@ -706,6 +740,10 @@
     function stopHymn() {
         currentHimno = null;
         currentIndex = -1;
+        
+        bgAudio.pause();
+        bgAudio.removeAttribute('src');
+
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
 
@@ -745,24 +783,24 @@
 
     function syncPlayerLoop() {
         if (!currentHimno) return;
-        const mainVideo = getActiveVideo();
-        const cur = mainVideo.currentTime || 0;
-        const dur = mainVideo.duration || 0;
+        const activeMedia = document.hidden ? bgAudio : getActiveVideo();
+        const cur = activeMedia.currentTime || 0;
+        const dur = activeMedia.duration || getActiveVideo().duration || 0;
 
         document.getElementById('timeCurrent').innerText = formatTime(cur);
         document.getElementById('timeTotal').innerText = formatTime(dur);
         if (dur > 0 && !isSeeking) {
             document.getElementById('progressSlider').value = (cur / dur) * 100;
         }
-        document.getElementById('playBtn').innerText = mainVideo.paused ? '▶ Reproducir' : '⏸ Pausa';
+        document.getElementById('playBtn').innerText = activeMedia.paused ? '▶ Reproducir' : '⏸ Pausa';
 
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = mainVideo.paused ? 'paused' : 'playing';
+            navigator.mediaSession.playbackState = activeMedia.paused ? 'paused' : 'playing';
             if (dur > 0 && ('setPositionState' in navigator.mediaSession)) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: dur,
-                        playbackRate: mainVideo.playbackRate || 1,
+                        playbackRate: activeMedia.playbackRate || 1,
                         position: Math.min(cur, dur)
                     });
                 } catch(e) {}
@@ -779,9 +817,9 @@
     }
 
     function userSeek(val) {
-        const mainVideo = getActiveVideo();
-        if (mainVideo && mainVideo.duration) {
-            mainVideo.currentTime = (val / 100) * mainVideo.duration;
+        const activeMedia = document.hidden ? bgAudio : getActiveVideo();
+        if (activeMedia && activeMedia.duration) {
+            activeMedia.currentTime = (val / 100) * activeMedia.duration;
             syncSecondary();
         }
     }
@@ -790,8 +828,8 @@
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
         const vol = val / 100;
-        v1.volume = vol; v2.volume = vol;
-        v1.muted = (val == 0); v2.muted = (val == 0);
+        v1.volume = vol; v2.volume = vol; bgAudio.volume = vol;
+        v1.muted = (val == 0); v2.muted = (val == 0); bgAudio.muted = (val == 0);
         document.getElementById('muteBtn').innerText = (val == 0 ? '🔇' : '🔊');
     }
 
@@ -799,7 +837,7 @@
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
         const isMuted = !v1.muted;
-        v1.muted = isMuted; v2.muted = isMuted;
+        v1.muted = isMuted; v2.muted = isMuted; bgAudio.muted = isMuted;
         document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
     }
 
