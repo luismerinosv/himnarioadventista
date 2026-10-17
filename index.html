@@ -340,8 +340,8 @@
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" crossorigin="anonymous"></video>
-                <video id="myMedia2" class="video-element" crossorigin="anonymous"></video>
+                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline></video>
             </div>
         </div>
 
@@ -427,6 +427,38 @@
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    /* --- CONFIGURACIÓN PARA REPRODUCCIÓN EN SEGUNDO PLANO (MEDIA SESSION API) --- */
+    function setupMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
+            navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+            navigator.mediaSession.setActionHandler('previoustrack', () => { prevHymn(); });
+            navigator.mediaSession.setActionHandler('nexttrack', () => { nextHymn(); });
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                const mainVideo = getActiveVideo();
+                if (details.fastSeek && ('fastSeek' in mainVideo)) {
+                    mainVideo.fastSeek(details.seekTime);
+                } else {
+                    mainVideo.currentTime = details.seekTime;
+                }
+            });
+        }
+    }
+
+    function updateMediaSessionMetadata() {
+        if ('mediaSession' in navigator && currentHimno) {
+            const isInst = document.getElementById('instrumentalCheckbox').checked;
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`,
+                artist: 'Himnario Adventista',
+                album: isInst ? 'Modo Instrumental' : 'Modo Cantado',
+                artwork: [
+                    { src: 'logo-adventista.webp', sizes: '512x512', type: 'image/webp' }
+                ]
+            });
+        }
     }
 
     async function cargarCalculoLocal() {
@@ -567,6 +599,7 @@
                 currentIndex = himnosList.findIndex(item => item.num === h.num);
                 document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
                 updateActiveListItem();
+                updateMediaSessionMetadata();
             }, 220);
         }
     }
@@ -598,6 +631,7 @@
         }
 
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+        updateMediaSessionMetadata();
 
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
@@ -673,6 +707,10 @@
         document.getElementById('progressSlider').value = 0;
         updateActiveListItem();
 
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'none';
+        }
+
         syncSecondary();
     }
 
@@ -702,6 +740,19 @@
             document.getElementById('progressSlider').value = (cur / dur) * 100;
         }
         document.getElementById('playBtn').innerText = mainVideo.paused ? '▶ Reproducir' : '⏸ Pausa';
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = mainVideo.paused ? 'paused' : 'playing';
+            if (dur > 0 && ('setPositionState' in navigator.mediaSession)) {
+                try {
+                    navigator.mediaSession.setPositionState({
+                        duration: dur,
+                        playbackRate: mainVideo.playbackRate || 1,
+                        position: Math.min(cur, dur)
+                    });
+                } catch(e) {}
+            }
+        }
 
         syncSecondary();
     }
@@ -751,6 +802,7 @@
         const isInst = document.getElementById('instrumentalCheckbox').checked;
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
         renderList(getFilteredList());
+        updateMediaSessionMetadata();
     }
 
     function getFilteredList() {
@@ -953,6 +1005,7 @@
     });
 
     window.onload = async () => {
+        setupMediaSession();
         await cargarCalculoLocal();
         setInterval(syncPlayerLoop, 250);
     };
