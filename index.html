@@ -1,77 +1,644 @@
-// Carga dinámica de títulos
-async function cargarTitulosDinamicos() {
-    try {
-        const resp = await fetch('titulos.json?v=' + Date.now()); // Evita caché antigua
-        if (resp.ok) {
-            const data = await resp.json();
-            for (const k in data) {
-                const n = parseInt(k, 10);
-                if (n >= 1 && n <= 613) {
-                    titulosOficiales[n] = data[k];
-                    titulosOficiales[String(n)] = data[k];
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Himnario Adventista en Línea</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0d0601; color: #f7dfb8; display: flex; justify-content: center; align-items: stretch; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        #hymn-player-wrapper { 
+            width: 100%; 
+            height: 100vh; 
+            max-width: 950px; 
+            margin: 0 auto; 
+            background: linear-gradient(180deg, #59350f 0%, #2f1906 35%, #180c02 100%); 
+            padding: 10px 15px; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            position: relative; 
+        }
+
+        #playerContainer { 
+            display: flex; 
+            flex-direction: column; 
+            width: 100%; 
+            height: 100%; 
+            gap: 6px; 
+            overflow: hidden; 
+            justify-content: flex-start;
+        }
+
+        .video-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 680px; 
+            max-height: 38vh;
+            aspect-ratio: 16 / 9; 
+            margin: 0 auto; 
+            background-color: #000; 
+            border-radius: 8px; 
+            border: 1px solid rgba(217, 155, 56, 0.3); 
+            overflow: hidden; 
+            box-shadow: 0 4px 18px rgba(0,0,0,0.7); 
+            flex-shrink: 0; 
+        }
+
+        .video-element {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            background: #000;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 1;
+        }
+
+        .video-element.active {
+            opacity: 1;
+            z-index: 2;
+        }
+        
+        .poster-overlay { 
+            position: absolute; 
+            inset: 0; 
+            background: radial-gradient(circle at center, #9e5b15 0%, #4a2608 65%, #1d0c02 100%); 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            text-align: center; 
+            z-index: 10; 
+            padding: 10px; 
+            user-select: none; 
+        }
+
+        .poster-logo {
+            max-width: 120px;
+            max-height: 120px;
+            margin-bottom: 10px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4));
+        }
+
+        .poster-title-main { 
+            font-size: clamp(1.2rem, 3vw, 2rem); 
+            font-weight: 900; 
+            letter-spacing: 2px; 
+            color: #fcecd2; 
+            text-shadow: 0 0 15px rgba(248, 203, 133, 0.5), 0 0 25px rgba(184, 103, 22, 0.8); 
+            margin-bottom: 2px; 
+            line-height: 1.1; 
+            white-space: nowrap;
+        }
+        
+        #playerControls { background: #231203; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(217, 155, 56, 0.25); display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+        .controls-header { display: flex; justify-content: space-between; align-items: center; font-size: clamp(0.75rem, 1.8vw, 0.85rem); color: #ebd1a7; gap: 10px; }
+        .timeline-container { display: flex; align-items: center; gap: 10px; width: 100%; }
+        .time-text { font-size: 0.78rem; color: #d1ba98; font-family: monospace; min-width: 40px; }
+        .progress-slider { flex: 1; accent-color: #d9822b; cursor: pointer; height: 5px; }
+        .controls-buttons { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+        .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 5px; transition: background 0.2s; }
+        .btn-ctrl:hover { background: #9e5614; }
+        .volume-container { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin-left: auto; }
+        .volume-slider { width: 75px; accent-color: #d9822b; cursor: pointer; }
+        .search-input { width: 100%; padding: 6px 10px; font-size: clamp(0.8rem, 1.8vw, 0.9rem); border: 1px solid #b89363; border-radius: 5px; background-color: #f8ebd5; color: #2d1704; outline: none; flex-shrink: 0; font-weight: 600; }
+        .checkbox-container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 5px 10px; background: rgba(18, 9, 2, 0.45); border: 1px solid rgba(217, 155, 56, 0.2); border-radius: 6px; font-size: clamp(0.75rem, 1.8vw, 0.85rem); flex-shrink: 0; }
+        .select-pantalla { background: #3b1d05; color: #f7dfb8; border: 1px solid #7a420f; padding: 3px 6px; border-radius: 5px; font-size: clamp(0.72rem, 1.6vw, 0.82rem); outline: none; cursor: pointer; max-width: 240px; font-weight: 500; }
+        .playlist-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1px; flex-shrink: 0; }
+        .playlist-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #ebd1a7; }
+        .mode-badge { font-size: 0.7rem; background: #7a420f; padding: 2px 7px; border-radius: 4px; font-weight: 600; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); }
+        
+        #playlist { 
+            list-style: none; 
+            flex: 1;
+            min-height: 100px;
+            height: 0;
+            overflow-y: auto; 
+            background: rgba(18, 9, 2, 0.5); 
+            border: 1px solid rgba(217, 155, 56, 0.15); 
+            border-radius: 6px; 
+            user-select: none; 
+        }
+
+        #playlist::-webkit-scrollbar { width: 6px; }
+        #playlist::-webkit-scrollbar-thumb { background: #7a420f; border-radius: 3px; }
+        .playlist-item { display: flex; align-items: center; gap: 10px; padding: 0 10px; height: 36px; box-sizing: border-box; border-bottom: 1px solid rgba(217, 155, 56, 0.08); font-size: clamp(0.78rem, 1.8vw, 0.88rem); cursor: pointer; transition: background 0.15s; color: #ebd1a7; }
+        .playlist-item:hover { background: rgba(217, 155, 56, 0.15); }
+        .playlist-item.active { background: rgba(158, 86, 20, 0.65); font-weight: 600; color: #ffffff; }
+        .play-bullet { width: 16px; height: 16px; background-color: #7a420f; border: 1px solid rgba(242, 203, 148, 0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+        .play-bullet::after { content: ''; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid #ffffff; margin-left: 1px; }
+        .esc-notice { display: none; font-size: 0.78rem; color: #ebd1a7; font-style: italic; margin-left: 6px; }
+
+        #hymn-player-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; padding: 0 !important; margin: 0 !important; background: #000 !important; }
+        #hymn-player-wrapper:fullscreen .video-container { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; aspect-ratio: unset !important; border: none !important; border-radius: 0 !important; }
+        #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
+        #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
+        #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="hymn-player-wrapper">
+    <div id="playerContainer">
+        <div class="video-container">
+            <div id="posterOverlay" class="poster-overlay">
+                <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
+                <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
+            </div>
+            <video id="myMedia1" class="video-element active" crossorigin="anonymous"></video>
+            <video id="myMedia2" class="video-element" crossorigin="anonymous"></video>
+        </div>
+
+        <div id="playerControls">
+            <div class="controls-header">
+                <span id="playerCurrentTitle" style="font-weight: bold; color: #fff;">Seleccione un himno para comenzar</span>
+                <span id="projectionStatusBadge" style="font-size:0.75rem; background:rgba(217, 155, 56, 0.2); padding:2px 6px; border-radius:3px;">Pantalla Única</span>
+            </div>
+
+            <div class="timeline-container">
+                <span id="timeCurrent" class="time-text">00:00</span>
+                <input type="range" id="progressSlider" class="progress-slider" value="0" min="0" max="100" onmousedown="isSeeking=true" onmouseup="isSeeking=false" oninput="userSeek(this.value)" onchange="isSeeking=false">
+                <span id="timeTotal" class="time-text">00:00</span>
+            </div>
+
+            <div class="controls-buttons">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <button class="btn-ctrl" onclick="prevHymn()">⏮ Anterior</button>
+                    <button class="btn-ctrl" id="playBtn" onclick="togglePlay()">▶ Reproducir</button>
+                    <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
+                    <button class="btn-ctrl" onclick="nextHymn()">Siguiente ⏭</button>
+                    <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Pantalla Completa</button>
+                    <span class="esc-notice">(Presiona ESC para salir)</span>
+                </div>
+
+                <div class="volume-container">
+                    <button class="btn-ctrl" id="muteBtn" style="padding:5px 9px;" onclick="toggleMute()">🔊</button>
+                    <input type="range" id="volumeSlider" class="volume-slider" value="100" min="0" max="100" oninput="setVolume(this.value)">
+                </div>
+            </div>
+        </div>
+
+        <input type="text" id="searchInput" class="search-input" placeholder="Buscar himno por nombre o número..." oninput="filtrarHimnos()" onkeydown="manejarTeclaBusqueda(event)">
+        
+        <div class="checkbox-container">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="secondaryScreenCheckbox" onchange="actualizarModoProyeccion()">
+                <span style="font-weight: 600; color: #ebd1a7;">Proyectar en:</span>
+            </label>
+
+            <select id="screenSelect" class="select-pantalla" onchange="alSeleccionarPantalla()">
+                <option value="-1">Cargando pantallas...</option>
+            </select>
+
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-left: auto;">
+                <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
+                <span>Instrumental</span>
+            </label>
+        </div>
+
+        <div class="playlist-header">
+            <label class="playlist-label">LISTA DE HIMNOS</label>
+            <span id="modeBadge" class="mode-badge">MODO: CANTADO</span>
+        </div>
+        
+        <ul id="playlist"></ul>
+    </div>
+</div>
+
+<script>
+    const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
+
+    let cantadoFilesMap = {};
+    let instrumentalFilesMap = {};
+    let titulosDiccionario = {};
+    const himnosList = [];
+
+    let currentIndex = -1;
+    let currentHimno = null;
+    let clickTimer = null;
+    let displaysList = [];
+    let isSeeking = false;
+
+    let activeVidId = 'myMedia1';
+    function getActiveVideo() { return document.getElementById(activeVidId); }
+    function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
+    function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
+
+    function removeAccents(str) {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    async function cargarCalculoLocal() {
+        try {
+            const response = await fetch(`${CLOUDFLARE_R2_URL}/titulos.json`);
+            if (response.ok) {
+                titulosDiccionario = await response.json();
+            } else {
+                throw new Error("No se pudo cargar titulos.json desde R2");
+            }
+        } catch (e) {
+            console.warn("Intentando cargar titulos.json local de respaldo...", e);
+            try {
+                const resLocal = await fetch('titulos.json');
+                if (resLocal.ok) {
+                    titulosDiccionario = await resLocal.json();
+                } else if (window.electronAPI && window.electronAPI.getHimnosData) {
+                    const data = await window.electronAPI.getHimnosData();
+                    titulosDiccionario = data.titulos || {};
+                    cantadoFilesMap = data.cantado || {};
+                    instrumentalFilesMap = data.instrumental || {};
                 }
+            } catch (err) {
+                titulosDiccionario = {};
             }
         }
-    } catch (e) {
-        console.warn("No se pudo cargar titulos.json local, usando catálogo base.", e);
-    }
 
-    himnos.length = 0;
-    for (let i = 1; i <= 613; i++) {
-        const numStr = String(i).padStart(3, '0');
-        const titleStr = titulosOficiales[i] || titulosOficiales[String(i)] || `Himno ${numStr}`;
-        himnos.push({ num: numStr, title: titleStr });
-    }
-    renderList(getFilteredList());
-}
-
-// Generador optimizado de URLs rápidas sin reintentos lentos
-function getHymnCandidateUrls(h, isInstrumental) {
-    if (!h) return [];
-    
-    const numPad = h.num; // "132"
-    const numInt = parseInt(h.num, 10).toString(); // "132"
-    const titleRaw = h.title.trim();
-    const titleNoAcc = removeAccents(titleRaw);
-    const titleLower = titleNoAcc.toLowerCase();
-    const titleCleanPunct = cleanPunctuation(titleRaw);
-
-    const folder = isInstrumental ? 'Instrumental' : 'Cantado';
-    const baseUrl = `https://files.recursos-biblicos.com/Himnario/mp4/${folder}`;
-
-    // Variantes de títulos registradas en el servidor
-    const titleVariants = Array.from(new Set([
-        titleRaw,
-        titleNoAcc,
-        titleLower,
-        titleCleanPunct
-    ])).filter(Boolean);
-
-    const numVariants = Array.from(new Set([numPad, numInt]));
-    const fileNames = [];
-
-    numVariants.forEach(nv => {
-        titleVariants.forEach(tv => {
-            if (isInstrumental) {
-                fileNames.push(`${nv} ${tv}_pista.mp4`);
-                fileNames.push(`${nv} ${tv}_PISTA.mp4`);
-                fileNames.push(`${nv} ${tv}.mp4`);
-            } else {
-                fileNames.push(`${nv} ${tv}.mp4`);
+        himnosList.length = 0;
+        for (let i = 1; i <= 613; i++) {
+            const numStr = String(i).padStart(3, '0');
+            const rawEntry = titulosDiccionario[i] || titulosDiccionario[String(i)] || titulosDiccionario[numStr];
+            let titleStr = `Himno ${i}`;
+            
+            if (typeof rawEntry === 'string') {
+                titleStr = rawEntry;
+            } else if (rawEntry && typeof rawEntry === 'object') {
+                titleStr = rawEntry.titulo || `Himno ${i}`;
             }
+
+            himnosList.push({ num: numStr, title: titleStr });
+        }
+
+        renderList(getFilteredList());
+        await cargarPantallas();
+    }
+
+    async function cargarPantallas() {
+        if (window.electronAPI && window.electronAPI.getDisplays) {
+            try {
+                displaysList = await window.electronAPI.getDisplays();
+            } catch (err) {
+                displaysList = [{ id: 'primary', label: 'Pantalla Principal', isPrimary: true }];
+            }
+        } else {
+            displaysList = [{ id: 'primary', label: 'Pantalla Principal (Navegador)', isPrimary: true }];
+        }
+
+        const select = document.getElementById('screenSelect');
+        const selectedVal = select.value;
+        select.innerHTML = '';
+
+        displaysList.forEach((d) => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.isPrimary ? '💻' : '🖥️'} ${d.label}`;
+            select.appendChild(opt);
         });
 
-        // Fallbacks por número directo
-        if (isInstrumental) {
-            fileNames.push(`${nv}_pista.mp4`);
-            fileNames.push(`${nv}_PISTA.mp4`);
-            fileNames.push(`${nv}.mp4`);
+        if (displaysList.some(d => String(d.id) === String(selectedVal))) {
+            select.value = selectedVal;
+        } else if (displaysList.length > 1) {
+            select.selectedIndex = 1;
         } else {
-            fileNames.push(`${nv}.mp4`);
+            select.selectedIndex = 0;
         }
-    });
+    }
 
-    // Construir URLs limpias apuntando exclusivamente al servidor activo
-    const urlsUnicas = Array.from(new Set(fileNames)).map(fn => `${baseUrl}/${encodeURIComponent(fn)}`);
-    return urlsUnicas;
-}
+    function renderList(items) {
+        const ul = document.getElementById('playlist');
+        ul.innerHTML = '';
+        if (items.length === 0) {
+            ul.innerHTML = '<li style="padding:12px; text-align:center; color:#aaa;">No se encontraron himnos.</li>';
+            return;
+        }
+
+        items.forEach(h => {
+            const li = document.createElement('li');
+            const isActive = currentHimno && (h.num === currentHimno.num);
+
+            li.className = `playlist-item ${isActive ? 'active' : ''}`;
+            li.dataset.num = h.num;
+            li.onclick = () => handleHymnClick(h);
+
+            const playBullet = document.createElement('div');
+            playBullet.className = 'play-bullet';
+            playBullet.onclick = (e) => { e.stopPropagation(); reproducirHimno(h, true); };
+
+            const textDiv = document.createElement('div');
+            textDiv.textContent = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+
+            li.appendChild(playBullet);
+            li.appendChild(textDiv);
+            ul.appendChild(li);
+        });
+
+        const spacer = document.createElement('li');
+        spacer.style.height = '45px';
+        spacer.style.pointerEvents = 'none';
+        ul.appendChild(spacer);
+    }
+
+    function handleHymnClick(h) {
+        if (clickTimer !== null) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            reproducirHimno(h, true);
+        } else {
+            clickTimer = setTimeout(() => {
+                clickTimer = null;
+                currentHimno = h;
+                currentIndex = himnosList.findIndex(item => item.num === h.num);
+                document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+                updateActiveListItem();
+            }, 220);
+        }
+    }
+
+    function updateActiveListItem() {
+        document.querySelectorAll('.playlist-item').forEach(li => {
+            if (currentHimno && li.dataset.num === currentHimno.num) li.classList.add('active');
+            else li.classList.remove('active');
+        });
+    }
+
+    function reproducirHimno(h, autoPlay = true) {
+        currentHimno = h;
+        currentIndex = himnosList.findIndex(item => item.num === h.num);
+        const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
+        const carpeta = isInstrumental ? 'Instrumental' : 'Cantado';
+
+        let videoUrl = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
+        const localTargetMap = isInstrumental ? instrumentalFilesMap : cantadoFilesMap;
+        
+        if (localTargetMap && localTargetMap[h.num]) {
+            videoUrl = localTargetMap[h.num];
+        } else {
+            const rawEntry = titulosDiccionario[parseInt(h.num, 10)] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
+            if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
+                const suffix = isInstrumental ? '_pista.mp4' : '.mp4';
+                videoUrl = `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`;
+            }
+        }
+
+        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+
+        const activeVid = getActiveVideo();
+        const nextVid = getInactiveVideo();
+
+        if (activeVid.src === videoUrl && !activeVid.ended) {
+            if (autoPlay) activeVid.play().catch(() => {});
+            document.getElementById('posterOverlay').style.display = 'none';
+            updateActiveListItem();
+            return;
+        }
+
+        nextVid.src = videoUrl;
+        nextVid.load();
+
+        let transitioned = false;
+        const performTransition = () => {
+            if (transitioned) return;
+            transitioned = true;
+
+            document.getElementById('posterOverlay').style.display = 'none';
+            
+            nextVid.classList.add('active');
+            activeVid.classList.remove('active');
+            
+            if (autoPlay) {
+                nextVid.play().catch(() => {});
+            }
+
+            setTimeout(() => {
+                activeVid.pause();
+            }, 100);
+
+            swapActiveVideoPointers();
+            syncSecondary();
+            updateActiveListItem();
+        };
+
+        nextVid.oncanplay = () => { performTransition(); };
+        nextVid.onended = () => { stopHymn(); };
+
+        if (nextVid.readyState >= 3) {
+            performTransition();
+        }
+
+        updateActiveListItem();
+    }
+
+    function togglePlay() {
+        if (!currentHimno) { reproducirHimno(himnosList[0], true); return; }
+        const mainVideo = getActiveVideo();
+        if (mainVideo.paused) mainVideo.play();
+        else mainVideo.pause();
+
+        syncSecondary();
+    }
+
+    function stopHymn() {
+        currentHimno = null;
+        currentIndex = -1;
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+
+        v1.pause(); v1.removeAttribute('src'); v1.load(); v1.classList.remove('active');
+        v2.pause(); v2.removeAttribute('src'); v2.load(); v2.classList.remove('active');
+
+        v1.classList.add('active');
+        activeVidId = 'myMedia1';
+
+        document.getElementById('posterOverlay').style.display = 'flex';
+        document.getElementById('playerCurrentTitle').innerText = 'Seleccione un himno para comenzar';
+        document.getElementById('timeCurrent').innerText = '00:00';
+        document.getElementById('timeTotal').innerText = '00:00';
+        document.getElementById('progressSlider').value = 0;
+        updateActiveListItem();
+
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const selectedDisp = getSelectedDisplay();
+        if (chk.checked && selectedDisp && !selectedDisp.isPrimary && window.electronAPI && window.electronAPI.syncVideo) {
+            window.electronAPI.syncVideo({
+                videoUrl: '',
+                isPaused: true,
+                currentTime: 0
+            });
+        }
+    }
+
+    function syncSecondary() {
+        const mainVideo = getActiveVideo();
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const selectedDisp = getSelectedDisplay();
+
+        if (chk.checked && selectedDisp && !selectedDisp.isPrimary && window.electronAPI && window.electronAPI.syncVideo) {
+            window.electronAPI.syncVideo({
+                videoUrl: mainVideo.src || '',
+                isPaused: mainVideo.paused,
+                currentTime: mainVideo.currentTime
+            });
+        }
+    }
+
+    function syncPlayerLoop() {
+        if (!currentHimno) return;
+        const mainVideo = getActiveVideo();
+        const cur = mainVideo.currentTime || 0;
+        const dur = mainVideo.duration || 0;
+
+        document.getElementById('timeCurrent').innerText = formatTime(cur);
+        document.getElementById('timeTotal').innerText = formatTime(dur);
+        if (dur > 0 && !isSeeking) {
+            document.getElementById('progressSlider').value = (cur / dur) * 100;
+        }
+        document.getElementById('playBtn').innerText = mainVideo.paused ? '▶ Reproducir' : '⏸ Pausa';
+
+        syncSecondary();
+    }
+
+    function formatTime(sec) {
+        if (isNaN(sec) || sec < 0) return "00:00";
+        const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+        return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function userSeek(val) {
+        const mainVideo = getActiveVideo();
+        if (mainVideo && mainVideo.duration) {
+            mainVideo.currentTime = (val / 100) * mainVideo.duration;
+            syncSecondary();
+        }
+    }
+
+    function setVolume(val) {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        const vol = val / 100;
+        v1.volume = vol; v2.volume = vol;
+        v1.muted = (val == 0); v2.muted = (val == 0);
+        document.getElementById('muteBtn').innerText = (val == 0 ? '🔇' : '🔊');
+    }
+
+    function toggleMute() {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        const isMuted = !v1.muted;
+        v1.muted = isMuted; v2.muted = isMuted;
+        document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+    }
+
+    function prevHymn() {
+        let newIdx = (currentIndex <= 0) ? himnosList.length - 1 : currentIndex - 1;
+        reproducirHimno(himnosList[newIdx], true);
+    }
+
+    function nextHymn() {
+        let newIdx = (currentIndex < 0 || currentIndex >= himnosList.length - 1) ? 0 : currentIndex + 1;
+        reproducirHimno(himnosList[newIdx], true);
+    }
+
+    function cambiarModoAudio() {
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
+        renderList(getFilteredList());
+    }
+
+    function getFilteredList() {
+        const rawQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+        if (!rawQuery) return himnosList;
+        const cleanQuery = removeAccents(rawQuery);
+        return himnosList.filter(h => 
+            h.num.includes(cleanQuery) || 
+            parseInt(h.num, 10).toString().includes(cleanQuery) ||
+            removeAccents(h.title.toLowerCase()).includes(cleanQuery)
+        );
+    }
+
+    function filtrarHimnos() { renderList(getFilteredList()); }
+    function manejarTeclaBusqueda(e) { if (e.key === 'Enter') { const l = getFilteredList(); if (l.length > 0) reproducirHimno(l[0], true); } }
+
+    function togglePantallaCompleta() {
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        if (!document.fullscreenElement) wrapper.requestFullscreen();
+        else document.exitFullscreen();
+    }
+
+    function getSelectedDisplay() {
+        const select = document.getElementById('screenSelect');
+        return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
+    }
+
+    function actualizarModoProyeccion() {
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const badge = document.getElementById('projectionStatusBadge');
+        const targetDisplay = getSelectedDisplay();
+        const mainVideo = getActiveVideo();
+
+        if (!chk.checked) {
+            badge.innerText = 'Pantalla Única';
+            badge.style.background = 'rgba(217, 155, 56, 0.2)';
+            badge.style.color = '#fff';
+            if (window.electronAPI && window.electronAPI.closeProjection) {
+                window.electronAPI.closeProjection();
+            }
+            return;
+        }
+
+        if (targetDisplay && targetDisplay.isPrimary) {
+            if (window.electronAPI && window.electronAPI.closeProjection) {
+                window.electronAPI.closeProjection();
+            }
+            badge.innerText = 'Proyectando (Pantalla 1)';
+            badge.style.background = '#2ecc71';
+            badge.style.color = '#000';
+
+            const wrapper = document.getElementById('hymn-player-wrapper');
+            if (!document.fullscreenElement) {
+                wrapper.requestFullscreen().catch(() => {});
+            }
+        } else {
+            badge.innerText = 'Proyectando (Pantalla Ext)';
+            badge.style.background = '#2ecc71';
+            badge.style.color = '#000';
+
+            if (window.electronAPI && window.electronAPI.launchProjection) {
+                window.electronAPI.launchProjection({
+                    displayId: targetDisplay.id,
+                    videoUrl: mainVideo.src || '',
+                    isPaused: mainVideo.paused,
+                    currentTime: mainVideo.currentTime || 0
+                });
+            }
+        }
+    }
+
+    function alSeleccionarPantalla() {
+        actualizarModoProyeccion();
+    }
+
+    if (window.electronAPI && window.electronAPI.onDisplaysChanged) {
+        window.electronAPI.onDisplaysChanged(async () => {
+            await cargarPantallas();
+            if (displaysList.length === 1) {
+                const chk = document.getElementById('secondaryScreenCheckbox');
+                chk.checked = false;
+                actualizarModoProyeccion();
+            } else {
+                actualizarModoProyeccion();
+            }
+        });
+    }
+
+    window.onload = async () => {
+        await cargarCalculoLocal();
+        setInterval(syncPlayerLoop, 250);
+    };
+</script>
+</body>
+</html>
