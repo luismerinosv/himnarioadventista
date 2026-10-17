@@ -114,6 +114,13 @@
         .controls-buttons { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
         .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 4px; transition: background 0.2s; white-space: nowrap; }
         .btn-ctrl:hover { background: #9e5614; }
+        
+        /* Control de velocidad con botones +/- */
+        .speed-container { display: flex; align-items: center; gap: 2px; background: #3b1d05; border: 1px solid rgba(242, 203, 148, 0.25); border-radius: 5px; padding: 1px 3px; }
+        .btn-speed { background: #7a420f; color: #f7dfb8; border: none; border-radius: 3px; width: 20px; height: 22px; font-weight: bold; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: background 0.2s; }
+        .btn-speed:hover { background: #9e5614; }
+        .speed-display { font-size: clamp(0.7rem, 1.8vw, 0.78rem); font-weight: 600; color: #f7dfb8; padding: 0 3px; cursor: pointer; user-select: none; min-width: 36px; text-align: center; }
+        
         .volume-container { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; margin-left: auto; }
         .volume-slider { width: 75px; accent-color: #d9822b; cursor: pointer; }
         .search-input { width: 100%; padding: 6px 10px; font-size: clamp(0.8rem, 1.8vw, 0.9rem); border: 1px solid #b89363; border-radius: 5px; background-color: #f8ebd5; color: #2d1704; outline: none; flex-shrink: 0; font-weight: 600; }
@@ -191,17 +198,31 @@
                 white-space: nowrap;
             }
 
-            /* Fila 2: Compartir y Volumen */
+            /* Fila 2: Compartir, Velocidad y Volumen */
             #shareBtn {
                 flex: 0 0 auto;
-                padding: 4px 8px !important;
-                font-size: 0.75rem !important;
+                padding: 4px 6px !important;
+                font-size: 0.72rem !important;
             }
 
             .volume-container {
                 margin-left: auto !important;
-                gap: 4px;
+                gap: 3px;
             }
+
+            .btn-speed {
+                width: 17px;
+                height: 19px;
+                font-size: 0.75rem;
+            }
+
+            .speed-display {
+                font-size: 0.68rem;
+                min-width: 32px;
+                padding: 0 1px;
+            }
+
+            .volume-slider { width: 45px !important; }
         }
 
         /* --- EXCLUSIVO MÓVIL EN HORIZONTAL (LANDSCAPE FIJO) --- */
@@ -300,6 +321,10 @@
                 gap: 2px !important;
                 flex-shrink: 0;
             }
+
+            .speed-container { padding: 0 2px; gap: 1px; }
+            .btn-speed { width: 15px; height: 16px; font-size: 0.65rem; }
+            .speed-display { font-size: 0.58rem; min-width: 28px; padding: 0 1px; }
 
             .volume-slider { width: 35px !important; }
 
@@ -400,6 +425,13 @@
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
+                    <!-- CONTROL FINO DE VELOCIDAD DE A POQUITO -->
+                    <div class="speed-container" title="Control de velocidad (Clic en el número para restablecer a 1.00x)">
+                        <button class="btn-speed" onclick="changeSpeed(-0.05)" title="Reducir velocidad (-0.05x)">-</button>
+                        <span id="speedDisplay" class="speed-display" onclick="resetSpeed()">1.00x</span>
+                        <button class="btn-speed" onclick="changeSpeed(0.05)" title="Aumentar velocidad (+0.05x)">+</button>
+                    </div>
+
                     <button class="btn-ctrl" id="muteBtn" style="padding:1px 4px;" onclick="toggleMute()">🔊</button>
                     <input type="range" id="volumeSlider" class="volume-slider" value="100" min="0" max="100" oninput="setVolume(this.value)">
                 </div>
@@ -451,6 +483,7 @@
     let clickTimer = null;
     let displaysList = [];
     let isSeeking = false;
+    let currentSpeed = 1.0;
 
     let activeVidId = 'myMedia1';
     function getActiveVideo() { return document.getElementById(activeVidId); }
@@ -459,6 +492,42 @@
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function applyPlaybackSpeed(mediaElement) {
+        if (mediaElement) {
+            mediaElement.playbackRate = currentSpeed;
+        }
+    }
+
+    function changeSpeed(delta) {
+        currentSpeed = Math.round((currentSpeed + delta) * 100) / 100;
+        if (currentSpeed < 0.5) currentSpeed = 0.5;
+        if (currentSpeed > 2.0) currentSpeed = 2.0;
+        updateSpeedUI();
+        applyPlaybackSpeedToAll();
+    }
+
+    function resetSpeed() {
+        currentSpeed = 1.0;
+        updateSpeedUI();
+        applyPlaybackSpeedToAll();
+    }
+
+    function updateSpeedUI() {
+        const speedDisplay = document.getElementById('speedDisplay');
+        if (speedDisplay) {
+            speedDisplay.innerText = currentSpeed.toFixed(2) + 'x';
+        }
+    }
+
+    function applyPlaybackSpeedToAll() {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        if (v1) v1.playbackRate = currentSpeed;
+        if (v2) v2.playbackRate = currentSpeed;
+        if (bgAudio) bgAudio.playbackRate = currentSpeed;
+        syncSecondary();
     }
 
     /* --- REPRODUCTOR DE AUDIO EN SEGUNDO PLANO --- */
@@ -477,6 +546,7 @@
                 bgAudio.currentTime = mainVideo.currentTime;
                 bgAudio.volume = mainVideo.volume;
                 bgAudio.muted = mainVideo.muted;
+                applyPlaybackSpeed(bgAudio);
                 bgAudio.play().catch(err => console.log("Bg audio error:", err));
                 mainVideo.pause();
             }
@@ -488,6 +558,7 @@
                         mainVideo.load();
                     }
                     mainVideo.currentTime = bgAudio.currentTime;
+                    applyPlaybackSpeed(mainVideo);
                     mainVideo.play().catch(() => {});
                 }
                 bgAudio.pause();
@@ -498,6 +569,7 @@
                     mainVideo.load();
                 }
                 mainVideo.currentTime = bgAudio.currentTime;
+                applyPlaybackSpeed(mainVideo);
             }
         }
     });
@@ -711,10 +783,12 @@
             bgAudio.currentTime = 0;
             bgAudio.volume = getActiveVideo().volume;
             bgAudio.muted = getActiveVideo().muted;
+            applyPlaybackSpeed(bgAudio);
             if (autoPlay) bgAudio.play().catch(() => {});
             
             const activeVid = getActiveVideo();
             activeVid.src = videoUrl;
+            applyPlaybackSpeed(activeVid);
 
             updateActiveListItem();
             return;
@@ -724,6 +798,7 @@
         const nextVid = getInactiveVideo();
 
         if (activeVid.src === videoUrl && !activeVid.ended) {
+            applyPlaybackSpeed(activeVid);
             if (autoPlay) activeVid.play().catch(() => {});
             document.getElementById('posterOverlay').style.display = 'none';
             updateActiveListItem();
@@ -743,6 +818,7 @@
             nextVid.classList.add('active');
             activeVid.classList.remove('active');
             
+            applyPlaybackSpeed(nextVid);
             if (autoPlay) {
                 nextVid.play().catch(() => {});
             }
@@ -770,10 +846,12 @@
         if (!currentHimno) { reproducirHimno(himnosList[0], true); return; }
         
         if (document.hidden) {
+            applyPlaybackSpeed(bgAudio);
             if (bgAudio.paused) bgAudio.play();
             else bgAudio.pause();
         } else {
             const mainVideo = getActiveVideo();
+            applyPlaybackSpeed(mainVideo);
             if (mainVideo.paused) mainVideo.play();
             else mainVideo.pause();
         }
@@ -821,7 +899,8 @@
                 action: 'sync',
                 videoUrl: mainVideo && mainVideo.src ? mainVideo.src : '',
                 isPaused: mainVideo ? mainVideo.paused : true,
-                currentTime: mainVideo ? mainVideo.currentTime : 0
+                currentTime: mainVideo ? mainVideo.currentTime : 0,
+                playbackRate: currentSpeed
             });
         }
     }
@@ -845,7 +924,7 @@
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: dur,
-                        playbackRate: activeMedia.playbackRate || 1,
+                        playbackRate: activeMedia.playbackRate || currentSpeed,
                         position: Math.min(cur, dur)
                     });
                 } catch(e) {}
@@ -1046,6 +1125,9 @@
                                     }
                                     if (Math.abs(v.currentTime - data.currentTime) > 0.4) {
                                         v.currentTime = data.currentTime;
+                                    }
+                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) {
+                                        v.playbackRate = data.playbackRate;
                                     }
                                     if (data.isPaused && !v.paused) v.pause();
                                     if (!data.isPaused && v.paused) v.play().catch(()=>{});
