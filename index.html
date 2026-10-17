@@ -214,7 +214,7 @@
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
 
-    // Canal de sincronización entre la ventana de control y la ventana proyectada
+    // Canal de comunicación en tiempo real
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
     let projectionWindow = null;
 
@@ -277,13 +277,11 @@
         await cargarPantallas();
     }
 
-    // Detección de monitores Web (Window Management API) + Fallback Ventana Auxiliar
     async function cargarPantallas() {
         const select = document.getElementById('screenSelect');
         select.innerHTML = '';
         displaysList = [];
 
-        // 1. Intentar usar la Web Window Management API (Chrome/Edge con HTTPS)
         if ('getScreenDetails' in window) {
             try {
                 const screenDetails = await window.getScreenDetails();
@@ -304,7 +302,6 @@
             }
         }
 
-        // 2. Fallback estándar para navegadores
         if (displaysList.length === 0) {
             displaysList = [
                 { id: 'primary', label: 'Pantalla Única / Ventana Principal', isPrimary: true },
@@ -487,6 +484,7 @@
 
         if (chk && chk.checked) {
             syncChannel.postMessage({
+                action: 'sync',
                 videoUrl: mainVideo && mainVideo.src ? mainVideo.src : '',
                 isPaused: mainVideo ? mainVideo.paused : true,
                 currentTime: mainVideo ? mainVideo.currentTime : 0
@@ -582,7 +580,6 @@
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
     }
 
-    // Lógica de Proyección para Navegadores Web
     function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
@@ -593,9 +590,11 @@
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
 
+            // Cerrar ventana proyectada si se desmarca el checkbox
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
             }
+            syncChannel.postMessage({ action: 'close' });
             projectionWindow = null;
             return;
         }
@@ -630,8 +629,13 @@
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
                             const v = document.getElementById('projVideo');
+                            
                             bc.onmessage = (e) => {
                                 const data = e.data;
+                                if (data.action === 'close') {
+                                    window.close();
+                                    return;
+                                }
                                 if (!data.videoUrl) {
                                     v.pause();
                                     v.src = '';
@@ -659,6 +663,14 @@
     function alSeleccionarPantalla() {
         actualizarModoProyeccion();
     }
+
+    // CIERRE AUTOMÁTICO AL CERRAR O RECARGAR LA PÁGINA PRINCIPAL
+    window.addEventListener('beforeunload', () => {
+        syncChannel.postMessage({ action: 'close' });
+        if (projectionWindow && !projectionWindow.closed) {
+            projectionWindow.close();
+        }
+    });
 
     window.onload = async () => {
         await cargarCalculoLocal();
