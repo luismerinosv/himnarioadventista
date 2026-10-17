@@ -340,8 +340,8 @@
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline></video>
-                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline autopictureinpicture></video>
+                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline autopictureinpicture></video>
             </div>
         </div>
 
@@ -364,6 +364,7 @@
                 <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
+                <button class="btn-ctrl" id="pipBtn" onclick="togglePiP()">📺 PiP</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
@@ -427,6 +428,20 @@
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    /* --- LÓGICA DE VENTANA FLOTANTE (PICTURE-IN-PICTURE) --- */
+    async function togglePiP() {
+        const mainVideo = getActiveVideo();
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else if (mainVideo) {
+                await mainVideo.requestPictureInPicture();
+            }
+        } catch (error) {
+            console.log("Picture-in-Picture no disponible o denegado:", error);
+        }
     }
 
     /* --- CONFIGURACIÓN PARA REPRODUCCIÓN EN SEGUNDO PLANO (MEDIA SESSION API) --- */
