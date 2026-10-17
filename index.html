@@ -140,6 +140,9 @@
         #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
         #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
+        
+        /* Oculta el botón de compartir en modo pantalla completa */
+        #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
     </style>
 </head>
 <body>
@@ -174,6 +177,7 @@
                     <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                     <button class="btn-ctrl" onclick="nextHymn()">Siguiente ⏭</button>
                     <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Pantalla Completa</button>
+                    <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
                     <span class="esc-notice">(Presiona ESC para salir)</span>
                 </div>
 
@@ -572,6 +576,22 @@
         const wrapper = document.getElementById('hymn-player-wrapper');
         if (!document.fullscreenElement) wrapper.requestFullscreen();
         else document.exitFullscreen();
+    }
+
+    // Función para compartir en Redes Sociales
+    function compartirApp() {
+        const shareData = {
+            title: 'Himnario Adventista en Línea',
+            text: currentHimno ? `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista` : 'Te comparto el Himnario Adventista en Línea',
+            url: window.location.href
+        };
+
+        if (navigator.share) {
+            navigator.share(shareData).catch((err) => console.log('Error al compartir:', err));
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert('¡Enlace copiado al portapapeles! Puedes pegarlo en tus redes sociales.');
+        }
     }
 
     function getSelectedDisplay() {
