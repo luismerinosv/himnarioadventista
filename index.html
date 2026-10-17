@@ -142,15 +142,16 @@
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
         #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
 
-        /* --- ADAPTACIÓN AUTOMÁTICA PARA MÓVILES EN HORIZONTAL (LANDSCAPE) --- */
+        /* --- VISTA HORIZONTAL PARA MÓVILES --- */
         @media (orientation: landscape) and (max-height: 600px) {
             #hymn-player-wrapper {
                 padding: 4px 8px;
             }
+
             #playerContainer {
                 display: grid;
                 grid-template-columns: 1.15fr 0.85fr;
-                grid-template-rows: auto auto auto 1fr;
+                grid-template-rows: 32px auto 22px 1fr;
                 grid-template-areas:
                     "video search"
                     "video checkboxes"
@@ -165,74 +166,98 @@
                 grid-area: video;
                 width: 100%;
                 max-width: 100%;
-                max-height: none;
-                margin: 0;
+                max-height: 48vh;
                 aspect-ratio: 16 / 9;
+                margin: 0;
             }
 
             #playerControls {
                 grid-area: controls;
-                padding: 4px 8px;
-                gap: 4px;
+                padding: 4px 6px;
+                gap: 3px;
             }
 
             .controls-header {
-                font-size: 0.7rem;
+                font-size: 0.68rem;
             }
 
-            .btn-ctrl {
-                padding: 3px 6px;
-                font-size: 0.7rem;
+            .timeline-container {
+                gap: 4px;
             }
 
             .time-text {
+                font-size: 0.65rem;
+                min-width: 32px;
+            }
+
+            .progress-slider {
+                height: 4px;
+            }
+
+            .controls-buttons {
+                gap: 4px;
+            }
+
+            .btn-ctrl {
+                padding: 2px 6px;
                 font-size: 0.68rem;
+            }
+
+            .volume-container {
+                gap: 4px;
+                font-size: 0.72rem;
             }
 
             .volume-slider {
                 width: 50px;
             }
 
+            /* Mantiene la barra de búsqueda delgada */
             .search-input {
                 grid-area: search;
-                padding: 4px 8px;
+                height: 32px !important;
+                padding: 2px 8px;
                 font-size: 0.75rem;
+                align-self: start;
             }
 
             .checkbox-container {
                 grid-area: checkboxes;
-                padding: 3px 6px;
-                font-size: 0.7rem;
+                padding: 2px 6px;
+                font-size: 0.68rem;
+                align-self: start;
             }
 
             .select-pantalla {
                 padding: 1px 4px;
-                font-size: 0.68rem;
-                max-width: 130px;
+                font-size: 0.65rem;
+                max-width: 120px;
             }
 
             .playlist-header {
                 grid-area: header;
+                margin-top: 0;
             }
 
             .playlist-label {
-                font-size: 0.7rem;
+                font-size: 0.68rem;
             }
 
             .mode-badge {
-                font-size: 0.65rem;
-                padding: 1px 5px;
+                font-size: 0.6rem;
+                padding: 1px 4px;
             }
 
             #playlist {
                 grid-area: playlist;
                 height: 100%;
                 min-height: 0;
+                overflow-y: auto;
             }
 
             .playlist-item {
                 height: 28px;
-                font-size: 0.75rem;
+                font-size: 0.72rem;
                 padding: 0 6px;
             }
 
@@ -242,13 +267,13 @@
             }
 
             .poster-logo {
-                max-width: 65px;
-                max-height: 65px;
-                margin-bottom: 4px;
+                max-width: 60px;
+                max-height: 60px;
+                margin-bottom: 2px;
             }
 
             .poster-title-main {
-                font-size: 1.1rem;
+                font-size: 1rem;
             }
         }
     </style>
@@ -363,6 +388,11 @@
                 const resLocal = await fetch('titulos.json');
                 if (resLocal.ok) {
                     titulosDiccionario = await resLocal.json();
+                } else if (window.electronAPI && window.electronAPI.getHimnosData) {
+                    const data = await window.electronAPI.getHimnosData();
+                    titulosDiccionario = data.titulos || {};
+                    cantadoFilesMap = data.cantado || {};
+                    instrumentalFilesMap = data.instrumental || {};
                 }
             } catch (err) {
                 titulosDiccionario = {};
@@ -372,15 +402,7 @@
         himnosList.length = 0;
         for (let i = 1; i <= 613; i++) {
             const numStr = String(i).padStart(3, '0');
-            const rawEntry = titulosDiccionario[i] || titulosDiccionario[String(i)] || titulosDiccionario[numStr];
-            let titleStr = `Himno ${i}`;
-            
-            if (typeof rawEntry === 'string') {
-                titleStr = rawEntry;
-            } else if (rawEntry && typeof rawEntry === 'object') {
-                titleStr = rawEntry.titulo || `Himno ${i}`;
-            }
-
+            const titleStr = titulosDiccionario[i] || titulosDiccionario[String(i)] || `Himno ${i}`;
             himnosList.push({ num: numStr, title: titleStr });
         }
 
@@ -499,15 +521,8 @@
 
         let videoUrl = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
         const localTargetMap = isInstrumental ? instrumentalFilesMap : cantadoFilesMap;
-        
         if (localTargetMap && localTargetMap[h.num]) {
             videoUrl = localTargetMap[h.num];
-        } else {
-            const rawEntry = titulosDiccionario[parseInt(h.num, 10)] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
-            if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
-                const suffix = isInstrumental ? '_pista.mp4' : '.mp4';
-                videoUrl = `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`;
-            }
         }
 
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
