@@ -178,14 +178,17 @@
                 justify-content: space-between;
             }
 
-            /* Fila 1: 5 botones (Ant, Pausa/Reproducir, Detener, Sig, Full) */
+            /* Fila 1: 5 botones (Ant, Repr, Detener, Sig, Full) */
             .controls-buttons > .btn-ctrl:nth-child(-n+5) {
                 flex: 1 1 calc(20% - 4px);
                 min-width: 0;
                 padding: 5px 2px !important;
-                font-size: clamp(0.68rem, 2.5vw, 0.75rem) !important;
+                font-size: clamp(0.65rem, 2.3vw, 0.75rem) !important;
                 justify-content: center;
                 text-align: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             /* Fila 2: Compartir y Volumen */
@@ -389,7 +392,7 @@
 
             <div class="controls-buttons">
                 <button class="btn-ctrl" onclick="prevHymn()">⏮ Ant.</button>
-                <button class="btn-ctrl" id="playBtn" onclick="togglePlay()">▶ Reproducir</button>
+                <button class="btn-ctrl" id="playBtn" onclick="togglePlay()">▶ Repr.</button>
                 <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
@@ -796,6 +799,7 @@
 
         document.getElementById('posterOverlay').style.display = 'flex';
         document.getElementById('playerCurrentTitle').innerText = 'Seleccione un himno para comenzar';
+        document.getElementById('playBtn').innerText = '▶ Repr.';
         document.getElementById('timeCurrent').innerText = '00:00';
         document.getElementById('timeTotal').innerText = '00:00';
         document.getElementById('progressSlider').value = 0;
@@ -833,7 +837,7 @@
         if (dur > 0 && !isSeeking) {
             document.getElementById('progressSlider').value = (cur / dur) * 100;
         }
-        document.getElementById('playBtn').innerText = activeMedia.paused ? '▶ Reproducir' : '⏸ Pausa';
+        document.getElementById('playBtn').innerText = activeMedia.paused ? '▶ Repr.' : '⏸ Pausa';
 
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = activeMedia.paused ? 'paused' : 'playing';
