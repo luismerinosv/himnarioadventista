@@ -451,12 +451,20 @@
         } else {
             if (!bgAudio.paused && bgAudio.src) {
                 if (mainVideo) {
+                    if (mainVideo.src !== bgAudio.src) {
+                        mainVideo.src = bgAudio.src;
+                        mainVideo.load();
+                    }
                     mainVideo.currentTime = bgAudio.currentTime;
                     mainVideo.play().catch(() => {});
                 }
                 bgAudio.pause();
                 bgAudio.removeAttribute('src');
             } else if (mainVideo && bgAudio.currentTime > 0) {
+                if (mainVideo.src !== bgAudio.src && bgAudio.src) {
+                    mainVideo.src = bgAudio.src;
+                    mainVideo.load();
+                }
                 mainVideo.currentTime = bgAudio.currentTime;
             }
         }
@@ -672,6 +680,10 @@
             bgAudio.volume = getActiveVideo().volume;
             bgAudio.muted = getActiveVideo().muted;
             if (autoPlay) bgAudio.play().catch(() => {});
+            
+            const activeVid = getActiveVideo();
+            activeVid.src = videoUrl;
+
             updateActiveListItem();
             return;
         }
