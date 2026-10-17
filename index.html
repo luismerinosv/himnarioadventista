@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Himnario Adventista en Línea</title>
+    <title>Himnario Adventista en Línea – Video</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #0d0601; color: #f7dfb8; display: flex; justify-content: center; align-items: stretch; height: 100vh; width: 100vw; overflow: hidden; }
@@ -214,6 +214,10 @@
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
 
+    // Canal de sincronización entre la ventana de control y la ventana proyectada
+    const syncChannel = new BroadcastChannel('hymn_projection_sync');
+    let projectionWindow = null;
+
     let cantadoFilesMap = {};
     let instrumentalFilesMap = {};
     let titulosDiccionario = {};
@@ -248,11 +252,6 @@
                 const resLocal = await fetch('titulos.json');
                 if (resLocal.ok) {
                     titulosDiccionario = await resLocal.json();
-                } else if (window.electronAPI && window.electronAPI.getHimnosData) {
-                    const data = await window.electronAPI.getHimnosData();
-                    titulosDiccionario = data.titulos || {};
-                    cantadoFilesMap = data.cantado || {};
-                    instrumentalFilesMap = data.instrumental || {};
                 }
             } catch (err) {
                 titulosDiccionario = {};
@@ -278,20 +277,40 @@
         await cargarPantallas();
     }
 
+    // Detección de monitores Web (Window Management API) + Fallback Ventana Auxiliar
     async function cargarPantallas() {
-        if (window.electronAPI && window.electronAPI.getDisplays) {
+        const select = document.getElementById('screenSelect');
+        select.innerHTML = '';
+        displaysList = [];
+
+        // 1. Intentar usar la Web Window Management API (Chrome/Edge con HTTPS)
+        if ('getScreenDetails' in window) {
             try {
-                displaysList = await window.electronAPI.getDisplays();
+                const screenDetails = await window.getScreenDetails();
+                displaysList = screenDetails.screens.map((s, idx) => ({
+                    id: idx,
+                    label: s.isPrimary ? `Monitor Principal (${s.width}x${s.height})` : `Monitor Secundario (${s.width}x${s.height})`,
+                    left: s.left,
+                    top: s.top,
+                    width: s.width,
+                    height: s.height,
+                    isPrimary: s.isPrimary
+                }));
+
+                screenDetails.oncurrentscreenchange = () => cargarPantallas();
+                screenDetails.onscreenschange = () => cargarPantallas();
             } catch (err) {
-                displaysList = [{ id: 'primary', label: 'Pantalla Principal', isPrimary: true }];
+                console.log("Acceso a API de pantallas denegado o cerrado.");
             }
-        } else {
-            displaysList = [{ id: 'primary', label: 'Pantalla Principal (Navegador)', isPrimary: true }];
         }
 
-        const select = document.getElementById('screenSelect');
-        const selectedVal = select.value;
-        select.innerHTML = '';
+        // 2. Fallback estándar para navegadores
+        if (displaysList.length === 0) {
+            displaysList = [
+                { id: 'primary', label: 'Pantalla Única / Ventana Principal', isPrimary: true },
+                { id: 'secondary_window', label: '🖥️ Proyector / Ventana Externa', isPrimary: false, left: window.screen.width, top: 0, width: 1280, height: 720 }
+            ];
+        }
 
         displaysList.forEach((d) => {
             const opt = document.createElement('option');
@@ -300,9 +319,7 @@
             select.appendChild(opt);
         });
 
-        if (displaysList.some(d => String(d.id) === String(selectedVal))) {
-            select.value = selectedVal;
-        } else if (displaysList.length > 1) {
+        if (displaysList.length > 1) {
             select.selectedIndex = 1;
         } else {
             select.selectedIndex = 0;
@@ -461,27 +478,18 @@
         document.getElementById('progressSlider').value = 0;
         updateActiveListItem();
 
-        const chk = document.getElementById('secondaryScreenCheckbox');
-        const selectedDisp = getSelectedDisplay();
-        if (chk.checked && selectedDisp && !selectedDisp.isPrimary && window.electronAPI && window.electronAPI.syncVideo) {
-            window.electronAPI.syncVideo({
-                videoUrl: '',
-                isPaused: true,
-                currentTime: 0
-            });
-        }
+        syncSecondary();
     }
 
     function syncSecondary() {
         const mainVideo = getActiveVideo();
         const chk = document.getElementById('secondaryScreenCheckbox');
-        const selectedDisp = getSelectedDisplay();
 
-        if (chk.checked && selectedDisp && !selectedDisp.isPrimary && window.electronAPI && window.electronAPI.syncVideo) {
-            window.electronAPI.syncVideo({
-                videoUrl: mainVideo.src || '',
-                isPaused: mainVideo.paused,
-                currentTime: mainVideo.currentTime
+        if (chk && chk.checked) {
+            syncChannel.postMessage({
+                videoUrl: mainVideo && mainVideo.src ? mainVideo.src : '',
+                isPaused: mainVideo ? mainVideo.paused : true,
+                currentTime: mainVideo ? mainVideo.currentTime : 0
             });
         }
     }
@@ -574,65 +582,82 @@
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
     }
 
+    // Lógica de Proyección para Navegadores Web
     function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
         const targetDisplay = getSelectedDisplay();
-        const mainVideo = getActiveVideo();
 
         if (!chk.checked) {
             badge.innerText = 'Pantalla Única';
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
-            if (window.electronAPI && window.electronAPI.closeProjection) {
-                window.electronAPI.closeProjection();
+
+            if (projectionWindow && !projectionWindow.closed) {
+                projectionWindow.close();
             }
+            projectionWindow = null;
             return;
         }
 
-        if (targetDisplay && targetDisplay.isPrimary) {
-            if (window.electronAPI && window.electronAPI.closeProjection) {
-                window.electronAPI.closeProjection();
-            }
-            badge.innerText = 'Proyectando (Pantalla 1)';
-            badge.style.background = '#2ecc71';
-            badge.style.color = '#000';
+        badge.innerText = 'Proyectando (Ventana Externa)';
+        badge.style.background = '#2ecc71';
+        badge.style.color = '#000';
 
-            const wrapper = document.getElementById('hymn-player-wrapper');
-            if (!document.fullscreenElement) {
-                wrapper.requestFullscreen().catch(() => {});
-            }
-        } else {
-            badge.innerText = 'Proyectando (Pantalla Ext)';
-            badge.style.background = '#2ecc71';
-            badge.style.color = '#000';
+        if (!projectionWindow || projectionWindow.closed) {
+            const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
+            const top = targetDisplay ? (targetDisplay.top || 0) : 0;
+            const width = targetDisplay ? (targetDisplay.width || 1280) : 1280;
+            const height = targetDisplay ? (targetDisplay.height || 720) : 720;
 
-            if (window.electronAPI && window.electronAPI.launchProjection) {
-                window.electronAPI.launchProjection({
-                    displayId: targetDisplay.id,
-                    videoUrl: mainVideo.src || '',
-                    isPaused: mainVideo.paused,
-                    currentTime: mainVideo.currentTime || 0
-                });
+            const windowFeatures = `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
+            projectionWindow = window.open('', 'HimnarioProyeccion', windowFeatures);
+
+            if (projectionWindow) {
+                projectionWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html lang="es">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Proyección - Himnario Adventista</title>
+                        <style>
+                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
+                            video { width: 100vw; height: 100vh; object-fit: contain; }
+                        </style>
+                    </head>
+                    <body>
+                        <video id="projVideo" autoplay crossorigin="anonymous"></video>
+                        <script>
+                            const bc = new BroadcastChannel('hymn_projection_sync');
+                            const v = document.getElementById('projVideo');
+                            bc.onmessage = (e) => {
+                                const data = e.data;
+                                if (!data.videoUrl) {
+                                    v.pause();
+                                    v.src = '';
+                                } else {
+                                    if (v.src !== data.videoUrl) {
+                                        v.src = data.videoUrl;
+                                    }
+                                    if (Math.abs(v.currentTime - data.currentTime) > 0.4) {
+                                        v.currentTime = data.currentTime;
+                                    }
+                                    if (data.isPaused && !v.paused) v.pause();
+                                    if (!data.isPaused && v.paused) v.play().catch(()=>{});
+                                }
+                            };
+                        <\/script>
+                    </body>
+                    </html>
+                `);
             }
         }
+
+        syncSecondary();
     }
 
     function alSeleccionarPantalla() {
         actualizarModoProyeccion();
-    }
-
-    if (window.electronAPI && window.electronAPI.onDisplaysChanged) {
-        window.electronAPI.onDisplaysChanged(async () => {
-            await cargarPantallas();
-            if (displaysList.length === 1) {
-                const chk = document.getElementById('secondaryScreenCheckbox');
-                chk.checked = false;
-                actualizarModoProyeccion();
-            } else {
-                actualizarModoProyeccion();
-            }
-        });
     }
 
     window.onload = async () => {
