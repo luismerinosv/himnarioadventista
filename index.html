@@ -159,6 +159,219 @@
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
         #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
 
+        /* --- MODAL PARA COMPARTIR --- */
+        .share-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.82);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .share-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .share-modal-card {
+            background: linear-gradient(180deg, #3b1d05 0%, #231203 100%);
+            border: 1px solid #d9822b;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 460px;
+            padding: 18px 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            transform: translateY(15px);
+            transition: transform 0.25s ease;
+        }
+
+        .share-modal-overlay.active .share-modal-card {
+            transform: translateY(0);
+        }
+
+        .share-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(217, 155, 56, 0.2);
+            padding-bottom: 8px;
+        }
+
+        .share-modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fcecd2;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .share-modal-close {
+            background: transparent;
+            border: none;
+            color: #ebd1a7;
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .share-modal-close:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .share-type-tabs {
+            display: flex;
+            gap: 6px;
+            background: rgba(18, 9, 2, 0.6);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(217, 155, 56, 0.15);
+        }
+
+        .share-tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #ebd1a7;
+            padding: 7px 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .share-tab-btn.active {
+            background: #7a420f;
+            color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+
+        .share-tab-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .share-preview-box {
+            background: rgba(18, 9, 2, 0.7);
+            border: 1px dashed rgba(217, 155, 56, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            color: #f7dfb8;
+            line-height: 1.35;
+        }
+
+        .share-url-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .share-url-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #ebd1a7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .share-url-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .share-url-input {
+            flex: 1;
+            background: #180c02;
+            border: 1px solid #7a420f;
+            color: #fcecd2;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            outline: none;
+            font-family: monospace;
+        }
+
+        .btn-copy-url {
+            background: #9e5614;
+            color: #fff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-copy-url:hover {
+            background: #ba671b;
+        }
+
+        .btn-native-share {
+            width: 100%;
+            background: linear-gradient(180deg, #d9822b 0%, #a65e18 100%);
+            color: #ffffff;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: filter 0.2s;
+        }
+
+        .btn-native-share:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Toast de notificación personalizada */
+        .toast-notification {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #231203;
+            color: #fcecd2;
+            border: 1px solid #d9822b;
+            padding: 10px 22px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+            z-index: 10000;
+            opacity: 0;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        .toast-notification.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
         /* --- MÓVIL EN VERTICAL (PORTRAIT) --- */
         @media (max-width: 600px) {
             .checkbox-container {
@@ -421,7 +634,7 @@
                 <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
-                <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
+                <button class="btn-ctrl" id="shareBtn" onclick="abrirShareModal()">🔗 Compartir</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
@@ -467,6 +680,44 @@
     </div>
 </div>
 
+<!-- MODAL DE DIÁLOGO DE COMPARTIR -->
+<div id="shareModal" class="share-modal-overlay" onclick="cerrarShareModalAlHacerClicFuera(event)">
+    <div class="share-modal-card">
+        <div class="share-modal-header">
+            <div class="share-modal-title">🔗 Compartir Himnario</div>
+            <button class="share-modal-close" onclick="cerrarShareModal()">&times;</button>
+        </div>
+
+        <!-- Pestañas para elegir qué compartir -->
+        <div class="share-type-tabs">
+            <button id="tabShareHymn" class="share-tab-btn active" onclick="cambiarTipoCompartir('hymn')">🎵 Himno Actual</button>
+            <button id="tabShareMain" class="share-tab-btn" onclick="cambiarTipoCompartir('main')">🏠 Página Principal</button>
+        </div>
+
+        <!-- Vista previa de texto -->
+        <div id="sharePreviewText" class="share-preview-box">
+            Generando información para compartir...
+        </div>
+
+        <!-- Caja del Enlace Corto -->
+        <div class="share-url-container">
+            <div class="share-url-label">Enlace Corto Acortado</div>
+            <div class="share-url-row">
+                <input type="text" id="shareUrlInput" class="share-url-input" readonly value="Generando enlace corto...">
+                <button class="btn-copy-url" onclick="copiarEnlaceCorto()">📋 Copiar</button>
+            </div>
+        </div>
+
+        <!-- Botón de compartir nativo / redes -->
+        <button class="btn-native-share" onclick="compartirNativo()">
+            📱 Compartir vía App / Redes
+        </button>
+    </div>
+</div>
+
+<!-- TOAST NOTIFICACIÓN -->
+<div id="toastNotification" class="toast-notification">¡Enlace copiado al portapapeles!</div>
+
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
 
@@ -485,6 +736,12 @@
     let isSeeking = false;
     let currentSpeed = 1.0;
 
+    // Estado para compartir
+    let currentShareType = 'hymn'; // 'hymn' | 'main'
+    let currentFullShareUrl = '';
+    let currentShortShareUrl = '';
+    let currentShareText = '';
+
     let activeVidId = 'myMedia1';
     function getActiveVideo() { return document.getElementById(activeVidId); }
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
@@ -492,6 +749,17 @@
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function showToast(mensaje) {
+        const toast = document.getElementById('toastNotification');
+        if (toast) {
+            toast.textContent = mensaje;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2600);
+        }
     }
 
     function applyPlaybackSpeed(mediaElement) {
@@ -650,6 +918,38 @@
 
         renderList(getFilteredList());
         await cargarPantallas();
+
+        // Procesar parámetro de URL si el enlace venía con un himno específico
+        procesarParametrosURL();
+    }
+
+    /* --- DETECCIÓN DE PARÁMETROS URL (?h=NUMERO) --- */
+    function procesarParametrosURL() {
+        const params = new URLSearchParams(window.location.search);
+        const hymnParam = params.get('h') || params.get('himno') || params.get('num');
+        const isInstParam = params.get('inst') === '1' || params.get('mode') === 'inst';
+
+        if (isInstParam) {
+            const instChk = document.getElementById('instrumentalCheckbox');
+            if (instChk) {
+                instChk.checked = true;
+                cambiarModoAudio();
+            }
+        }
+
+        if (hymnParam) {
+            const targetNum = String(parseInt(hymnParam, 10)).padStart(3, '0');
+            const found = himnosList.find(item => item.num === targetNum);
+            if (found) {
+                reproducirHimno(found, false);
+                setTimeout(() => {
+                    const activeEl = document.querySelector(`.playlist-item[data-num="${targetNum}"]`);
+                    if (activeEl) {
+                        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 300);
+            }
+        }
     }
 
     async function cargarPantallas() {
@@ -1002,18 +1302,150 @@
         else document.exitFullscreen();
     }
 
-    function compartirApp() {
+    /* --- GENERACIÓN DE ENLACES CORTOS Y MODAL DE COMPARTIR --- */
+    async function generarEnlaceCorto(urlLarga) {
+        // Intento 1: API de TinyURL
+        try {
+            const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(urlLarga)}`);
+            if (res.ok) {
+                const shortUrl = await res.text();
+                if (shortUrl && shortUrl.startsWith('http')) {
+                    return shortUrl.trim();
+                }
+            }
+        } catch (e) {
+            console.warn("Error generando enlace corto con TinyURL, probando respaldo...", e);
+        }
+
+        // Intento 2: API de respaldo is.gd
+        try {
+            const res = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(urlLarga)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.shorturl) {
+                    return data.shorturl;
+                }
+            }
+        } catch (e) {
+            console.warn("Error generando enlace corto con is.gd, usando URL completa:", e);
+        }
+
+        return urlLarga;
+    }
+
+    function abrirShareModal() {
+        const modal = document.getElementById('shareModal');
+        const btnHymn = document.getElementById('tabShareHymn');
+        
+        if (currentHimno) {
+            btnHymn.disabled = false;
+            cambiarTipoCompartir('hymn');
+        } else {
+            btnHymn.disabled = true;
+            cambiarTipoCompartir('main');
+        }
+
+        modal.classList.add('active');
+    }
+
+    function cerrarShareModal() {
+        const modal = document.getElementById('shareModal');
+        modal.classList.remove('active');
+    }
+
+    function cerrarShareModalAlHacerClicFuera(e) {
+        if (e.target.id === 'shareModal') {
+            cerrarShareModal();
+        }
+    }
+
+    async function cambiarTipoCompartir(tipo) {
+        currentShareType = tipo;
+        
+        const btnHymn = document.getElementById('tabShareHymn');
+        const btnMain = document.getElementById('tabShareMain');
+        const previewEl = document.getElementById('sharePreviewText');
+        const inputUrl = document.getElementById('shareUrlInput');
+
+        if (tipo === 'hymn') {
+            btnHymn.classList.add('active');
+            btnMain.classList.remove('active');
+        } else {
+            btnMain.classList.add('active');
+            btnHymn.classList.remove('active');
+        }
+
+        inputUrl.value = "⏳ Generando enlace corto...";
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
+
+        if (tipo === 'hymn' && currentHimno) {
+            const hymnNum = parseInt(currentHimno.num, 10);
+            currentFullShareUrl = `${baseUrl}?h=${currentHimno.num}${isInstrumental ? '&inst=1' : ''}`;
+            currentShareText = `🎶 Escucha el Himno ${hymnNum}: "${currentHimno.title}" en el Himnario Adventista en Línea`;
+            previewEl.innerHTML = `<strong>Himno ${hymnNum}:</strong> ${currentHimno.title}<br><span style="font-size:0.75rem; color:#ebd1a7;">Modo: ${isInstrumental ? 'Instrumental' : 'Cantado'}</span>`;
+        } else {
+            currentFullShareUrl = baseUrl;
+            currentShareText = `📖 Te invito a usar el Himnario Adventista en Línea - Himnos en video y audio`;
+            previewEl.innerHTML = `<strong>Himnario Adventista en Línea</strong><br><span style="font-size:0.75rem; color:#ebd1a7;">Accede a la colección completa de himnos</span>`;
+        }
+
+        currentShortShareUrl = await generarEnlaceCorto(currentFullShareUrl);
+        inputUrl.value = currentShortShareUrl;
+    }
+
+    function copiarTextoAlPortapapeles(texto) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(texto).then(() => {
+                showToast('¡Enlace copiado al portapapeles!');
+            }).catch(() => {
+                fallbackCopiarTexto(texto);
+            });
+        } else {
+            fallbackCopiarTexto(texto);
+        }
+    }
+
+    function fallbackCopiarTexto(texto) {
+        const textArea = document.createElement("textarea");
+        textArea.value = texto;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('¡Enlace copiado al portapapeles!');
+        } catch (err) {
+            showToast('Error al copiar el enlace');
+        }
+        document.body.removeChild(textArea);
+    }
+
+    function copiarEnlaceCorto() {
+        const linkParaCopiar = currentShortShareUrl || currentFullShareUrl;
+        copiarTextoAlPortapapeles(linkParaCopiar);
+    }
+
+    function compartirNativo() {
+        const linkParaCompartir = currentShortShareUrl || currentFullShareUrl;
         const shareData = {
-            title: 'Himnario Adventista en Línea',
-            text: currentHimno ? `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista` : 'Te comparto el Himnario Adventista en Línea',
-            url: window.location.href
+            title: 'Himnario Adventista',
+            text: currentShareText,
+            url: linkParaCompartir
         };
 
         if (navigator.share) {
-            navigator.share(shareData).catch((err) => console.log('Error al compartir:', err));
+            navigator.share(shareData).then(() => {
+                cerrarShareModal();
+            }).catch((err) => {
+                console.log('Error al compartir nativamente:', err);
+            });
         } else {
-            navigator.clipboard.writeText(window.location.href);
-            alert('¡Enlace copiado al portapapeles! Puedes pegarlo en tus redes sociales.');
+            copiarTextoAlPortapapeles(`${currentShareText}\n${linkParaCompartir}`);
         }
     }
 
