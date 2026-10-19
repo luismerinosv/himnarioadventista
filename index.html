@@ -115,6 +115,7 @@
         .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 4px; transition: background 0.2s; white-space: nowrap; }
         .btn-ctrl:hover { background: #9e5614; }
         
+        /* Control de velocidad con botones +/- */
         .speed-container { display: flex; align-items: center; gap: 2px; background: #3b1d05; border: 1px solid rgba(242, 203, 148, 0.25); border-radius: 5px; padding: 1px 3px; }
         .btn-speed { background: #7a420f; color: #f7dfb8; border: none; border-radius: 3px; width: 20px; height: 22px; font-weight: bold; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: background 0.2s; }
         .btn-speed:hover { background: #9e5614; }
@@ -150,216 +151,238 @@
         .play-bullet::after { content: ''; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid #ffffff; margin-left: 1px; }
         .esc-notice { display: none; font-size: 0.78rem; color: #ebd1a7; font-style: italic; margin-left: 6px; }
 
-        /* ESTILOS DE MODALES */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.25s ease-in-out;
-            padding: 15px;
-        }
+        #hymn-player-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; padding: 0 !important; margin: 0 !important; background: #000 !important; }
+        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; }
+        #hymn-player-wrapper:fullscreen .video-container { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; aspect-ratio: unset !important; border: none !important; border-radius: 0 !important; }
+        #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
+        #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
+        #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
+        #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
 
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-card {
-            background: #1f1004;
-            border: 1px solid #7a420f;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 460px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.9);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            transform: translateY(15px);
-            transition: transform 0.25s ease-out;
-        }
-
-        .modal-overlay.active .modal-card {
-            transform: translateY(0);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 18px;
-            background: rgba(0, 0, 0, 0.3);
-            border-bottom: 1px solid rgba(217, 155, 56, 0.15);
-            color: #fcecd2;
-            font-weight: 800;
-            font-size: 1.05rem;
-        }
-
-        .modal-close {
-            background: transparent;
-            border: none;
-            color: #f7dfb8;
-            font-size: 1.3rem;
-            cursor: pointer;
-            line-height: 1;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .modal-close:hover { background: rgba(255,255,255,0.1); }
-
-        .modal-body {
-            padding: 16px 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* Pestañas del Modal de Compartir */
-        .share-tabs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            background: #0d0601;
-            padding: 4px;
-            border-radius: 8px;
-            border: 1px solid rgba(217, 155, 56, 0.2);
-        }
-
-        .share-tab {
-            background: transparent;
-            color: #a89279;
-            border: none;
-            padding: 8px 10px;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            cursor: pointer;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all 0.2s;
-        }
-
-        .share-tab.active {
-            background: #7a420f;
-            color: #ffffff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        }
-
-        /* Tarjeta de vista previa */
-        .share-preview-card {
-            background: #120902;
-            border: 1px dashed rgba(217, 155, 56, 0.3);
-            border-radius: 8px;
-            padding: 12px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .share-preview-title { font-size: 0.92rem; font-weight: 800; color: #fcecd2; }
-        .share-preview-subtitle { font-size: 0.78rem; color: #cbb290; }
-
-        .share-link-section { display: flex; flex-direction: column; gap: 6px; }
-        .share-label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; color: #f7dfb8; }
-        .share-input-group { display: flex; gap: 6px; }
-
-        .share-input-field {
-            flex: 1;
-            background: #000000;
-            border: 1px solid #7a420f;
-            border-radius: 6px;
-            color: #ffffff;
-            padding: 8px 10px;
-            font-size: 0.82rem;
-            outline: none;
-            font-family: monospace;
-        }
-
-        .btn-copy {
-            background: #7a420f;
-            color: #ffffff;
-            border: 1px solid rgba(242, 203, 148, 0.3);
-            border-radius: 6px;
-            padding: 8px 14px;
-            font-size: 0.82rem;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }
-        .btn-copy:hover { background: #9e5614; }
-
-        .btn-share-native {
-            background: linear-gradient(180deg, #b86214 0%, #7a3e0b 100%);
-            color: #ffffff;
-            border: 1px solid rgba(242, 203, 148, 0.4);
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 0.9rem;
-            font-weight: 800;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            transition: background 0.2s;
-        }
-
-        /* Opciones del Modal de Descarga */
-        .download-options { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .download-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            background: rgba(18, 9, 2, 0.6);
-            border: 1px solid rgba(217, 155, 56, 0.2);
-            border-radius: 8px;
-            text-decoration: none;
-            color: #f7dfb8;
-            transition: background 0.2s, border-color 0.2s;
-        }
-        .download-item:hover:not(.disabled) {
-            background: rgba(158, 86, 20, 0.35);
-            border-color: rgba(217, 155, 56, 0.5);
-        }
-        .download-item.disabled { opacity: 0.6; cursor: not-allowed; }
-        .download-info { display: flex; align-items: center; gap: 10px; }
-        .download-icon { font-size: 1.4rem; }
-        .download-title { font-size: 0.88rem; font-weight: 600; color: #fff; }
-        .download-desc { font-size: 0.72rem; color: #d1ba98; }
-        .btn-download-action {
-            background: #7a420f;
-            color: #fff;
-            padding: 6px 12px;
-            border-radius: 5px;
-            font-size: 0.78rem;
-            font-weight: 600;
-            border: 1px solid rgba(242, 203, 148, 0.3);
-        }
-
+        /* --- MÓVIL EN VERTICAL (PORTRAIT) --- */
         @media (max-width: 600px) {
-            .checkbox-container { flex-wrap: nowrap !important; white-space: nowrap; gap: 4px; padding: 4px 6px; font-size: 0.75rem; }
-            .select-pantalla { max-width: 105px !important; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; padding: 2px 4px; font-size: 0.72rem; }
-            .controls-buttons { display: flex; flex-wrap: wrap; gap: 4px; justify-content: space-between; }
-            .controls-buttons > .btn-ctrl:nth-child(-n+5) { flex: 1 1 calc(20% - 4px); min-width: 0; padding: 5px 2px !important; font-size: clamp(0.65rem, 2.3vw, 0.75rem) !important; justify-content: center; text-align: center; }
-            #shareBtn, #downloadBtn { padding: 4px 6px !important; font-size: 0.72rem !important; }
-            .volume-container { margin-left: auto !important; gap: 3px; }
-            .btn-speed { width: 17px; height: 19px; font-size: 0.75rem; }
-            .speed-display { font-size: 0.68rem; min-width: 32px; padding: 0 1px; }
+            .checkbox-container {
+                flex-wrap: nowrap !important;
+                white-space: nowrap;
+                gap: 4px;
+                padding: 4px 6px;
+                font-size: 0.75rem;
+            }
+
+            .select-pantalla {
+                max-width: 105px !important;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                overflow: hidden;
+                padding: 2px 4px;
+                font-size: 0.72rem;
+            }
+
+            .controls-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                justify-content: space-between;
+            }
+
+            /* Fila 1: 5 botones (Ant, Repr, Detener, Sig, Full) */
+            .controls-buttons > .btn-ctrl:nth-child(-n+5) {
+                flex: 1 1 calc(20% - 4px);
+                min-width: 0;
+                padding: 5px 2px !important;
+                font-size: clamp(0.65rem, 2.3vw, 0.75rem) !important;
+                justify-content: center;
+                text-align: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Fila 2: Compartir, Velocidad y Volumen */
+            #shareBtn {
+                flex: 0 0 auto;
+                padding: 4px 6px !important;
+                font-size: 0.72rem !important;
+            }
+
+            .volume-container {
+                margin-left: auto !important;
+                gap: 3px;
+            }
+
+            .btn-speed {
+                width: 17px;
+                height: 19px;
+                font-size: 0.75rem;
+            }
+
+            .speed-display {
+                font-size: 0.68rem;
+                min-width: 32px;
+                padding: 0 1px;
+            }
+
             .volume-slider { width: 45px !important; }
+        }
+
+        /* --- EXCLUSIVO MÓVIL EN HORIZONTAL (LANDSCAPE FIJO) --- */
+        @media (orientation: landscape) and (max-height: 600px) {
+            #hymn-player-wrapper {
+                padding: 4px 6px;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            #playerContainer {
+                display: grid;
+                grid-template-columns: 1.35fr 0.65fr;
+                grid-template-rows: auto auto auto auto minmax(0, 1fr);
+                grid-template-areas:
+                    "video controls"
+                    "video search"
+                    "video checkboxes"
+                    "video header"
+                    "video playlist";
+                gap: 4px;
+                height: 100%;
+                max-height: 100%;
+                overflow: hidden;
+            }
+
+            .video-section {
+                grid-area: video;
+                width: 100%;
+                height: 100%;
+                min-height: 0;
+                display: flex;
+                align-items: flex-start;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            .video-container {
+                width: 100%;
+                height: auto;
+                max-width: 100%;
+                max-height: 100%;
+                aspect-ratio: 16 / 9;
+                margin: 0 auto !important;
+            }
+
+            #playerControls {
+                grid-area: controls;
+                padding: 3px 5px;
+                gap: 2px;
+                background: #231203;
+                border-radius: 6px;
+                border: 1px solid rgba(217, 155, 56, 0.25);
+            }
+
+            .controls-header {
+                font-size: 0.62rem;
+                gap: 4px;
+            }
+
+            .timeline-container {
+                gap: 4px;
+            }
+
+            .time-text {
+                font-size: 0.6rem;
+                min-width: 26px;
+            }
+
+            .progress-slider {
+                height: 3px;
+            }
+
+            .controls-buttons {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                gap: 2px !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto;
+            }
+
+            .controls-buttons::-webkit-scrollbar { display: none; }
+
+            .btn-ctrl {
+                padding: 1px 3px !important;
+                font-size: 0.58rem !important;
+                border-radius: 3px;
+                flex-shrink: 0;
+            }
+
+            .volume-container {
+                margin-left: auto !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 2px !important;
+                flex-shrink: 0;
+            }
+
+            .speed-container { padding: 0 2px; gap: 1px; }
+            .btn-speed { width: 15px; height: 16px; font-size: 0.65rem; }
+            .speed-display { font-size: 0.58rem; min-width: 28px; padding: 0 1px; }
+
+            .volume-slider { width: 35px !important; }
+
+            .search-input {
+                grid-area: search;
+                height: 26px !important;
+                padding: 2px 6px;
+                font-size: 0.7rem;
+            }
+
+            .checkbox-container {
+                grid-area: checkboxes;
+                padding: 2px 5px;
+                font-size: 0.6rem;
+                white-space: nowrap;
+                gap: 4px;
+                flex-wrap: nowrap !important;
+            }
+
+            .select-pantalla {
+                padding: 1px 3px;
+                font-size: 0.58rem;
+                max-width: 90px;
+            }
+
+            .playlist-header {
+                grid-area: header;
+                margin-top: 0;
+            }
+
+            .playlist-label { font-size: 0.62rem; }
+            .mode-badge { font-size: 0.55rem; padding: 1px 3px; }
+
+            #playlist {
+                grid-area: playlist;
+                height: 100%;
+                min-height: 0;
+                max-height: 100%;
+                overflow-y: auto;
+            }
+
+            .playlist-item {
+                height: 25px;
+                font-size: 0.68rem;
+                padding: 0 5px;
+            }
+
+            .play-bullet { width: 12px; height: 12px; }
+
+            .poster-logo {
+                max-width: min(50px, 20cqw);
+                max-height: min(50px, 20cqw);
+                margin-bottom: 2px;
+            }
+
+            .poster-title-main {
+                font-size: clamp(0.6rem, 4.5cqw, 1rem);
+            }
         }
     </style>
 </head>
@@ -398,15 +421,15 @@
                 <button class="btn-ctrl" onclick="stopHymn()">⏹ Detener</button>
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
-                <button class="btn-ctrl" id="shareBtn" onclick="abrirModalCompartir()">🔗 Compartir</button>
-                <button class="btn-ctrl" id="downloadBtn" onclick="abrirModalDescarga()">💻 App PC</button>
+                <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
+                    <!-- CONTROL FINO DE VELOCIDAD DE A POQUITO -->
                     <div class="speed-container" title="Control de velocidad (Clic en el número para restablecer a 1.00x)">
-                        <button class="btn-speed" onclick="changeSpeed(-0.05)">-</button>
+                        <button class="btn-speed" onclick="changeSpeed(-0.05)" title="Reducir velocidad (-0.05x)">-</button>
                         <span id="speedDisplay" class="speed-display" onclick="resetSpeed()">1.00x</span>
-                        <button class="btn-speed" onclick="changeSpeed(0.05)">+</button>
+                        <button class="btn-speed" onclick="changeSpeed(0.05)" title="Aumentar velocidad (+0.05x)">+</button>
                     </div>
 
                     <button class="btn-ctrl" id="muteBtn" style="padding:1px 4px;" onclick="toggleMute()">🔊</button>
@@ -444,84 +467,8 @@
     </div>
 </div>
 
-<!-- MODAL DE COMPARTIR (EXACTO AL DISEÑO ORIGINAL) -->
-<div id="shareModal" class="modal-overlay">
-    <div class="modal-card">
-        <div class="modal-header">
-            <span>🔗 Compartir Himnario</span>
-            <button class="modal-close" onclick="cerrarModalCompartir()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="share-tabs">
-                <button class="share-tab" id="tabHymn" onclick="seleccionarTabCompartir('hymn')">🎵 Himno Actual</button>
-                <button class="share-tab active" id="tabMain" onclick="seleccionarTabCompartir('main')">🏠 Página Principal</button>
-            </div>
-
-            <div id="sharePreviewCard" class="share-preview-card">
-                <div id="sharePreviewTitle" class="share-preview-title">Himnario Adventista en Línea</div>
-                <div id="sharePreviewSubtitle" class="share-preview-subtitle">Accede a la colección completa de himnos</div>
-            </div>
-
-            <div class="share-link-section">
-                <label class="share-label">ENLACE CORTO ACORTADO</label>
-                <div class="share-input-group">
-                    <input type="text" id="shareUrlInput" class="share-input-field" readonly value="Generando enlace...">
-                    <button class="btn-copy" onclick="copiarEnlaceCompartir()">📋 Copiar</button>
-                </div>
-            </div>
-
-            <button class="btn-share-native" onclick="compartirNativo()">
-                📲 Compartir vía App / Redes
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL DE DESCARGA PARA ESCRITORIO -->
-<div id="downloadModal" class="modal-overlay">
-    <div class="modal-card">
-        <div class="modal-header">
-            <span>💻 Descargar Aplicación de Escritorio</span>
-            <button class="modal-close" onclick="cerrarModalDescarga()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <p style="font-size: 0.85rem; color: #ebd1a7; line-height: 1.4;">
-                Obtén la versión ejecutable para computadora. Ideal para iglesias, proyectar sin navegador e interactuar sin interrupciones.
-            </p>
-            <div class="download-options">
-                <!-- Windows -->
-                <a href="#" id="windowsDownloadLink" target="_blank" class="download-item" onclick="return manejarClicDescargaWindows(event)">
-                    <div class="download-info">
-                        <span class="download-icon">🪟</span>
-                        <div>
-                            <div class="download-title">Windows</div>
-                            <div class="download-desc">Instalador para Windows (64-bit)</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action">Descargar</span>
-                </a>
-
-                <!-- macOS (Próximamente) -->
-                <div class="download-item disabled">
-                    <div class="download-info">
-                        <span class="download-icon">🍎</span>
-                        <div>
-                            <div class="download-title">macOS</div>
-                            <div class="download-desc">Versión para Mac</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action" style="background: #4a2d12; color: #a89279; border-color: transparent;">Próximamente</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
-
-    // 📌 COPIA AQUÍ TU ENLACE DE GOOGLE DRIVE CUANDO LO TENGAS LISTO:
-    const WINDOWS_DRIVE_URL = ""; 
 
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
     let projectionWindow = null;
@@ -538,140 +485,20 @@
     let isSeeking = false;
     let currentSpeed = 1.0;
 
-    let currentShareType = 'main';
-    let currentShortMainUrl = '';
-    let currentShortHymnUrl = '';
-
     let activeVidId = 'myMedia1';
     function getActiveVideo() { return document.getElementById(activeVidId); }
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
 
-    /* --- MODAL DE DESCARGA PC --- */
-    function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
-    function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
-
-    function manejarClicDescargaWindows(e) {
-        if (!WINDOWS_DRIVE_URL || WINDOWS_DRIVE_URL.trim() === "") {
-            e.preventDefault();
-            mostrarToast('El enlace de Google Drive se está procesando. ¡Estará disponible muy pronto!');
-            return false;
-        }
-        document.getElementById('windowsDownloadLink').href = WINDOWS_DRIVE_URL;
-        return true;
+    function removeAccents(str) {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
-    /* --- MODAL DE COMPARTIR Y ENLACES CORTOS --- */
-    function abrirModalCompartir() {
-        document.getElementById('shareModal').classList.add('active');
-        if (currentHimno) {
-            seleccionarTabCompartir('hymn');
-        } else {
-            seleccionarTabCompartir('main');
+    function applyPlaybackSpeed(mediaElement) {
+        if (mediaElement) {
+            mediaElement.playbackRate = currentSpeed;
         }
     }
-
-    function cerrarModalCompartir() { document.getElementById('shareModal').classList.remove('active'); }
-
-    async function shortenUrl(longUrl) {
-        try {
-            const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
-            if (res.ok) {
-                const short = await res.text();
-                if (short && short.startsWith('http')) return short.trim();
-            }
-        } catch (e) {
-            console.warn("No se pudo acortar la URL:", e);
-        }
-        return longUrl;
-    }
-
-    async function seleccionarTabCompartir(type) {
-        currentShareType = type;
-        const tabMain = document.getElementById('tabMain');
-        const tabHymn = document.getElementById('tabHymn');
-        const input = document.getElementById('shareUrlInput');
-        const previewTitle = document.getElementById('sharePreviewTitle');
-        const previewSubtitle = document.getElementById('sharePreviewSubtitle');
-
-        if (type === 'main') {
-            tabMain.classList.add('active');
-            tabHymn.classList.remove('active');
-            previewTitle.innerText = 'Himnario Adventista en Línea';
-            previewSubtitle.innerText = 'Accede a la colección completa de himnos';
-            input.value = 'Generando enlace...';
-
-            const baseUrl = window.location.origin + window.location.pathname;
-            if (!currentShortMainUrl) {
-                currentShortMainUrl = await shortenUrl(baseUrl);
-            }
-            input.value = currentShortMainUrl;
-        } else {
-            tabHymn.classList.add('active');
-            tabMain.classList.remove('active');
-
-            if (!currentHimno) {
-                previewTitle.innerText = 'Sin himno seleccionado';
-                previewSubtitle.innerText = 'Reproduzca o seleccione un himno para compartirlo';
-                input.value = 'Seleccione un himno primero';
-                return;
-            }
-
-            const isInst = document.getElementById('instrumentalCheckbox').checked;
-            previewTitle.innerText = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
-            previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
-            input.value = 'Generando enlace...';
-
-            const hymnUrl = `${window.location.origin}${window.location.pathname}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
-            currentShortHymnUrl = await shortenUrl(hymnUrl);
-            input.value = currentShortHymnUrl;
-        }
-    }
-
-    function copiarEnlaceCompartir() {
-        const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
-
-        navigator.clipboard.writeText(input.value);
-        mostrarToast('¡Enlace copiado al portapapeles!');
-    }
-
-    function compartirNativo() {
-        const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
-
-        const isMain = currentShareType === 'main';
-        const title = isMain ? 'Himnario Adventista en Línea' : `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
-        const text = isMain ? 'Te comparto el Himnario Adventista en Línea' : `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista`;
-
-        if (navigator.share) {
-            navigator.share({ title: title, text: text, url: input.value }).catch(e => console.log('Error compartiendo:', e));
-        } else {
-            copiarEnlaceCompartir();
-        }
-    }
-
-    function mostrarToast(mensaje) {
-        let toast = document.getElementById('toastNotice');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'toastNotice';
-            toast.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#d9822b; color:#fff; padding:8px 16px; border-radius:20px; font-size:0.85rem; font-weight:bold; z-index:2000; box-shadow:0 4px 12px rgba(0,0,0,0.5); opacity:0; transition:opacity 0.3s; pointer-events:none;';
-            document.body.appendChild(toast);
-        }
-        toast.innerText = mensaje;
-        toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 2500);
-    }
-
-    document.querySelectorAll('.modal-overlay').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
-        });
-    });
-
-    function removeAccents(str) { return str.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
-    function applyPlaybackSpeed(mediaElement) { if (mediaElement) mediaElement.playbackRate = currentSpeed; }
 
     function changeSpeed(delta) {
         currentSpeed = Math.round((currentSpeed + delta) * 100) / 100;
@@ -689,7 +516,9 @@
 
     function updateSpeedUI() {
         const speedDisplay = document.getElementById('speedDisplay');
-        if (speedDisplay) speedDisplay.innerText = currentSpeed.toFixed(2) + 'x';
+        if (speedDisplay) {
+            speedDisplay.innerText = currentSpeed.toFixed(2) + 'x';
+        }
     }
 
     function applyPlaybackSpeedToAll() {
@@ -705,7 +534,9 @@
     const bgAudio = new Audio();
     bgAudio.preload = 'auto';
 
-    bgAudio.onended = () => { nextHymn(); };
+    bgAudio.onended = () => {
+        nextHymn();
+    };
 
     document.addEventListener('visibilitychange', () => {
         const mainVideo = getActiveVideo();
@@ -743,6 +574,7 @@
         }
     });
 
+    /* --- CONFIGURACIÓN PARA CONTROLES DE PANTALLA DE BLOQUEO (MEDIA SESSION API) --- */
     function setupMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
@@ -783,6 +615,7 @@
                 throw new Error("No se pudo cargar titulos.json desde R2");
             }
         } catch (e) {
+            console.warn("Intentando cargar titulos.json local de respaldo...", e);
             try {
                 const resLocal = await fetch('titulos.json');
                 if (resLocal.ok) {
@@ -817,29 +650,6 @@
 
         renderList(getFilteredList());
         await cargarPantallas();
-        verificarHimnoUrl();
-    }
-
-    function verificarHimnoUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const hymnNum = urlParams.get('h');
-        const isInst = urlParams.get('inst');
-
-        if (isInst === '1') {
-            const chk = document.getElementById('instrumentalCheckbox');
-            if (chk) {
-                chk.checked = true;
-                cambiarModoAudio();
-            }
-        }
-
-        if (hymnNum) {
-            const numFormatted = String(hymnNum).padStart(3, '0');
-            const target = himnosList.find(h => h.num === numFormatted || parseInt(h.num, 10) === parseInt(hymnNum, 10));
-            if (target) {
-                reproducirHimno(target, true);
-            }
-        }
     }
 
     async function cargarPantallas() {
@@ -862,7 +672,9 @@
 
                 screenDetails.oncurrentscreenchange = () => cargarPantallas();
                 screenDetails.onscreenschange = () => cargarPantallas();
-            } catch (err) {}
+            } catch (err) {
+                console.log("Acceso a API de pantallas denegado o cerrado.");
+            }
         }
 
         if (displaysList.length === 0) {
@@ -879,7 +691,11 @@
             select.appendChild(opt);
         });
 
-        select.selectedIndex = displaysList.length > 1 ? 1 : 0;
+        if (displaysList.length > 1) {
+            select.selectedIndex = 1;
+        } else {
+            select.selectedIndex = 0;
+        }
     }
 
     function renderList(items) {
@@ -929,7 +745,6 @@
                 document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
                 updateActiveListItem();
                 updateMediaSessionMetadata();
-                currentShortHymnUrl = '';
             }, 220);
         }
     }
@@ -944,8 +759,6 @@
     function reproducirHimno(h, autoPlay = true) {
         currentHimno = h;
         currentIndex = himnosList.findIndex(item => item.num === h.num);
-        currentShortHymnUrl = '';
-
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInstrumental ? 'Instrumental' : 'Cantado';
 
@@ -1006,9 +819,13 @@
             activeVid.classList.remove('active');
             
             applyPlaybackSpeed(nextVid);
-            if (autoPlay) nextVid.play().catch(() => {});
+            if (autoPlay) {
+                nextVid.play().catch(() => {});
+            }
 
-            setTimeout(() => { activeVid.pause(); }, 100);
+            setTimeout(() => {
+                activeVid.pause();
+            }, 100);
 
             swapActiveVideoPointers();
             syncSecondary();
@@ -1018,7 +835,9 @@
         nextVid.oncanplay = () => { performTransition(); };
         nextVid.onended = () => { stopHymn(); };
 
-        if (nextVid.readyState >= 3) performTransition();
+        if (nextVid.readyState >= 3) {
+            performTransition();
+        }
 
         updateActiveListItem();
     }
@@ -1043,7 +862,6 @@
     function stopHymn() {
         currentHimno = null;
         currentIndex = -1;
-        currentShortHymnUrl = '';
         
         bgAudio.pause();
         bgAudio.removeAttribute('src');
@@ -1065,7 +883,10 @@
         document.getElementById('progressSlider').value = 0;
         updateActiveListItem();
 
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'none';
+        }
+
         syncSecondary();
     }
 
@@ -1159,7 +980,6 @@
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
         renderList(getFilteredList());
         updateMediaSessionMetadata();
-        currentShortHymnUrl = '';
     }
 
     function getFilteredList() {
@@ -1182,6 +1002,21 @@
         else document.exitFullscreen();
     }
 
+    function compartirApp() {
+        const shareData = {
+            title: 'Himnario Adventista en Línea',
+            text: currentHimno ? `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista` : 'Te comparto el Himnario Adventista en Línea',
+            url: window.location.href
+        };
+
+        if (navigator.share) {
+            navigator.share(shareData).catch((err) => console.log('Error al compartir:', err));
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert('¡Enlace copiado al portapapeles! Puedes pegarlo en tus redes sociales.');
+        }
+    }
+
     function getSelectedDisplay() {
         const select = document.getElementById('screenSelect');
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
@@ -1197,7 +1032,9 @@
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
 
-            if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
+            if (projectionWindow && !projectionWindow.closed) {
+                projectionWindow.close();
+            }
             syncChannel.postMessage({ action: 'close' });
             projectionWindow = null;
             return;
@@ -1227,9 +1064,36 @@
                             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
                             body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; }
                             video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
-                            .poster-overlay { position: absolute; inset: 0; background: radial-gradient(circle at center, #9e5b15 0%, #4a2608 65%, #1d0c02 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 10; padding: 10px; }
-                            .poster-logo { max-width: 180px; max-height: 180px; margin-bottom: 15px; filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4)); }
-                            .poster-title-main { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 900; letter-spacing: 3px; color: #fcecd2; text-shadow: 0 0 15px rgba(248, 203, 133, 0.5); }
+                            .poster-overlay { 
+                                position: absolute; 
+                                inset: 0; 
+                                background: radial-gradient(circle at center, #9e5b15 0%, #4a2608 65%, #1d0c02 100%); 
+                                display: flex; 
+                                flex-direction: column; 
+                                justify-content: center; 
+                                align-items: center; 
+                                text-align: center; 
+                                z-index: 10; 
+                                padding: 10px; 
+                                user-select: none; 
+                            }
+                            .poster-logo {
+                                max-width: 180px;
+                                max-height: 180px;
+                                margin-bottom: 15px;
+                                object-fit: contain;
+                                filter: drop-shadow(0 0 12px rgba(248, 203, 133, 0.4));
+                            }
+                            .poster-title-main { 
+                                font-size: clamp(1.8rem, 4vw, 3rem); 
+                                font-weight: 900; 
+                                letter-spacing: 3px; 
+                                color: #fcecd2; 
+                                text-shadow: 0 0 15px rgba(248, 203, 133, 0.5), 0 0 25px rgba(184, 103, 22, 0.8); 
+                                margin-bottom: 2px; 
+                                line-height: 1.1; 
+                                white-space: nowrap;
+                            }
                         </style>
                     </head>
                     <body>
@@ -1245,15 +1109,26 @@
                             
                             bc.onmessage = (e) => {
                                 const data = e.data;
-                                if (data.action === 'close') { window.close(); return; }
+                                if (data.action === 'close') {
+                                    window.close();
+                                    return;
+                                }
                                 if (!data.videoUrl) {
-                                    v.pause(); v.removeAttribute('src'); v.load();
+                                    v.pause();
+                                    v.removeAttribute('src');
+                                    v.load();
                                     poster.style.display = 'flex';
                                 } else {
                                     poster.style.display = 'none';
-                                    if (v.src !== data.videoUrl) v.src = data.videoUrl;
-                                    if (Math.abs(v.currentTime - data.currentTime) > 0.4) v.currentTime = data.currentTime;
-                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) v.playbackRate = data.playbackRate;
+                                    if (v.src !== data.videoUrl) {
+                                        v.src = data.videoUrl;
+                                    }
+                                    if (Math.abs(v.currentTime - data.currentTime) > 0.4) {
+                                        v.currentTime = data.currentTime;
+                                    }
+                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) {
+                                        v.playbackRate = data.playbackRate;
+                                    }
                                     if (data.isPaused && !v.paused) v.pause();
                                     if (!data.isPaused && v.paused) v.play().catch(()=>{});
                                 }
@@ -1268,11 +1143,45 @@
         syncSecondary();
     }
 
-    function alSeleccionarPantalla() { actualizarModoProyeccion(); }
+    function alSeleccionarPantalla() {
+        actualizarModoProyeccion();
+    }
+
+    // --- LÓGICA TÁCTIL: ARRASTRAR HACIA ABAJO PARA ACTUALIZAR LA PÁGINA ---
+    let touchStartY = 0;
+    let isPullingToRefresh = false;
+
+    window.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            touchStartY = e.touches[0].pageY;
+            isPullingToRefresh = false;
+        }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+            const touchCurrentY = e.touches[0].pageY;
+            const pullDistance = touchCurrentY - touchStartY;
+            const playlist = document.getElementById('playlist');
+            const isAtTop = !playlist || playlist.scrollTop === 0 || !playlist.contains(e.target);
+
+            if (pullDistance > 110 && isAtTop) {
+                isPullingToRefresh = true;
+            }
+        }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+        if (isPullingToRefresh) {
+            window.location.reload();
+        }
+    });
 
     window.addEventListener('beforeunload', () => {
         syncChannel.postMessage({ action: 'close' });
-        if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
+        if (projectionWindow && !projectionWindow.closed) {
+            projectionWindow.close();
+        }
     });
 
     window.onload = async () => {
