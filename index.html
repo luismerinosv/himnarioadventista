@@ -4,6 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Himnario Adventista en Línea – Video</title>
+
+    <!-- ETIQUETAS OPEN GRAPH PARA VISTA PREVIA EN REDES SOCIALES (WHATSAPP, FACEBOOK, TWITTER) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Himnario Adventista">
+    <meta id="ogTitle" property="og:title" content="Himnario Adventista en Línea">
+    <meta id="ogDesc" property="og:description" content="Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.">
+    <meta id="ogImage" property="og:image" content="https://luismerinosv.github.io/himnarioadventista/logo-adventista.webp">
+    <meta property="og:image:type" content="image/webp">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta id="twTitle" name="twitter:title" content="Himnario Adventista en Línea">
+    <meta id="twDesc" name="twitter:description" content="Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.">
+    <meta id="twImage" name="twitter:image" content="https://luismerinosv.github.io/himnarioadventista/logo-adventista.webp">
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #0d0601; color: #f7dfb8; display: flex; justify-content: center; align-items: stretch; height: 100vh; width: 100vw; overflow: hidden; overscroll-behavior-y: contain; }
@@ -770,6 +784,26 @@
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
 
+    /* --- ACTUALIZAR ETIQUETAS META DE LA PÁGINA PARA VISTA PREVIA EN REDES --- */
+    function actualizarMetaTags(titulo, descripcion, imagen) {
+        const logoDefecto = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/logo-adventista.webp`;
+        const imgFinal = imagen || logoDefecto;
+
+        const ogTitle = document.getElementById('ogTitle');
+        const ogDesc = document.getElementById('ogDesc');
+        const ogImage = document.getElementById('ogImage');
+        const twTitle = document.getElementById('twTitle');
+        const twDesc = document.getElementById('twDesc');
+        const twImage = document.getElementById('twImage');
+
+        if (ogTitle) ogTitle.setAttribute('content', titulo);
+        if (ogDesc) ogDesc.setAttribute('content', descripcion);
+        if (ogImage) ogImage.setAttribute('content', imgFinal);
+        if (twTitle) twTitle.setAttribute('content', titulo);
+        if (twDesc) twDesc.setAttribute('content', descripcion);
+        if (twImage) twImage.setAttribute('content', imgFinal);
+    }
+
     /* --- MODAL DE DESCARGA PC --- */
     function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
     function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
@@ -824,6 +858,12 @@
             previewSubtitle.innerText = 'Accede a la colección completa de himnos';
             input.value = 'Generando enlace...';
 
+            actualizarMetaTags(
+                'Himnario Adventista en Línea',
+                'Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.',
+                ''
+            );
+
             const baseUrl = window.location.origin + window.location.pathname;
             if (!currentShortMainUrl) {
                 currentShortMainUrl = await shortenUrl(baseUrl);
@@ -841,9 +881,14 @@
             }
 
             const isInst = document.getElementById('instrumentalCheckbox').checked;
-            previewTitle.innerText = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+            const tituloHimno = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+            const descHimno = `Escucha el ${tituloHimno} (${isInst ? 'Instrumental' : 'Cantado'}) en el Himnario Adventista en Línea.`;
+
+            previewTitle.innerText = tituloHimno;
             previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
             input.value = 'Generando enlace...';
+
+            actualizarMetaTags(tituloHimno, descHimno, '');
 
             const hymnUrl = `${window.location.origin}${window.location.pathname}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
             currentShortHymnUrl = await shortenUrl(hymnUrl);
