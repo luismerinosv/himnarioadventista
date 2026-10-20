@@ -157,7 +157,206 @@
         #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
         #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
-        #hymn-player-wrapper:fullscreen #shareBtn { display: none !important; }
+        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #downloadBtn { display: none !important; }
+
+        /* --- ESTILOS DE MODALES (COMPARTIR Y DESCARGA) --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease-in-out;
+            padding: 15px;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: #1f1004;
+            border: 1px solid #7a420f;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(15px);
+            transition: transform 0.25s ease-out;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(217, 155, 56, 0.15);
+            color: #fcecd2;
+            font-weight: 800;
+            font-size: 1.05rem;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: #f7dfb8;
+            font-size: 1.3rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover { background: rgba(255,255,255,0.1); }
+
+        .modal-body {
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Pestañas del Modal de Compartir */
+        .share-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: #0d0601;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(217, 155, 56, 0.2);
+        }
+
+        .share-tab {
+            background: transparent;
+            color: #a89279;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .share-tab.active {
+            background: #7a420f;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .share-preview-card {
+            background: #120902;
+            border: 1px dashed rgba(217, 155, 56, 0.3);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .share-preview-title { font-size: 0.92rem; font-weight: 800; color: #fcecd2; }
+        .share-preview-subtitle { font-size: 0.78rem; color: #cbb290; }
+
+        .share-link-section { display: flex; flex-direction: column; gap: 6px; }
+        .share-label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; color: #f7dfb8; }
+        .share-input-group { display: flex; gap: 6px; }
+
+        .share-input-field {
+            flex: 1;
+            background: #000000;
+            border: 1px solid #7a420f;
+            border-radius: 6px;
+            color: #ffffff;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            outline: none;
+            font-family: monospace;
+        }
+
+        .btn-copy {
+            background: #7a420f;
+            color: #ffffff;
+            border: 1px solid rgba(242, 203, 148, 0.3);
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .btn-copy:hover { background: #9e5614; }
+
+        .btn-share-native {
+            background: linear-gradient(180deg, #b86214 0%, #7a3e0b 100%);
+            color: #ffffff;
+            border: 1px solid rgba(242, 203, 148, 0.4);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: background 0.2s;
+        }
+
+        /* Opciones del Modal de Descarga */
+        .download-options { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .download-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: rgba(18, 9, 2, 0.6);
+            border: 1px solid rgba(217, 155, 56, 0.2);
+            border-radius: 8px;
+            text-decoration: none;
+            color: #f7dfb8;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .download-item:hover:not(.disabled) {
+            background: rgba(158, 86, 20, 0.35);
+            border-color: rgba(217, 155, 56, 0.5);
+        }
+        .download-item.disabled { opacity: 0.6; cursor: not-allowed; }
+        .download-info { display: flex; align-items: center; gap: 10px; }
+        .download-icon { font-size: 1.4rem; }
+        .download-title { font-size: 0.88rem; font-weight: 600; color: #fff; }
+        .download-desc { font-size: 0.72rem; color: #d1ba98; }
+        .btn-download-action {
+            background: #7a420f;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border: 1px solid rgba(242, 203, 148, 0.3);
+        }
 
         /* --- MÓVIL EN VERTICAL (PORTRAIT) --- */
         @media (max-width: 600px) {
@@ -198,8 +397,8 @@
                 white-space: nowrap;
             }
 
-            /* Fila 2: Compartir, Velocidad y Volumen */
-            #shareBtn {
+            /* Fila 2: Compartir, App PC, Velocidad y Volumen */
+            #shareBtn, #downloadBtn {
                 flex: 0 0 auto;
                 padding: 4px 6px !important;
                 font-size: 0.72rem !important;
@@ -422,6 +621,7 @@
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
+                <button class="btn-ctrl" id="downloadBtn" onclick="abrirModalDescarga()">💻 App PC</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
@@ -467,8 +667,84 @@
     </div>
 </div>
 
+<!-- MODAL DE COMPARTIR -->
+<div id="shareModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>🔗 Compartir Himnario</span>
+            <button class="modal-close" onclick="cerrarModalCompartir()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="share-tabs">
+                <button class="share-tab" id="tabHymn" onclick="seleccionarTabCompartir('hymn')">🎵 Himno Actual</button>
+                <button class="share-tab active" id="tabMain" onclick="seleccionarTabCompartir('main')">🏠 Página Principal</button>
+            </div>
+
+            <div id="sharePreviewCard" class="share-preview-card">
+                <div id="sharePreviewTitle" class="share-preview-title">Himnario Adventista en Línea</div>
+                <div id="sharePreviewSubtitle" class="share-preview-subtitle">Accede a la colección completa de himnos</div>
+            </div>
+
+            <div class="share-link-section">
+                <label class="share-label">ENLACE CORTO ACORTADO</label>
+                <div class="share-input-group">
+                    <input type="text" id="shareUrlInput" class="share-input-field" readonly value="Generando enlace...">
+                    <button class="btn-copy" onclick="copiarEnlaceCompartir()">📋 Copiar</button>
+                </div>
+            </div>
+
+            <button class="btn-share-native" onclick="compartirNativo()">
+                📲 Compartir vía App / Redes
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE DESCARGA PARA ESCRITORIO -->
+<div id="downloadModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>💻 Descargar Aplicación de Escritorio</span>
+            <button class="modal-close" onclick="cerrarModalDescarga()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 0.85rem; color: #ebd1a7; line-height: 1.4;">
+                Obtén la versión ejecutable para computadora. Ideal para iglesias, proyectar sin navegador e interactuar sin interrupciones.
+            </p>
+            <div class="download-options">
+                <!-- Windows (Pegar tu enlace de Drive en la variable WINDOWS_DRIVE_URL) -->
+                <a href="#" id="windowsDownloadLink" target="_blank" class="download-item" onclick="return manejarClicDescargaWindows(event)">
+                    <div class="download-info">
+                        <span class="download-icon">🪟</span>
+                        <div>
+                            <div class="download-title">Windows</div>
+                            <div class="download-desc">Instalador para Windows (64-bit)</div>
+                        </div>
+                    </div>
+                    <span class="btn-download-action">Descargar</span>
+                </a>
+
+                <!-- macOS (Próximamente) -->
+                <div class="download-item disabled">
+                    <div class="download-info">
+                        <span class="download-icon">🍎</span>
+                        <div>
+                            <div class="download-title">macOS</div>
+                            <div class="download-desc">Versión para Mac</div>
+                        </div>
+                    </div>
+                    <span class="btn-download-action" style="background: #4a2d12; color: #a89279; border-color: transparent;">Próximamente</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
+
+    // 📌 COPIA AQUÍ TU ENLACE DE GOOGLE DRIVE CUANDO LO TENGAS LISTO:
+    const WINDOWS_DRIVE_URL = ""; 
 
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
     let projectionWindow = null;
@@ -485,10 +761,137 @@
     let isSeeking = false;
     let currentSpeed = 1.0;
 
+    let currentShareType = 'main';
+    let currentShortMainUrl = '';
+    let currentShortHymnUrl = '';
+
     let activeVidId = 'myMedia1';
     function getActiveVideo() { return document.getElementById(activeVidId); }
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
+
+    /* --- MODAL DE DESCARGA PC --- */
+    function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
+    function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
+
+    function manejarClicDescargaWindows(e) {
+        if (!WINDOWS_DRIVE_URL || WINDOWS_DRIVE_URL.trim() === "") {
+            e.preventDefault();
+            mostrarToast('El enlace de Google Drive se está procesando. ¡Estará disponible muy pronto!');
+            return false;
+        }
+        document.getElementById('windowsDownloadLink').href = WINDOWS_DRIVE_URL;
+        return true;
+    }
+
+    /* --- COMPARTIR Y ENLACES CORTOS --- */
+    function compartirApp() {
+        document.getElementById('shareModal').classList.add('active');
+        if (currentHimno) {
+            seleccionarTabCompartir('hymn');
+        } else {
+            seleccionarTabCompartir('main');
+        }
+    }
+
+    function cerrarModalCompartir() { document.getElementById('shareModal').classList.remove('active'); }
+
+    async function shortenUrl(longUrl) {
+        try {
+            const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+            if (res.ok) {
+                const short = await res.text();
+                if (short && short.startsWith('http')) return short.trim();
+            }
+        } catch (e) {
+            console.warn("No se pudo acortar la URL:", e);
+        }
+        return longUrl;
+    }
+
+    async function seleccionarTabCompartir(type) {
+        currentShareType = type;
+        const tabMain = document.getElementById('tabMain');
+        const tabHymn = document.getElementById('tabHymn');
+        const input = document.getElementById('shareUrlInput');
+        const previewTitle = document.getElementById('sharePreviewTitle');
+        const previewSubtitle = document.getElementById('sharePreviewSubtitle');
+
+        if (type === 'main') {
+            tabMain.classList.add('active');
+            tabHymn.classList.remove('active');
+            previewTitle.innerText = 'Himnario Adventista en Línea';
+            previewSubtitle.innerText = 'Accede a la colección completa de himnos';
+            input.value = 'Generando enlace...';
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            if (!currentShortMainUrl) {
+                currentShortMainUrl = await shortenUrl(baseUrl);
+            }
+            input.value = currentShortMainUrl;
+        } else {
+            tabHymn.classList.add('active');
+            tabMain.classList.remove('active');
+
+            if (!currentHimno) {
+                previewTitle.innerText = 'Sin himno seleccionado';
+                previewSubtitle.innerText = 'Reproduzca o seleccione un himno para compartirlo';
+                input.value = 'Seleccione un himno primero';
+                return;
+            }
+
+            const isInst = document.getElementById('instrumentalCheckbox').checked;
+            previewTitle.innerText = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+            previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
+            input.value = 'Generando enlace...';
+
+            const hymnUrl = `${window.location.origin}${window.location.pathname}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
+            currentShortHymnUrl = await shortenUrl(hymnUrl);
+            input.value = currentShortHymnUrl;
+        }
+    }
+
+    function copiarEnlaceCompartir() {
+        const input = document.getElementById('shareUrlInput');
+        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
+
+        navigator.clipboard.writeText(input.value);
+        mostrarToast('¡Enlace copiado al portapapeles!');
+    }
+
+    function compartirNativo() {
+        const input = document.getElementById('shareUrlInput');
+        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
+
+        const isMain = currentShareType === 'main';
+        const title = isMain ? 'Himnario Adventista en Línea' : `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+        const text = isMain ? 'Te comparto el Himnario Adventista en Línea' : `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista`;
+
+        if (navigator.share) {
+            navigator.share({ title: title, text: text, url: input.value }).catch(e => console.log('Error compartiendo:', e));
+        } else {
+            copiarEnlaceCompartir();
+        }
+    }
+
+    function mostrarToast(mensaje) {
+        let toast = document.getElementById('toastNotice');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'toastNotice';
+            toast.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#d9822b; color:#fff; padding:8px 16px; border-radius:20px; font-size:0.85rem; font-weight:bold; z-index:2000; box-shadow:0 4px 12px rgba(0,0,0,0.5); opacity:0; transition:opacity 0.3s; pointer-events:none;';
+            document.body.appendChild(toast);
+        }
+        toast.innerText = mensaje;
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+    }
+
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.remove('active');
+        });
+    });
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -650,6 +1053,29 @@
 
         renderList(getFilteredList());
         await cargarPantallas();
+        verificarHimnoUrl();
+    }
+
+    function verificarHimnoUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hymnNum = urlParams.get('h');
+        const isInst = urlParams.get('inst');
+
+        if (isInst === '1') {
+            const chk = document.getElementById('instrumentalCheckbox');
+            if (chk) {
+                chk.checked = true;
+                cambiarModoAudio();
+            }
+        }
+
+        if (hymnNum) {
+            const numFormatted = String(hymnNum).padStart(3, '0');
+            const target = himnosList.find(h => h.num === numFormatted || parseInt(h.num, 10) === parseInt(hymnNum, 10));
+            if (target) {
+                reproducirHimno(target, true);
+            }
+        }
     }
 
     async function cargarPantallas() {
@@ -745,6 +1171,7 @@
                 document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
                 updateActiveListItem();
                 updateMediaSessionMetadata();
+                currentShortHymnUrl = '';
             }, 220);
         }
     }
@@ -759,6 +1186,8 @@
     function reproducirHimno(h, autoPlay = true) {
         currentHimno = h;
         currentIndex = himnosList.findIndex(item => item.num === h.num);
+        currentShortHymnUrl = '';
+
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInstrumental ? 'Instrumental' : 'Cantado';
 
@@ -862,6 +1291,7 @@
     function stopHymn() {
         currentHimno = null;
         currentIndex = -1;
+        currentShortHymnUrl = '';
         
         bgAudio.pause();
         bgAudio.removeAttribute('src');
@@ -980,6 +1410,7 @@
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
         renderList(getFilteredList());
         updateMediaSessionMetadata();
+        currentShortHymnUrl = '';
     }
 
     function getFilteredList() {
@@ -1000,21 +1431,6 @@
         const wrapper = document.getElementById('hymn-player-wrapper');
         if (!document.fullscreenElement) wrapper.requestFullscreen();
         else document.exitFullscreen();
-    }
-
-    function compartirApp() {
-        const shareData = {
-            title: 'Himnario Adventista en Línea',
-            text: currentHimno ? `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista` : 'Te comparto el Himnario Adventista en Línea',
-            url: window.location.href
-        };
-
-        if (navigator.share) {
-            navigator.share(shareData).catch((err) => console.log('Error al compartir:', err));
-        } else {
-            navigator.clipboard.writeText(window.location.href);
-            alert('¡Enlace copiado al portapapeles! Puedes pegarlo en tus redes sociales.');
-        }
     }
 
     function getSelectedDisplay() {
