@@ -10,13 +10,16 @@
     <meta property="og:site_name" content="Himnario Adventista">
     <meta id="ogTitle" property="og:title" content="Himnario Adventista en Línea">
     <meta id="ogDesc" property="og:description" content="Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.">
-    <meta id="ogImage" property="og:image" content="https://luismerinosv.github.io/himnarioadventista/logo-adventista.webp">
-    <meta property="og:image:type" content="image/webp">
+    <meta id="ogImage" property="og:image" content="https://luismerinosv.github.io/himnarioadventista/portada.jpg">
+    <meta property="og:image:secure_url" content="https://luismerinosv.github.io/himnarioadventista/portada.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1280">
+    <meta property="og:image:height" content="720">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta id="twTitle" name="twitter:title" content="Himnario Adventista en Línea">
     <meta id="twDesc" name="twitter:description" content="Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.">
-    <meta id="twImage" name="twitter:image" content="https://luismerinosv.github.io/himnarioadventista/logo-adventista.webp">
+    <meta id="twImage" name="twitter:image" content="https://luismerinosv.github.io/himnarioadventista/portada.jpg">
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -757,6 +760,9 @@
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
 
+    // 🔗 URL DEL WORKER DE CLOUDFLARE QUE CREASTE
+    const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
+
     // 📌 COPIA AQUÍ TU ENLACE DE GOOGLE DRIVE CUANDO LO TENGAS LISTO:
     const WINDOWS_DRIVE_URL = ""; 
 
@@ -786,7 +792,7 @@
 
     /* --- ACTUALIZAR ETIQUETAS META DE LA PÁGINA PARA VISTA PREVIA EN REDES --- */
     function actualizarMetaTags(titulo, descripcion, imagen) {
-        const logoDefecto = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/logo-adventista.webp`;
+        const logoDefecto = "https://luismerinosv.github.io/himnarioadventista/portada.jpg";
         const imgFinal = imagen || logoDefecto;
 
         const ogTitle = document.getElementById('ogTitle');
@@ -861,12 +867,11 @@
             actualizarMetaTags(
                 'Himnario Adventista en Línea',
                 'Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.',
-                ''
+                'https://luismerinosv.github.io/himnarioadventista/portada.jpg'
             );
 
-            const baseUrl = window.location.origin + window.location.pathname;
             if (!currentShortMainUrl) {
-                currentShortMainUrl = await shortenUrl(baseUrl);
+                currentShortMainUrl = await shortenUrl(WORKER_URL);
             }
             input.value = currentShortMainUrl;
         } else {
@@ -888,10 +893,10 @@
             previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
             input.value = 'Generando enlace...';
 
-            actualizarMetaTags(tituloHimno, descHimno, '');
+            actualizarMetaTags(tituloHimno, descHimno, 'https://luismerinosv.github.io/himnarioadventista/portada.jpg');
 
-            const hymnUrl = `${window.location.origin}${window.location.pathname}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
-            currentShortHymnUrl = await shortenUrl(hymnUrl);
+            const targetHymnUrl = `${WORKER_URL}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
+            currentShortHymnUrl = await shortenUrl(targetHymnUrl);
             input.value = currentShortHymnUrl;
         }
     }
