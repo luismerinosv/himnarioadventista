@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Himnario Adventista en Línea</title>
-    <link rel="icon" type="image/png" href="https://luismerinosv.github.io/himnarioadventista/favicon.png">
+    <link rel="icon" type="image/png" href="https://luismerinosv.github.io/himnarioadventista/favicon.png?v=2">
     <!-- ETIQUETAS OPEN GRAPH PARA VISTA PREVIA EN REDES SOCIALES (WHATSAPP, FACEBOOK, TWITTER) -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Himnario Adventista">
@@ -132,7 +132,6 @@
         .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 4px; transition: background 0.2s; white-space: nowrap; }
         .btn-ctrl:hover { background: #9e5614; }
         
-        /* Control de velocidad con botones +/- */
         .speed-container { display: flex; align-items: center; gap: 2px; background: #3b1d05; border: 1px solid rgba(242, 203, 148, 0.25); border-radius: 5px; padding: 1px 3px; }
         .btn-speed { background: #7a420f; color: #f7dfb8; border: none; border-radius: 3px; width: 20px; height: 22px; font-weight: bold; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: background 0.2s; }
         .btn-speed:hover { background: #9e5614; }
@@ -176,7 +175,7 @@
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
         #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #downloadBtn { display: none !important; }
 
-        /* --- ESTILOS DE MODALES (COMPARTIR Y DESCARGA) --- */
+        /* --- ESTILOS DE MODALES --- */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -247,7 +246,6 @@
             gap: 12px;
         }
 
-        /* Pestañas del Modal de Compartir */
         .share-tabs {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -342,7 +340,6 @@
             transition: background 0.2s;
         }
 
-        /* Opciones del Modal de Descarga */
         .download-options { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
         .download-item {
             display: flex;
@@ -375,7 +372,7 @@
             border: 1px solid rgba(242, 203, 148, 0.3);
         }
 
-        /* --- MÓVIL EN VERTICAL (PORTRAIT) --- */
+        /* --- MÓVIL EN VERTICAL --- */
         @media (max-width: 600px) {
             .checkbox-container {
                 flex-wrap: nowrap !important;
@@ -401,7 +398,6 @@
                 justify-content: space-between;
             }
 
-            /* Fila 1: 5 botones (Ant, Repr, Detener, Sig, Full) */
             .controls-buttons > .btn-ctrl:nth-child(-n+5) {
                 flex: 1 1 calc(20% - 4px);
                 min-width: 0;
@@ -414,7 +410,6 @@
                 white-space: nowrap;
             }
 
-            /* Fila 2: Compartir, App PC, Velocidad y Volumen */
             #shareBtn, #downloadBtn {
                 flex: 0 0 auto;
                 padding: 4px 6px !important;
@@ -441,7 +436,7 @@
             .volume-slider { width: 45px !important; }
         }
 
-        /* --- EXCLUSIVO MÓVIL EN HORIZONTAL (LANDSCAPE FIJO) --- */
+        /* --- MÓVIL EN HORIZONTAL --- */
         @media (orientation: landscape) and (max-height: 600px) {
             #hymn-player-wrapper {
                 padding: 4px 6px;
@@ -494,23 +489,10 @@
                 border: 1px solid rgba(217, 155, 56, 0.25);
             }
 
-            .controls-header {
-                font-size: 0.62rem;
-                gap: 4px;
-            }
-
-            .timeline-container {
-                gap: 4px;
-            }
-
-            .time-text {
-                font-size: 0.6rem;
-                min-width: 26px;
-            }
-
-            .progress-slider {
-                height: 3px;
-            }
+            .controls-header { font-size: 0.62rem; gap: 4px; }
+            .timeline-container { gap: 4px; }
+            .time-text { font-size: 0.6rem; min-width: 26px; }
+            .progress-slider { height: 3px; }
 
             .controls-buttons {
                 display: flex !important;
@@ -642,7 +624,6 @@
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
-                    <!-- CONTROL FINO DE VELOCIDAD DE A POQUITO -->
                     <div class="speed-container" title="Control de velocidad (Clic en el número para restablecer a 1.00x)">
                         <button class="btn-speed" onclick="changeSpeed(-0.05)" title="Reducir velocidad (-0.05x)">-</button>
                         <span id="speedDisplay" class="speed-display" onclick="resetSpeed()">1.00x</span>
@@ -703,7 +684,7 @@
             </div>
 
             <div class="share-link-section">
-                <label class="share-label">ENLACE CORTO ACORTADO</label>
+                <label class="share-label">ENLACE ACORTADO</label>
                 <div class="share-input-group">
                     <input type="text" id="shareUrlInput" class="share-input-field" readonly value="Generando enlace...">
                     <button class="btn-copy" onclick="copiarEnlaceCompartir()">📋 Copiar</button>
@@ -729,7 +710,6 @@
                 Obtén la versión ejecutable para computadora. Ideal para iglesias, proyectar sin navegador e interactuar sin interrupciones.
             </p>
             <div class="download-options">
-                <!-- Windows (Pegar tu enlace de Drive en la variable WINDOWS_DRIVE_URL) -->
                 <a href="#" id="windowsDownloadLink" target="_blank" class="download-item" onclick="return manejarClicDescargaWindows(event)">
                     <div class="download-info">
                         <span class="download-icon">🪟</span>
@@ -741,7 +721,6 @@
                     <span class="btn-download-action">Descargar</span>
                 </a>
 
-                <!-- macOS (Próximamente) -->
                 <div class="download-item disabled">
                     <div class="download-info">
                         <span class="download-icon">🍎</span>
@@ -759,11 +738,7 @@
 
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
-
-    // 🔗 URL DEL WORKER DE CLOUDFLARE QUE CREASTE
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
-
-    // 📌 COPIA AQUÍ TU ENLACE DE GOOGLE DRIVE CUANDO LO TENGAS LISTO:
     const WINDOWS_DRIVE_URL = ""; 
 
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
@@ -790,7 +765,6 @@
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
 
-    /* --- ACTUALIZAR ETIQUETAS META DE LA PÁGINA PARA VISTA PREVIA EN REDES --- */
     function actualizarMetaTags(titulo, descripcion, imagen) {
         const logoDefecto = "https://luismerinosv.github.io/himnarioadventista/portada.jpg";
         const imgFinal = imagen || logoDefecto;
@@ -810,7 +784,6 @@
         if (twImage) twImage.setAttribute('content', imgFinal);
     }
 
-    /* --- MODAL DE DESCARGA PC --- */
     function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
     function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
 
@@ -824,7 +797,6 @@
         return true;
     }
 
-    /* --- COMPARTIR Y ENLACES CORTOS --- */
     function compartirApp() {
         document.getElementById('shareModal').classList.add('active');
         if (currentHimno) {
@@ -886,16 +858,19 @@
             }
 
             const isInst = document.getElementById('instrumentalCheckbox').checked;
-            const tituloHimno = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+            const numInt = parseInt(currentHimno.num, 10);
+            const numPadded = String(numInt).padStart(3, '0');
+            const tituloHimno = `Himno ${numInt}: ${currentHimno.title}`;
             const descHimno = `Escucha el ${tituloHimno} (${isInst ? 'Instrumental' : 'Cantado'}) en el Himnario Adventista en Línea.`;
+            const imagenPortada = `https://luismerinosv.github.io/himnarioadventista/portadas/${numPadded}.jpg`;
 
             previewTitle.innerText = tituloHimno;
             previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
             input.value = 'Generando enlace...';
 
-            actualizarMetaTags(tituloHimno, descHimno, 'https://luismerinosv.github.io/himnarioadventista/portada.jpg');
+            actualizarMetaTags(tituloHimno, descHimno, imagenPortada);
 
-            const targetHymnUrl = `${WORKER_URL}?h=${parseInt(currentHimno.num, 10)}${isInst ? '&inst=1' : ''}`;
+            const targetHymnUrl = `${WORKER_URL}?h=${numInt}${isInst ? '&inst=1' : ''}`;
             currentShortHymnUrl = await shortenUrl(targetHymnUrl);
             input.value = currentShortHymnUrl;
         }
@@ -983,13 +958,10 @@
         syncSecondary();
     }
 
-    /* --- REPRODUCTOR DE AUDIO EN SEGUNDO PLANO --- */
     const bgAudio = new Audio();
     bgAudio.preload = 'auto';
 
-    bgAudio.onended = () => {
-        nextHymn();
-    };
+    bgAudio.onended = () => { nextHymn(); };
 
     document.addEventListener('visibilitychange', () => {
         const mainVideo = getActiveVideo();
@@ -1027,7 +999,6 @@
         }
     });
 
-    /* --- CONFIGURACIÓN PARA CONTROLES DE PANTALLA DE BLOQUEO (MEDIA SESSION API) --- */
     function setupMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
@@ -1068,7 +1039,6 @@
                 throw new Error("No se pudo cargar titulos.json desde R2");
             }
         } catch (e) {
-            console.warn("Intentando cargar titulos.json local de respaldo...", e);
             try {
                 const resLocal = await fetch('titulos.json');
                 if (resLocal.ok) {
@@ -1479,8 +1449,8 @@
 
     function togglePantallaCompleta() {
         const wrapper = document.getElementById('hymn-player-wrapper');
-        if (!document.fullscreenElement) wrapper.requestFullscreen();
-        else document.exitFullscreen();
+        if (!document.fullscreenElement) wrapper.requestFullscreen().catch(() => {});
+        else if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
     }
 
     function getSelectedDisplay() {
@@ -1488,10 +1458,14 @@
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
     }
 
+    /* --- LÓGICA DE PROYECCIÓN RESTAURADA --- */
     function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
         const targetDisplay = getSelectedDisplay();
+
+        // Determina si es la pantalla principal o si solo hay un monitor conectado
+        const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
 
         if (!chk.checked) {
             badge.innerText = 'Pantalla Única';
@@ -1503,12 +1477,41 @@
             }
             syncChannel.postMessage({ action: 'close' });
             projectionWindow = null;
+
+            // Al desmarcar la casilla en pantalla única, salir de pantalla completa
+            if (document.fullscreenElement && isPrimaryScreen) {
+                document.exitFullscreen().catch(() => {});
+            }
             return;
         }
 
+        // SI ES LA PANTALLA PRINCIPAL / MONITOR ÚNICO -> ACTIVAR PANTALLA COMPLETA
+        if (isPrimaryScreen) {
+            if (projectionWindow && !projectionWindow.closed) {
+                projectionWindow.close();
+            }
+            syncChannel.postMessage({ action: 'close' });
+            projectionWindow = null;
+
+            badge.innerText = 'Proyectando (Pantalla Completa)';
+            badge.style.background = '#2ecc71';
+            badge.style.color = '#000';
+
+            if (!document.fullscreenElement) {
+                const wrapper = document.getElementById('hymn-player-wrapper');
+                wrapper.requestFullscreen().catch(() => {});
+            }
+            return;
+        }
+
+        // SI ES UN MONITOR SECUNDARIO / PROYECTOR EXTERNO -> ABRIR VENTANA EXTERNA
         badge.innerText = 'Proyectando (Ventana Externa)';
         badge.style.background = '#2ecc71';
         badge.style.color = '#000';
+
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
 
         if (!projectionWindow || projectionWindow.closed) {
             const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
@@ -1613,7 +1616,18 @@
         actualizarModoProyeccion();
     }
 
-    // --- LÓGICA TÁCTIL: ARRASTRAR HACIA ABAJO PARA ACTUALIZAR LA PÁGINA ---
+    /* DETECTAR SALIDA DE PANTALLA COMPLETA CON TECLA ESC */
+    document.addEventListener('fullscreenchange', () => {
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const targetDisplay = getSelectedDisplay();
+        const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
+
+        if (!document.fullscreenElement && chk && chk.checked && isPrimaryScreen) {
+            chk.checked = false;
+            actualizarModoProyeccion();
+        }
+    });
+
     let touchStartY = 0;
     let isPullingToRefresh = false;
 
