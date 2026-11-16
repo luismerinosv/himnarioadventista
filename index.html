@@ -856,10 +856,13 @@
                 <option value="-1">Cargando pantallas...</option>
             </select>
 
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-left: auto;">
-                <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
-                <span>Instrumental</span>
-            </label>
+            <div style="display:flex; align-items:center; gap:6px; margin-left: auto;">
+                <button id="altAudioTrackBtn" class="btn-mini-pl" style="display:none;" onclick="alternarPistaAudioArchivo()" title="Este archivo contiene 2 pistas de audio internas. Toca para cambiar entre Pista 1 y Pista 2.">🎙️ Pista 1</button>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
+                    <span>Instrumental</span>
+                </label>
+            </div>
         </div>
 
         <!-- ENCABEZADO Y SELECTOR DE LISTAS DE REPRODUCCIÓN -->
@@ -969,7 +972,7 @@
         </div>
         <div class="modal-body">
             <p style="font-size: 0.8rem; color: #ebd1a7; line-height: 1.4;">
-                Verifica los 613 himnos en <code>Cantado/</code> e <code>Instrumental/</code> para detectar archivos faltantes (404) o himnos donde <strong>Cantado</strong> tiene subida la misma pista que <strong>Instrumental</strong> (como el 19).
+                Verifica los 613 himnos en <code>Cantado/</code> e <code>Instrumental/</code> para detectar archivos faltantes (404) o himnos donde <strong>Cantado</strong> tiene subida la misma pista que <strong>Instrumental</strong>.
             </p>
 
             <div style="display:flex; gap:8px; align-items:center;">
@@ -1129,8 +1132,8 @@
     const WINDOWS_DRIVE_URL = ""; 
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
+    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v1";
 
-    // Audio WAV silencioso (44 bytes) para desbloquear masterAudio de forma instantánea en el toque del usuario
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
@@ -1163,14 +1166,62 @@
     let currentShortPlaylistUrl = '';
 
     /* =========================================================================
+       PREFERENCIA DE PISTA INTERNA POR ARCHIVO (SOLO SI EL MP4 TIENE 2 PISTAS)
+       ========================================================================= */
+    let altTrackPrefs = {};
+    try {
+        altTrackPrefs = JSON.parse(localStorage.getItem(ALT_TRACK_PREF_KEY) || '{}') || {};
+    } catch (e) {
+        altTrackPrefs = {};
+    }
+
+    function guardarAltTrackPrefs() {
+        try {
+            localStorage.setItem(ALT_TRACK_PREF_KEY, JSON.stringify(altTrackPrefs));
+        } catch (e) {}
+    }
+
+    function getAltTrackKey(h, isInst) {
+        return `${h.num}_${isInst ? 'I' : 'C'}`;
+    }
+
+    function actualizarBotonPistaInterna(soundTracksCount, useAltTrack) {
+        const btn = document.getElementById('altAudioTrackBtn');
+        if (!btn) return;
+        if (soundTracksCount >= 2) {
+            btn.style.display = 'inline-flex';
+            btn.textContent = useAltTrack ? '🎙️ Pista 2' : '🎙️ Pista 1';
+            btn.classList.toggle('active-toggle', useAltTrack);
+        } else {
+            btn.style.display = 'none';
+            btn.classList.remove('active-toggle');
+        }
+    }
+
+    function alternarPistaAudioArchivo() {
+        if (!currentHimno) return;
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        const key = getAltTrackKey(currentHimno, isInst);
+        const nextVal = !altTrackPrefs[key];
+        if (nextVal) {
+            altTrackPrefs[key] = true;
+        } else {
+            delete altTrackPrefs[key];
+        }
+        guardarAltTrackPrefs();
+        const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
+        reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
+        mostrarToast(nextVal ? '🎙️ Cambiado a Pista 2 del archivo' : '🎙️ Cambiado a Pista 1 del archivo');
+    }
+
+    /* =========================================================================
        EXTRACTOR DE PISTA DE AUDIO PURA (ELIMINA PISTA 'vide' DEL ENCABEZADO MP4)
-       Evita que Android Chrome e iOS Safari pausen el audio al cambiar de pestaña
-       y selecciona la 2da pista vocal si el MP4 tiene doble pista (Inst + Cantado)
+       Por defecto conserva la Pista 1 de audio (Cantado) igual que siempre.
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
     const audioOnlyOrder = [];
 
-    function stripVideoTrackFromMp4(arrayBuffer, preferSecondAudio = false) {
+    function stripVideoTrackFromMp4(arrayBuffer, useSecondAudio = false) {
         try {
             const bytes = new Uint8Array(arrayBuffer);
             const view = new DataView(arrayBuffer);
@@ -1217,7 +1268,7 @@
                     }
 
                     soundTracksCount = soundTrackOffsets.length;
-                    if (preferSecondAudio && soundTrackOffsets.length >= 2) {
+                    if (useSecondAudio && soundTrackOffsets.length >= 2) {
                         const firstAudioOffset = soundTrackOffsets[0];
                         bytes[firstAudioOffset + 4] = 0x73; // 's'
                         bytes[firstAudioOffset + 5] = 0x6B; // 'k'
@@ -1251,8 +1302,8 @@
         return null;
     }
 
-    async function obtenerUrlAudioPuro(sourceUrl, preferSecondAudio = false) {
-        const cacheKey = `${sourceUrl}|alt:${preferSecondAudio ? 1 : 0}`;
+    async function obtenerUrlAudioPuro(sourceUrl, useSecondAudio = false) {
+        const cacheKey = `${sourceUrl}|alt:${useSecondAudio ? 1 : 0}`;
         if (audioOnlyBlobCache.has(cacheKey)) {
             return audioOnlyBlobCache.get(cacheKey);
         }
@@ -1260,7 +1311,7 @@
             const resp = await fetch(sourceUrl);
             if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0 };
             const buf = await resp.arrayBuffer();
-            const parsed = stripVideoTrackFromMp4(buf, preferSecondAudio);
+            const parsed = stripVideoTrackFromMp4(buf, useSecondAudio);
             if (!parsed || !parsed.blob) {
                 return { url: sourceUrl, ok: true, soundTracksCount: 1 };
             }
@@ -2980,7 +3031,6 @@
         isUserPaused = !autoPlay;
         useVideoAudioFallback = false;
 
-        // Desbloquear masterAudio síncronamente dentro del gesto táctil del usuario
         if (autoPlay && masterAudio.paused) {
             masterAudio.src = SILENT_AUDIO_DATA_URI;
             masterAudio.play().catch(() => {});
@@ -3021,9 +3071,9 @@
             }
         }
 
-        // En modo Cantado, si el MP4 tiene doble pista (1=Instrumental, 2=Cantado), selecciona la 2da pista vocal
-        const preferSecondAudio = !isInstrumental;
-        let audioRes = await obtenerUrlAudioPuro(playUrl, preferSecondAudio);
+        // Por defecto usa la Pista 1 (Cantado); solo cambia a Pista 2 si el usuario lo activó para este archivo
+        const useAltTrack = Boolean(altTrackPrefs[getAltTrackKey(h, isInstrumental)]);
+        let audioRes = await obtenerUrlAudioPuro(playUrl, useAltTrack);
         if (reqId !== currentPlayRequestId) return;
 
         while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
@@ -3031,7 +3081,7 @@
             remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
             currentRemoteStreamUrl = remoteVideoUrl;
             playUrl = remoteVideoUrl;
-            audioRes = await obtenerUrlAudioPuro(playUrl, preferSecondAudio);
+            audioRes = await obtenerUrlAudioPuro(playUrl, useAltTrack);
             if (reqId !== currentPlayRequestId) return;
         }
 
@@ -3040,20 +3090,12 @@
             masterAudio.removeAttribute('src');
             masterAudio.load();
             isUserPaused = true;
+            actualizarBotonPistaInterna(0, false);
             mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
         }
 
-        // Si en modo Cantado el archivo solo tiene 1 pista de audio, verificar si en R2 es idéntico al Instrumental
-        if (!isInstrumental && audioRes.soundTracksCount < 2 && !isLocal) {
-            const instUrl = getHymnVideoUrl(h, true);
-            Promise.all([inspeccionarArchivoR2(remoteVideoUrl), inspeccionarArchivoR2(instUrl)]).then(([rC, rI]) => {
-                if (reqId !== currentPlayRequestId) return;
-                if (rC.ok && rI.ok && rC.size && rC.size === rI.size) {
-                    mostrarToast(`⚠️ En R2, Cantado/${h.num}.mp4 es idéntico al Instrumental (reemplaza el archivo en R2).`);
-                }
-            });
-        }
+        actualizarBotonPistaInterna(audioRes.soundTracksCount || 1, useAltTrack);
 
         currentActivePlayUrl = playUrl;
         currentAudioOnlyBlobUrl = audioRes.url;
@@ -3161,6 +3203,7 @@
         currentAudioOnlyBlobUrl = '';
         currentCandidateUrls = [];
         currentCandidateIndex = 0;
+        actualizarBotonPistaInterna(0, false);
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
