@@ -1165,16 +1165,18 @@
     /* =========================================================================
        EXTRACTOR DE PISTA DE AUDIO PURA (ELIMINA PISTA 'vide' DEL ENCABEZADO MP4)
        Evita que Android Chrome e iOS Safari pausen el audio al cambiar de pestaña
+       y selecciona la 2da pista vocal si el MP4 tiene doble pista (Inst + Cantado)
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
     const audioOnlyOrder = [];
 
-    function stripVideoTrackFromMp4(arrayBuffer) {
+    function stripVideoTrackFromMp4(arrayBuffer, preferSecondAudio = false) {
         try {
             const bytes = new Uint8Array(arrayBuffer);
             const view = new DataView(arrayBuffer);
             const len = bytes.length;
             let offset = 0;
+            let soundTracksCount = 0;
 
             while (offset + 8 <= len) {
                 let boxSize = view.getUint32(offset, false);
@@ -1193,6 +1195,8 @@
                 if (type === 'moov') {
                     const moovEnd = offset + boxSize;
                     let sub = offset + headerSize;
+                    const soundTrackOffsets = [];
+
                     while (sub + 8 <= moovEnd) {
                         const subSize = view.getUint32(sub, false);
                         if (subSize < 8 || sub + subSize > moovEnd) break;
@@ -1200,7 +1204,9 @@
 
                         if (subType === 'trak') {
                             const handler = findTrackHandlerType(bytes, view, sub + 8, sub + subSize);
-                            if (handler && handler !== 'soun') {
+                            if (handler === 'soun') {
+                                soundTrackOffsets.push(sub);
+                            } else if (handler) {
                                 bytes[sub + 4] = 0x73; // 's'
                                 bytes[sub + 5] = 0x6B; // 'k'
                                 bytes[sub + 6] = 0x69; // 'i'
@@ -1209,11 +1215,20 @@
                         }
                         sub += subSize;
                     }
+
+                    soundTracksCount = soundTrackOffsets.length;
+                    if (preferSecondAudio && soundTrackOffsets.length >= 2) {
+                        const firstAudioOffset = soundTrackOffsets[0];
+                        bytes[firstAudioOffset + 4] = 0x73; // 's'
+                        bytes[firstAudioOffset + 5] = 0x6B; // 'k'
+                        bytes[firstAudioOffset + 6] = 0x69; // 'i'
+                        bytes[firstAudioOffset + 7] = 0x70; // 'p'
+                    }
                     break;
                 }
                 offset += boxSize;
             }
-            return new Blob([bytes], { type: 'audio/mp4' });
+            return { blob: new Blob([bytes], { type: 'audio/mp4' }), soundTracksCount };
         } catch (e) {
             return null;
         }
@@ -1236,29 +1251,33 @@
         return null;
     }
 
-    async function obtenerUrlAudioPuro(sourceUrl) {
-        if (audioOnlyBlobCache.has(sourceUrl)) {
-            return { url: audioOnlyBlobCache.get(sourceUrl), ok: true };
+    async function obtenerUrlAudioPuro(sourceUrl, preferSecondAudio = false) {
+        const cacheKey = `${sourceUrl}|alt:${preferSecondAudio ? 1 : 0}`;
+        if (audioOnlyBlobCache.has(cacheKey)) {
+            return audioOnlyBlobCache.get(cacheKey);
         }
         try {
             const resp = await fetch(sourceUrl);
-            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status };
+            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0 };
             const buf = await resp.arrayBuffer();
-            const audioBlob = stripVideoTrackFromMp4(buf);
-            if (!audioBlob) return { url: sourceUrl, ok: true };
+            const parsed = stripVideoTrackFromMp4(buf, preferSecondAudio);
+            if (!parsed || !parsed.blob) {
+                return { url: sourceUrl, ok: true, soundTracksCount: 1 };
+            }
 
-            const blobUrl = URL.createObjectURL(audioBlob);
-            audioOnlyBlobCache.set(sourceUrl, blobUrl);
-            audioOnlyOrder.push(sourceUrl);
+            const blobUrl = URL.createObjectURL(parsed.blob);
+            const resultObj = { url: blobUrl, ok: true, soundTracksCount: parsed.soundTracksCount };
+            audioOnlyBlobCache.set(cacheKey, resultObj);
+            audioOnlyOrder.push(cacheKey);
             if (audioOnlyOrder.length > 15) {
                 const oldest = audioOnlyOrder.shift();
-                const oldBlob = audioOnlyBlobCache.get(oldest);
-                if (oldBlob) URL.revokeObjectURL(oldBlob);
+                const oldEntry = audioOnlyBlobCache.get(oldest);
+                if (oldEntry && oldEntry.url) URL.revokeObjectURL(oldEntry.url);
                 audioOnlyBlobCache.delete(oldest);
             }
-            return { url: blobUrl, ok: true };
+            return resultObj;
         } catch (e) {
-            return { url: sourceUrl, ok: true };
+            return { url: sourceUrl, ok: true, soundTracksCount: 1 };
         }
     }
 
@@ -1278,7 +1297,6 @@
                 if (!isUserPaused) masterAudio.play().catch(() => {});
                 return;
             }
-            // Probar siguiente variante de nombre si existe (ej. 19.mp4 o 019.MP4)
             if (currentCandidateIndex + 1 < currentCandidateUrls.length) {
                 currentCandidateIndex++;
                 const altUrl = currentCandidateUrls[currentCandidateIndex];
@@ -1787,9 +1805,7 @@
             if (headRes.status === 404) {
                 return { ok: false, status: 404 };
             }
-        } catch (e) {
-            // Respaldo con GET Range: bytes=0-1 si HEAD no está habilitado en CORS
-        }
+        } catch (e) {}
 
         try {
             const getRes = await fetch(url, {
@@ -2508,7 +2524,7 @@
         }
         toast.innerText = mensaje;
         toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 2800);
+        setTimeout(() => { toast.style.opacity = '0'; }, 3500);
     }
 
     document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -2610,7 +2626,6 @@
             return;
         }
 
-        // Verificar que la pista cargada coincida exactamente con el himno y modo (Cantado/Instrumental) actual
         const expectedPrimaryUrl = getHymnVideoUrl(currentHimno);
         if (!currentCandidateUrls.includes(expectedPrimaryUrl) || !currentActivePlayUrl) {
             reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
@@ -3006,8 +3021,9 @@
             }
         }
 
-        // Obtener versión de audio puro; si el nombre principal da 404, probar variantes (19.mp4, 019.MP4, etc.)
-        let audioRes = await obtenerUrlAudioPuro(playUrl);
+        // En modo Cantado, si el MP4 tiene doble pista (1=Instrumental, 2=Cantado), selecciona la 2da pista vocal
+        const preferSecondAudio = !isInstrumental;
+        let audioRes = await obtenerUrlAudioPuro(playUrl, preferSecondAudio);
         if (reqId !== currentPlayRequestId) return;
 
         while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
@@ -3015,7 +3031,7 @@
             remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
             currentRemoteStreamUrl = remoteVideoUrl;
             playUrl = remoteVideoUrl;
-            audioRes = await obtenerUrlAudioPuro(playUrl);
+            audioRes = await obtenerUrlAudioPuro(playUrl, preferSecondAudio);
             if (reqId !== currentPlayRequestId) return;
         }
 
@@ -3026,6 +3042,17 @@
             isUserPaused = true;
             mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
+        }
+
+        // Si en modo Cantado el archivo solo tiene 1 pista de audio, verificar si en R2 es idéntico al Instrumental
+        if (!isInstrumental && audioRes.soundTracksCount < 2 && !isLocal) {
+            const instUrl = getHymnVideoUrl(h, true);
+            Promise.all([inspeccionarArchivoR2(remoteVideoUrl), inspeccionarArchivoR2(instUrl)]).then(([rC, rI]) => {
+                if (reqId !== currentPlayRequestId) return;
+                if (rC.ok && rI.ok && rC.size && rC.size === rI.size) {
+                    mostrarToast(`⚠️ En R2, Cantado/${h.num}.mp4 es idéntico al Instrumental (reemplaza el archivo en R2).`);
+                }
+            });
         }
 
         currentActivePlayUrl = playUrl;
@@ -3302,7 +3329,6 @@
         updateMediaSessionMetadata();
         currentShortHymnUrl = '';
 
-        // Si hay un himno seleccionado o reproduciéndose, recargarlo en el modo elegido
         if (currentHimno) {
             const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
             reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
@@ -3549,7 +3575,9 @@
             projectionWindow.close();
         }
         activeBlobUrls.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
-        audioOnlyBlobCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
+        audioOnlyBlobCache.forEach(entry => {
+            if (entry && entry.url) URL.revokeObjectURL(entry.url);
+        });
     });
 
     window.onload = async () => {
