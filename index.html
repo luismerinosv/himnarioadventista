@@ -753,15 +753,15 @@
 
 <div id="hymn-player-wrapper">
     <div id="playerContainer">
-        <!-- REPRODUCTOR DE VIDEO -->
+        <!-- REPRODUCTOR DE VIDEO (VISUAL SILENCIADO; AUDIO EN masterAudio) -->
         <div class="video-section">
             <div class="video-container">
                 <div id="posterOverlay" class="poster-overlay">
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" preload="auto" crossorigin="anonymous" playsinline></video>
-                <video id="myMedia2" class="video-element" preload="auto" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia1" class="video-element active" muted preload="auto" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia2" class="video-element" muted preload="auto" crossorigin="anonymous" playsinline></video>
             </div>
         </div>
 
@@ -1057,6 +1057,8 @@
     let displaysList = [];
     let isSeeking = false;
     let currentSpeed = 1.0;
+    let currentVolume = 1.0;
+    let isAudioMuted = false;
     let currentPlayRequestId = 0;
     let isUserPaused = true;
 
@@ -1064,6 +1066,13 @@
     let currentShortMainUrl = '';
     let currentShortHymnUrl = '';
     let currentShortPlaylistUrl = '';
+
+    /* =========================================================================
+       MOTOR DE AUDIO MAESTRO INDEPENDIENTE (EVITA CORTES AL CAMBIAR DE PESTAÑA)
+       ========================================================================= */
+    const masterAudio = new Audio();
+    masterAudio.preload = 'auto';
+    masterAudio.onended = () => { handleMediaEnded(); };
 
     /* =========================================================================
        SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB (PARA REPRODUCCIÓN FLUIDA)
@@ -1911,17 +1920,12 @@
             .replace(/"/g, '&quot;');
     }
 
-    /* --- VIDEO DOUBLE BUFFERING Y REPRODUCCIÓN FLUIDA --- */
+    /* --- VIDEO DOUBLE BUFFERING (VISUAL) --- */
     let activeVidId = 'myMedia1';
     let currentRemoteStreamUrl = '';
     function getActiveVideo() { return document.getElementById(activeVidId); }
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
-
-    function getCurrentPlayingMedia() {
-        if (bgAudio.src && !bgAudio.paused) return bgAudio;
-        return getActiveVideo();
-    }
 
     function actualizarMetaTags(titulo, descripcion, imagen) {
         const logoDefecto = "https://luismerinosv.github.io/himnarioadventista/portada.jpg";
@@ -2118,12 +2122,6 @@
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
-    function applyPlaybackSpeed(mediaElement) {
-        if (mediaElement) {
-            mediaElement.playbackRate = currentSpeed;
-        }
-    }
-
     function changeSpeed(delta) {
         currentSpeed = Math.round((currentSpeed + delta) * 100) / 100;
         if (currentSpeed < 0.5) currentSpeed = 0.5;
@@ -2146,17 +2144,13 @@
     }
 
     function applyPlaybackSpeedToAll() {
+        masterAudio.playbackRate = currentSpeed;
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
         if (v1) v1.playbackRate = currentSpeed;
         if (v2) v2.playbackRate = currentSpeed;
-        if (bgAudio && bgAudio.src) bgAudio.playbackRate = currentSpeed;
         syncSecondary();
     }
-
-    const bgAudio = new Audio();
-    bgAudio.preload = 'auto';
-    bgAudio.onended = () => { handleMediaEnded(); };
 
     function handleMediaEnded() {
         if (activeQueuePlaylistId) {
@@ -2179,40 +2173,24 @@
         stopHymn();
     }
 
-    /* CAMBIO DE PESTAÑA/VENTANA SIN INTERRUMPIR EL FLUJO NATIVO */
+    /* TRANSICIÓN DE PESTAÑA SIN MICRO-CORTES:
+       masterAudio sigue sonando sin tocarse; solo pausamos/re-sincronizamos el video visual silenciado */
     document.addEventListener('visibilitychange', () => {
         const mainVideo = getActiveVideo();
+        if (!mainVideo) return;
+
         if (document.hidden) {
-            // No pausamos mainVideo: en PC y Android sigue sonando fluido en segundo plano.
-            // Solo si un navegador móvil estricto (ej. iOS) pausa el video a la fuerza, activamos bgAudio.
-            if (mainVideo && mainVideo.src && !isUserPaused) {
-                setTimeout(() => {
-                    if (document.hidden && !isUserPaused && mainVideo.paused && mainVideo.src && !bgAudio.src) {
-                        bgAudio.src = mainVideo.src;
-                        bgAudio.currentTime = mainVideo.currentTime;
-                        bgAudio.volume = mainVideo.volume;
-                        bgAudio.muted = mainVideo.muted;
-                        applyPlaybackSpeed(bgAudio);
-                        bgAudio.play().catch(err => console.log("Bg audio fallback:", err));
-                    }
-                }, 350);
+            if (!mainVideo.paused) {
+                mainVideo.pause();
             }
         } else {
-            // Al volver a la pestaña, solo sincronizar si bgAudio llegó a intervenir
-            if (bgAudio.src) {
-                const wasPlaying = !bgAudio.paused;
-                const resumeTime = bgAudio.currentTime;
-                bgAudio.pause();
-                bgAudio.removeAttribute('src');
-
-                if (mainVideo && mainVideo.src) {
-                    if (Math.abs(mainVideo.currentTime - resumeTime) > 0.35) {
-                        mainVideo.currentTime = resumeTime;
-                    }
-                    applyPlaybackSpeed(mainVideo);
-                    if (wasPlaying || !isUserPaused) {
-                        mainVideo.play().catch(() => {});
-                    }
+            if (currentHimno && mainVideo.src) {
+                if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
+                    mainVideo.currentTime = masterAudio.currentTime;
+                }
+                mainVideo.playbackRate = currentSpeed;
+                if (!masterAudio.paused) {
+                    mainVideo.play().catch(() => {});
                 }
             }
         }
@@ -2225,12 +2203,14 @@
             navigator.mediaSession.setActionHandler('previoustrack', () => { prevHymn(); });
             navigator.mediaSession.setActionHandler('nexttrack', () => { nextHymn(); });
             navigator.mediaSession.setActionHandler('seekto', (details) => {
-                const activeMedia = getCurrentPlayingMedia();
-                if (!activeMedia) return;
-                if (details.fastSeek && ('fastSeek' in activeMedia)) {
-                    activeMedia.fastSeek(details.seekTime);
+                if (details.fastSeek && ('fastSeek' in masterAudio)) {
+                    masterAudio.fastSeek(details.seekTime);
                 } else {
-                    activeMedia.currentTime = details.seekTime;
+                    masterAudio.currentTime = details.seekTime;
+                }
+                const mainVideo = getActiveVideo();
+                if (mainVideo && mainVideo.src) {
+                    mainVideo.currentTime = details.seekTime;
                 }
                 syncSecondary(true);
             });
@@ -2575,39 +2555,42 @@
             });
         }
 
-        // Si el respaldo de audio estaba activo en segundo plano (ej. iOS), actualizarlo también
-        if (document.hidden && bgAudio.src) {
-            bgAudio.src = playUrl;
-            bgAudio.currentTime = 0;
-            bgAudio.volume = getActiveVideo().volume;
-            bgAudio.muted = getActiveVideo().muted;
-            applyPlaybackSpeed(bgAudio);
-            if (autoPlay) bgAudio.play().catch(() => {});
-
-            const activeVid = getActiveVideo();
-            activeVid.src = playUrl;
-            applyPlaybackSpeed(activeVid);
-            updateActiveListItem();
-            return;
-        }
-
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        if (activeVid.src === playUrl && !activeVid.ended) {
-            applyPlaybackSpeed(activeVid);
-            if (autoPlay) activeVid.play().catch(() => {});
+        // Si ya está cargado el mismo himno
+        if (masterAudio.src === playUrl && !masterAudio.ended) {
+            applyPlaybackSpeedToAll();
+            if (autoPlay) {
+                masterAudio.play().catch(() => {});
+                if (activeVid.src === playUrl && !document.hidden) {
+                    activeVid.currentTime = masterAudio.currentTime;
+                    activeVid.play().catch(() => {});
+                }
+            }
             document.getElementById('posterOverlay').style.display = 'none';
             updateActiveListItem();
             return;
         }
 
+        // 1. Iniciar Audio Maestro inmediatamente (nunca sufre cortes al cambiar de pestaña)
+        masterAudio.src = playUrl;
+        masterAudio.currentTime = 0;
+        masterAudio.volume = currentVolume;
+        masterAudio.muted = isAudioMuted;
+        masterAudio.playbackRate = currentSpeed;
+        if (autoPlay) {
+            masterAudio.play().catch(() => {});
+        }
+
+        // 2. Cargar pista visual silenciada en segundo buffer
+        nextVid.muted = true;
         nextVid.src = playUrl;
         nextVid.load();
 
         let transitioned = false;
         const performTransition = () => {
-            if (transitioned) return;
+            if (transitioned || reqId !== currentPlayRequestId) return;
             transitioned = true;
 
             document.getElementById('posterOverlay').style.display = 'none';
@@ -2615,12 +2598,14 @@
             nextVid.classList.add('active');
             activeVid.classList.remove('active');
             
-            applyPlaybackSpeed(nextVid);
-            if (autoPlay) {
+            nextVid.playbackRate = currentSpeed;
+            if (Math.abs(nextVid.currentTime - masterAudio.currentTime) > 0.15) {
+                nextVid.currentTime = masterAudio.currentTime;
+            }
+            if (!masterAudio.paused && !document.hidden) {
                 nextVid.play().catch(() => {});
             }
 
-            // Liberar el decodificador del video anterior tras el fundido para evitar tirones al cambiar de pestaña
             setTimeout(() => {
                 activeVid.pause();
                 activeVid.removeAttribute('src');
@@ -2633,7 +2618,6 @@
         };
 
         nextVid.oncanplay = () => { performTransition(); };
-        nextVid.onended = () => { handleMediaEnded(); };
 
         if (nextVid.readyState >= 3) {
             performTransition();
@@ -2652,22 +2636,23 @@
             return;
         }
         
-        if (bgAudio.src && !bgAudio.paused) {
-            bgAudio.pause();
-            isUserPaused = true;
-        } else if (document.hidden && bgAudio.src) {
-            applyPlaybackSpeed(bgAudio);
-            bgAudio.play();
+        const mainVideo = getActiveVideo();
+        applyPlaybackSpeedToAll();
+
+        if (masterAudio.paused) {
+            masterAudio.play().catch(() => {});
             isUserPaused = false;
+            if (mainVideo && mainVideo.src && !document.hidden) {
+                if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
+                    mainVideo.currentTime = masterAudio.currentTime;
+                }
+                mainVideo.play().catch(() => {});
+            }
         } else {
-            const mainVideo = getActiveVideo();
-            applyPlaybackSpeed(mainVideo);
-            if (mainVideo.paused) {
-                mainVideo.play();
-                isUserPaused = false;
-            } else {
+            masterAudio.pause();
+            isUserPaused = true;
+            if (mainVideo && !mainVideo.paused) {
                 mainVideo.pause();
-                isUserPaused = true;
             }
         }
 
@@ -2681,14 +2666,15 @@
         currentShortHymnUrl = '';
         currentRemoteStreamUrl = '';
         
-        bgAudio.pause();
-        bgAudio.removeAttribute('src');
+        masterAudio.pause();
+        masterAudio.removeAttribute('src');
+        masterAudio.load();
 
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
 
-        v1.pause(); v1.removeAttribute('src'); v1.load(); v1.classList.remove('active');
-        v2.pause(); v2.removeAttribute('src'); v2.load(); v2.classList.remove('active');
+        v1.pause(); v1.removeAttribute('src'); v1.load(); v1.classList.remove('active'); v1.muted = true;
+        v2.pause(); v2.removeAttribute('src'); v2.load(); v2.classList.remove('active'); v2.muted = true;
 
         v1.classList.add('active');
         activeVidId = 'myMedia1';
@@ -2713,16 +2699,15 @@
 
     function syncSecondary(forceSeek = false) {
         const mainVideo = getActiveVideo();
-        const activeMedia = getCurrentPlayingMedia();
         const chk = document.getElementById('secondaryScreenCheckbox');
 
         if (chk && chk.checked) {
             syncChannel.postMessage({
                 action: 'sync',
-                videoUrl: mainVideo && mainVideo.src ? mainVideo.src : '',
+                videoUrl: (mainVideo && mainVideo.src) ? mainVideo.src : (masterAudio.src || ''),
                 fallbackUrl: currentRemoteStreamUrl || '',
-                isPaused: activeMedia ? activeMedia.paused : true,
-                currentTime: activeMedia ? activeMedia.currentTime : 0,
+                isPaused: masterAudio.paused,
+                currentTime: masterAudio.currentTime || 0,
                 playbackRate: currentSpeed,
                 forceSeek: forceSeek
             });
@@ -2731,24 +2716,34 @@
 
     function syncPlayerLoop() {
         if (!currentHimno) return;
-        const activeMedia = getCurrentPlayingMedia();
-        const cur = activeMedia.currentTime || 0;
-        const dur = activeMedia.duration || getActiveVideo().duration || 0;
+        const mainVideo = getActiveVideo();
+        const cur = masterAudio.currentTime || 0;
+        const dur = masterAudio.duration || (mainVideo ? mainVideo.duration : 0) || 0;
 
         document.getElementById('timeCurrent').innerText = formatTime(cur);
         document.getElementById('timeTotal').innerText = formatTime(dur);
         if (dur > 0 && !isSeeking) {
             document.getElementById('progressSlider').value = (cur / dur) * 100;
         }
-        document.getElementById('playBtn').innerText = activeMedia.paused ? '▶ Repr.' : '⏸ Pausa';
+        document.getElementById('playBtn').innerText = masterAudio.paused ? '▶ Repr.' : '⏸ Pausa';
+
+        // Mantener el video visual silenciado sincronizado mientras la pestaña está visible
+        if (!document.hidden && !masterAudio.paused && mainVideo && mainVideo.src) {
+            if (mainVideo.paused && mainVideo.readyState >= 2) {
+                mainVideo.play().catch(() => {});
+            }
+            if (Math.abs(mainVideo.currentTime - cur) > 0.4) {
+                mainVideo.currentTime = cur;
+            }
+        }
 
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = activeMedia.paused ? 'paused' : 'playing';
+            navigator.mediaSession.playbackState = masterAudio.paused ? 'paused' : 'playing';
             if (dur > 0 && ('setPositionState' in navigator.mediaSession)) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: dur,
-                        playbackRate: activeMedia.playbackRate || currentSpeed,
+                        playbackRate: masterAudio.playbackRate || currentSpeed,
                         position: Math.min(cur, dur)
                     });
                 } catch(e) {}
@@ -2765,28 +2760,30 @@
     }
 
     function userSeek(val) {
-        const activeMedia = getCurrentPlayingMedia();
-        if (activeMedia && activeMedia.duration) {
-            activeMedia.currentTime = (val / 100) * activeMedia.duration;
+        const mainVideo = getActiveVideo();
+        const dur = masterAudio.duration || (mainVideo ? mainVideo.duration : 0) || 0;
+        if (dur > 0) {
+            const targetTime = (val / 100) * dur;
+            masterAudio.currentTime = targetTime;
+            if (mainVideo && mainVideo.src) {
+                mainVideo.currentTime = targetTime;
+            }
             syncSecondary(true);
         }
     }
 
     function setVolume(val) {
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        const vol = val / 100;
-        v1.volume = vol; v2.volume = vol; bgAudio.volume = vol;
-        v1.muted = (val == 0); v2.muted = (val == 0); bgAudio.muted = (val == 0);
-        document.getElementById('muteBtn').innerText = (val == 0 ? '🔇' : '🔊');
+        currentVolume = val / 100;
+        isAudioMuted = (val == 0);
+        masterAudio.volume = currentVolume;
+        masterAudio.muted = isAudioMuted;
+        document.getElementById('muteBtn').innerText = isAudioMuted ? '🔇' : '🔊';
     }
 
     function toggleMute() {
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        const isMuted = !v1.muted;
-        v1.muted = isMuted; v2.muted = isMuted; bgAudio.muted = isMuted;
-        document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+        isAudioMuted = !isAudioMuted;
+        masterAudio.muted = isAudioMuted;
+        document.getElementById('muteBtn').innerText = isAudioMuted ? '🔇' : '🔊';
     }
 
     function prevHymn() {
@@ -2965,7 +2962,7 @@
                             <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                             <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                         </div>
-                        <video id="projVideo" autoplay preload="auto" crossorigin="anonymous"></video>
+                        <video id="projVideo" muted autoplay preload="auto" crossorigin="anonymous"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
                             const v = document.getElementById('projVideo');
