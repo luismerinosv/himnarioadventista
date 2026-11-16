@@ -751,8 +751,8 @@
 </head>
 <body>
 
-<!-- AUDIO MAESTRO MONTADO EN EL DOM PARA REPRODUCCIÓN CONTINUA EN MÓVIL Y ESCRITORIO -->
-<audio id="masterAudio" preload="auto" crossorigin="anonymous" playsinline style="display:none;"></audio>
+<!-- AUDIO MAESTRO (SIN display:none Y CON PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
+<audio id="masterAudio" preload="auto" playsinline></audio>
 
 <div id="hymn-player-wrapper">
     <div id="playerContainer">
@@ -1046,6 +1046,9 @@
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
 
+    // Audio WAV silencioso (44 bytes) para desbloquear masterAudio de forma instantánea en el toque del usuario
+    const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
     let projectionWindow = null;
 
@@ -1065,6 +1068,7 @@
     let currentPlayRequestId = 0;
     let isUserPaused = true;
     let currentActivePlayUrl = '';
+    let currentAudioOnlyBlobUrl = '';
     let useVideoAudioFallback = false;
 
     let currentShareType = 'main';
@@ -1073,13 +1077,124 @@
     let currentShortPlaylistUrl = '';
 
     /* =========================================================================
-       MOTOR DE AUDIO MAESTRO (MONTADO EN EL DOM PARA SEGUNDO PLANO EN MÓVIL)
+       EXTRACTOR DE PISTA DE AUDIO PURA (ELIMINA PISTA 'vide' DEL ENCABEZADO MP4)
+       Evita que Android Chrome e iOS Safari pausen el audio al cambiar de pestaña
+       ========================================================================= */
+    const audioOnlyBlobCache = new Map();
+    const audioOnlyOrder = [];
+
+    function stripVideoTrackFromMp4(arrayBuffer) {
+        try {
+            const bytes = new Uint8Array(arrayBuffer);
+            const view = new DataView(arrayBuffer);
+            const len = bytes.length;
+            let offset = 0;
+
+            while (offset + 8 <= len) {
+                let boxSize = view.getUint32(offset, false);
+                let headerSize = 8;
+                if (boxSize === 1 && offset + 16 <= len) {
+                    const hi = view.getUint32(offset + 8, false);
+                    const lo = view.getUint32(offset + 12, false);
+                    boxSize = hi * 4294967296 + lo;
+                    headerSize = 16;
+                } else if (boxSize === 0) {
+                    boxSize = len - offset;
+                }
+                if (boxSize < headerSize || offset + boxSize > len) break;
+
+                const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+                if (type === 'moov') {
+                    const moovEnd = offset + boxSize;
+                    let sub = offset + headerSize;
+                    while (sub + 8 <= moovEnd) {
+                        const subSize = view.getUint32(sub, false);
+                        if (subSize < 8 || sub + subSize > moovEnd) break;
+                        const subType = String.fromCharCode(bytes[sub + 4], bytes[sub + 5], bytes[sub + 6], bytes[sub + 7]);
+
+                        if (subType === 'trak') {
+                            const handler = findTrackHandlerType(bytes, view, sub + 8, sub + subSize);
+                            if (handler && handler !== 'soun') {
+                                // Renombra 'trak' -> 'skip' en el lugar: conserva los offsets de mdat intactos
+                                bytes[sub + 4] = 0x73; // 's'
+                                bytes[sub + 5] = 0x6B; // 'k'
+                                bytes[sub + 6] = 0x69; // 'i'
+                                bytes[sub + 7] = 0x70; // 'p'
+                            }
+                        }
+                        sub += subSize;
+                    }
+                    break;
+                }
+                offset += boxSize;
+            }
+            return new Blob([bytes], { type: 'audio/mp4' });
+        } catch (e) {
+            console.warn("No se pudo aislar pista de audio:", e);
+            return null;
+        }
+    }
+
+    function findTrackHandlerType(bytes, view, start, end) {
+        let pos = start;
+        while (pos + 8 <= end) {
+            const size = view.getUint32(pos, false);
+            if (size < 8 || pos + size > end) break;
+            const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+            if (type === 'mdia') {
+                return findTrackHandlerType(bytes, view, pos + 8, pos + size);
+            }
+            if (type === 'hdlr' && pos + 20 <= end) {
+                return String.fromCharCode(bytes[pos + 16], bytes[pos + 17], bytes[pos + 18], bytes[pos + 19]);
+            }
+            pos += size;
+        }
+        return null;
+    }
+
+    async function obtenerUrlAudioPuro(sourceUrl) {
+        if (audioOnlyBlobCache.has(sourceUrl)) {
+            return audioOnlyBlobCache.get(sourceUrl);
+        }
+        try {
+            const resp = await fetch(sourceUrl);
+            if (!resp.ok) return sourceUrl;
+            const buf = await resp.arrayBuffer();
+            const audioBlob = stripVideoTrackFromMp4(buf);
+            if (!audioBlob) return sourceUrl;
+
+            const blobUrl = URL.createObjectURL(audioBlob);
+            audioOnlyBlobCache.set(sourceUrl, blobUrl);
+            audioOnlyOrder.push(sourceUrl);
+            if (audioOnlyOrder.length > 15) {
+                const oldest = audioOnlyOrder.shift();
+                const oldBlob = audioOnlyBlobCache.get(oldest);
+                if (oldBlob) URL.revokeObjectURL(oldBlob);
+                audioOnlyBlobCache.delete(oldest);
+            }
+            return blobUrl;
+        } catch (e) {
+            return sourceUrl;
+        }
+    }
+
+    /* =========================================================================
+       MOTOR DE AUDIO MAESTRO (PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL)
        ========================================================================= */
     const masterAudio = document.getElementById('masterAudio');
-    masterAudio.onended = () => { handleMediaEnded(); };
+    masterAudio.onended = () => {
+        if (masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+        handleMediaEnded();
+    };
     masterAudio.onerror = () => {
-        // Respaldo automático si algún navegador móvil no decodifica .mp4 en <audio>
+        if (masterAudio.src === SILENT_AUDIO_DATA_URI) return;
         if (currentHimno && currentActivePlayUrl) {
+            // Si el blob audio-only falló, intentar con la URL directa primero
+            if (masterAudio.src !== currentActivePlayUrl) {
+                masterAudio.src = currentActivePlayUrl;
+                if (!isUserPaused) masterAudio.play().catch(() => {});
+                return;
+            }
             useVideoAudioFallback = true;
             const activeVid = getActiveVideo();
             if (activeVid) {
@@ -2196,48 +2311,74 @@
         stopHymn();
     }
 
-    /* TRANSICIÓN DE PESTAÑA / PANTALLA APAGADA EN MÓVIL Y ESCRITORIO:
-       - Al salir: pausamos solo el video visual para ahorrar batería/GPU; masterAudio sigue sonando.
-       - Al volver: si avanzó a otro himno en segundo plano, cargamos su video; si es el mismo, re-sincronizamos. */
+    /* AL VOLVER A LA PESTAÑA: Sincroniza el video visual con el himno y segundo exacto de masterAudio.
+       (No llamamos mainVideo.pause() al salir para evitar que Android/iOS pausen el MediaSession de la pestaña) */
     document.addEventListener('visibilitychange', () => {
-        const mainVideo = getActiveVideo();
-        if (!mainVideo) return;
+        if (!document.hidden && currentHimno && currentActivePlayUrl) {
+            const mainVideo = getActiveVideo();
+            if (!mainVideo) return;
+            document.getElementById('posterOverlay').style.display = 'none';
 
-        if (document.hidden) {
-            if (!useVideoAudioFallback && !mainVideo.paused) {
-                mainVideo.pause();
-            }
-        } else {
-            if (currentHimno && currentActivePlayUrl) {
-                document.getElementById('posterOverlay').style.display = 'none';
-
-                if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
-                    mainVideo.muted = !useVideoAudioFallback;
-                    mainVideo.dataset.loadedUrl = currentActivePlayUrl;
-                    mainVideo.src = currentActivePlayUrl;
-                    mainVideo.load();
-                    mainVideo.oncanplay = () => {
-                        mainVideo.currentTime = masterAudio.currentTime || 0;
-                        mainVideo.playbackRate = currentSpeed;
-                        if (!masterAudio.paused) mainVideo.play().catch(() => {});
-                    };
-                } else {
-                    if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
-                        mainVideo.currentTime = masterAudio.currentTime;
-                    }
+            if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
+                mainVideo.muted = !useVideoAudioFallback;
+                mainVideo.dataset.loadedUrl = currentActivePlayUrl;
+                mainVideo.src = currentActivePlayUrl;
+                mainVideo.load();
+                mainVideo.oncanplay = () => {
+                    mainVideo.currentTime = masterAudio.currentTime || 0;
                     mainVideo.playbackRate = currentSpeed;
-                    if (!masterAudio.paused) {
-                        mainVideo.play().catch(() => {});
-                    }
+                    if (!masterAudio.paused) mainVideo.play().catch(() => {});
+                };
+            } else {
+                if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
+                    mainVideo.currentTime = masterAudio.currentTime;
+                }
+                mainVideo.playbackRate = currentSpeed;
+                if (!masterAudio.paused) {
+                    mainVideo.play().catch(() => {});
                 }
             }
         }
     });
 
+    function playCurrentMedia() {
+        if (!currentHimno) {
+            if (currentViewId !== 'all') {
+                iniciarReproduccionListaActual();
+            } else {
+                reproducirHimno(himnosList[0], true);
+            }
+            return;
+        }
+        const mainVideo = getActiveVideo();
+        const engine = getPrimaryAudioEngine();
+        applyPlaybackSpeedToAll();
+        engine.play().catch(() => {});
+        isUserPaused = false;
+        if (mainVideo && mainVideo !== engine && mainVideo.src && !document.hidden) {
+            if (Math.abs(mainVideo.currentTime - engine.currentTime) > 0.25) {
+                mainVideo.currentTime = engine.currentTime;
+            }
+            mainVideo.play().catch(() => {});
+        }
+        syncSecondary();
+    }
+
+    function pauseCurrentMedia() {
+        const mainVideo = getActiveVideo();
+        const engine = getPrimaryAudioEngine();
+        engine.pause();
+        isUserPaused = true;
+        if (mainVideo && !mainVideo.paused) {
+            mainVideo.pause();
+        }
+        syncSecondary();
+    }
+
     function setupMediaSession() {
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
-            navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+            navigator.mediaSession.setActionHandler('play', () => { playCurrentMedia(); });
+            navigator.mediaSession.setActionHandler('pause', () => { pauseCurrentMedia(); });
             navigator.mediaSession.setActionHandler('stop', () => { stopHymn(); });
             navigator.mediaSession.setActionHandler('previoustrack', () => { prevHymn(); });
             navigator.mediaSession.setActionHandler('nexttrack', () => { nextHymn(); });
@@ -2557,6 +2698,12 @@
         isUserPaused = !autoPlay;
         useVideoAudioFallback = false;
 
+        // Desbloquear masterAudio síncronamente dentro del gesto táctil del usuario
+        if (autoPlay && masterAudio.paused) {
+            masterAudio.src = SILENT_AUDIO_DATA_URI;
+            masterAudio.play().catch(() => {});
+        }
+
         if (keepPlaylistContext && currentViewId !== 'all') {
             activeQueuePlaylistId = currentViewId;
         } else if (!keepPlaylistContext && currentViewId === 'all') {
@@ -2575,8 +2722,6 @@
         updateMediaSessionMetadata();
         updateActiveListItem();
 
-        // Resolvemos de forma síncrona si ya está en caché o no está guardado en local,
-        // para NO perder el gesto táctil del usuario en dispositivos móviles
         let playUrl = remoteVideoUrl;
         let isLocal = false;
 
@@ -2607,35 +2752,25 @@
             });
         }
 
+        // Obtener versión de audio puro (sin pista 'vide' en moov) para reproducción continua en segundo plano
+        const audioOnlyUrl = await obtenerUrlAudioPuro(playUrl);
+        if (reqId !== currentPlayRequestId) return;
+        currentAudioOnlyBlobUrl = audioOnlyUrl;
+
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        // Si ya está cargado el mismo himno
-        if (masterAudio.src === playUrl && !masterAudio.ended) {
-            applyPlaybackSpeedToAll();
-            if (autoPlay) {
-                masterAudio.play().catch(() => {});
-                if (!document.hidden && activeVid.dataset.loadedUrl === playUrl) {
-                    activeVid.currentTime = masterAudio.currentTime;
-                    activeVid.play().catch(() => {});
-                }
-            }
-            document.getElementById('posterOverlay').style.display = 'none';
-            updateActiveListItem();
-            return;
-        }
-
-        // 1. Iniciar Audio Maestro INMEDIATAMENTE (mantiene activo el servicio de segundo plano en móvil)
-        masterAudio.src = playUrl;
+        // 1. Iniciar Audio Maestro con pista de audio pura (nunca se pausa al salir de la pestaña en móvil)
+        masterAudio.src = audioOnlyUrl;
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
         masterAudio.muted = isAudioMuted;
         masterAudio.playbackRate = currentSpeed;
-        if (autoPlay) {
+        if (autoPlay && !isUserPaused) {
             masterAudio.play().catch(() => {});
         }
 
-        // 2. Si el móvil tiene la pantalla apagada o está en otra app, NO cargar el video pesado en segundo plano
+        // 2. Si el móvil tiene la pantalla apagada o está en otra app, no cargar el video pesado en segundo plano
         if (document.hidden) {
             syncSecondary(true);
             updateActiveListItem();
@@ -2689,39 +2824,19 @@
 
     function togglePlay() {
         if (!currentHimno) {
-            if (currentViewId !== 'all') {
-                iniciarReproduccionListaActual();
-            } else {
-                reproducirHimno(himnosList[0], true);
-            }
+            playCurrentMedia();
             return;
         }
-        
-        const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
-        applyPlaybackSpeedToAll();
-
         if (engine.paused) {
-            engine.play().catch(() => {});
-            isUserPaused = false;
-            if (mainVideo && mainVideo !== engine && mainVideo.src && !document.hidden) {
-                if (Math.abs(mainVideo.currentTime - engine.currentTime) > 0.25) {
-                    mainVideo.currentTime = engine.currentTime;
-                }
-                mainVideo.play().catch(() => {});
-            }
+            playCurrentMedia();
         } else {
-            engine.pause();
-            isUserPaused = true;
-            if (mainVideo && !mainVideo.paused) {
-                mainVideo.pause();
-            }
+            pauseCurrentMedia();
         }
-
-        syncSecondary();
     }
 
     function stopHymn() {
+        currentPlayRequestId++;
         isUserPaused = true;
         useVideoAudioFallback = false;
         currentHimno = null;
@@ -2729,6 +2844,7 @@
         currentShortHymnUrl = '';
         currentRemoteStreamUrl = '';
         currentActivePlayUrl = '';
+        currentAudioOnlyBlobUrl = '';
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
@@ -2780,6 +2896,8 @@
 
     function syncPlayerLoop() {
         if (!currentHimno) return;
+        if (masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+
         const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
         const cur = engine.currentTime || 0;
@@ -3137,6 +3255,7 @@
             projectionWindow.close();
         }
         activeBlobUrls.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
+        audioOnlyBlobCache.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     });
 
     window.onload = async () => {
