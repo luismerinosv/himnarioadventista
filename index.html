@@ -229,7 +229,7 @@
             border: 1px solid #7a420f;
             border-radius: 12px;
             width: 100%;
-            max-width: 460px;
+            max-width: 480px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.9);
             overflow: hidden;
             display: flex;
@@ -513,6 +513,42 @@
         .btn-offline-card strong { font-size: 0.82rem; color: #fff; }
         .btn-offline-card span { font-size: 0.71rem; color: #cbb290; }
 
+        /* --- ESTILOS REPORTE AUDITORÍA R2 --- */
+        .audit-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+        .audit-stat-pill {
+            background: #120902;
+            border: 1px solid rgba(217, 155, 56, 0.25);
+            border-radius: 7px;
+            padding: 8px 6px;
+            text-align: center;
+        }
+        .audit-stat-pill strong {
+            display: block;
+            font-size: 1.05rem;
+            color: #fcecd2;
+        }
+        .audit-stat-pill span {
+            font-size: 0.68rem;
+            color: #cbb290;
+        }
+        .audit-report-box {
+            background: #0d0601;
+            border: 1px solid rgba(217, 155, 56, 0.25);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.78rem;
+            color: #ebd1a7;
+            max-height: 250px;
+            overflow-y: auto;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
         /* --- MÓVIL EN VERTICAL --- */
         @media (max-width: 600px) {
             .checkbox-container {
@@ -751,7 +787,7 @@
 </head>
 <body>
 
-<!-- AUDIO MAESTRO (SIN display:none Y CON PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
+<!-- AUDIO MAESTRO (CON PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
 <audio id="masterAudio" preload="auto" playsinline></audio>
 
 <div id="hymn-player-wrapper">
@@ -837,7 +873,7 @@
                 <button id="playPlaylistBtn" class="btn-mini-pl play-all" style="display:none;" onclick="iniciarReproduccionListaActual()" title="Reproducir esta lista automáticamente de principio a fin">▶ Repr. Lista</button>
                 <button id="loopPlaylistBtn" class="btn-mini-pl" style="display:none;" onclick="toggleRepetirLista()" title="Repetir lista automáticamente al finalizar">🔁</button>
                 <button class="btn-mini-pl" onclick="abrirModalGestionListas()" title="Crear o administrar listas de reproducción">⚙ Listas</button>
-                <button id="offlineMgrBtn" class="btn-mini-pl offline-btn" onclick="abrirModalOffline()" title="Guardar himnos en el dispositivo para reproducción fluida sin internet">💾 Local (0)</button>
+                <button id="offlineMgrBtn" class="btn-mini-pl offline-btn" onclick="abrirModalOffline()" title="Guardar himnos en el dispositivo o verificar archivos en servidor">💾 Local (0)</button>
             </div>
             <div class="playlist-right-badges">
                 <span id="queueActiveBadge" class="queue-badge" title="Reproducción automática de lista activa">AUTO-LISTA</span>
@@ -849,16 +885,16 @@
     </div>
 </div>
 
-<!-- MODAL: ALMACENAMIENTO LOCAL / SIN CONEXIÓN -->
+<!-- MODAL: ALMACENAMIENTO LOCAL / SIN CONEXIÓN / AUDITORÍA R2 -->
 <div id="offlineModal" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-header">
-            <span>💾 Guardar Himnos en Local</span>
+            <span>💾 Local y Diagnóstico de Himnos</span>
             <button class="modal-close" onclick="cerrarModalOffline()">&times;</button>
         </div>
         <div class="modal-body">
             <p style="font-size: 0.82rem; color: #ebd1a7; line-height: 1.4;">
-                Guarda los himnos en el almacenamiento de tu navegador para reproducirlos al instante, sin pausas ni consumo de datos.
+                Guarda himnos en tu navegador para reproducción sin conexión o audita los 613 archivos en Cloudflare R2 (Cantado vs Instrumental).
             </p>
 
             <div class="offline-stats-box">
@@ -915,10 +951,58 @@
                 </button>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid rgba(217,155,56,0.2); padding-top:10px;">
-                <button class="btn-mini-pl" onclick="verSoloGuardadosLocal()">👁 Ver himnos guardados</button>
-                <button class="btn-mini-pl" style="background:#751e19; border-color:#b83830;" onclick="limpiarTodoAlmacenamientoLocal()">🗑️ Liberar espacio</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; border-top:1px solid rgba(217,155,56,0.2); padding-top:10px; flex-wrap:wrap;">
+                <button class="btn-mini-pl" style="background:#5c3d11; border-color:#d9822b;" onclick="abrirModalAuditoriaR2()">🔍 Revisar 613 en R2</button>
+                <button class="btn-mini-pl" onclick="verSoloGuardadosLocal()">👁 Ver guardados</button>
+                <button class="btn-mini-pl" style="background:#751e19; border-color:#b83830;" onclick="limpiarTodoAlmacenamientoLocal()">🗑️ Liberar</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: AUDITORÍA DE ARCHIVOS CANTADO / INSTRUMENTAL EN R2 -->
+<div id="auditModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>🔍 Auditoría Cantado vs Instrumental (R2)</span>
+            <button class="modal-close" onclick="cerrarModalAuditoriaR2()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 0.8rem; color: #ebd1a7; line-height: 1.4;">
+                Verifica los 613 himnos en <code>Cantado/</code> e <code>Instrumental/</code> para detectar archivos faltantes (404) o himnos donde <strong>Cantado</strong> tiene subida la misma pista que <strong>Instrumental</strong> (como el 19).
+            </p>
+
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button id="startAuditBtn" class="btn-copy" style="flex:1; justify-content:center;" onclick="ejecutarAuditoriaR2()">▶ Iniciar revisión de 613 himnos</button>
+                <button id="copyAuditBtn" class="btn-mini-pl" style="padding:8px 10px; display:none;" onclick="copiarReporteAuditoria()">📋 Copiar</button>
+            </div>
+
+            <div id="auditProgressWrap" class="offline-progress-wrap">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem;">
+                    <strong style="color:#fff;">Escaneando servidor R2...</strong>
+                    <span id="auditCounter" style="color:#80c4ff; font-family:monospace;">0 / 613</span>
+                </div>
+                <div class="offline-progress-bar-bg">
+                    <div id="auditProgressFill" class="offline-progress-bar-fill"></div>
+                </div>
+            </div>
+
+            <div id="auditSummaryGrid" class="audit-summary-grid" style="display:none;">
+                <div class="audit-stat-pill">
+                    <strong id="statMissingCantado" style="color:#ff7b72;">0</strong>
+                    <span>Falta Cantado</span>
+                </div>
+                <div class="audit-stat-pill">
+                    <strong id="statMissingInst" style="color:#ff7b72;">0</strong>
+                    <span>Falta Instrumental</span>
+                </div>
+                <div class="audit-stat-pill">
+                    <strong id="statIdentical" style="color:#ffd24c;">0</strong>
+                    <span>Mismo archivo (C=I)</span>
+                </div>
+            </div>
+
+            <div id="auditReportBox" class="audit-report-box" style="display:none;"></div>
         </div>
     </div>
 </div>
@@ -1069,6 +1153,8 @@
     let isUserPaused = true;
     let currentActivePlayUrl = '';
     let currentAudioOnlyBlobUrl = '';
+    let currentCandidateUrls = [];
+    let currentCandidateIndex = 0;
     let useVideoAudioFallback = false;
 
     let currentShareType = 'main';
@@ -1115,7 +1201,6 @@
                         if (subType === 'trak') {
                             const handler = findTrackHandlerType(bytes, view, sub + 8, sub + subSize);
                             if (handler && handler !== 'soun') {
-                                // Renombra 'trak' -> 'skip' en el lugar: conserva los offsets de mdat intactos
                                 bytes[sub + 4] = 0x73; // 's'
                                 bytes[sub + 5] = 0x6B; // 'k'
                                 bytes[sub + 6] = 0x69; // 'i'
@@ -1130,7 +1215,6 @@
             }
             return new Blob([bytes], { type: 'audio/mp4' });
         } catch (e) {
-            console.warn("No se pudo aislar pista de audio:", e);
             return null;
         }
     }
@@ -1154,14 +1238,14 @@
 
     async function obtenerUrlAudioPuro(sourceUrl) {
         if (audioOnlyBlobCache.has(sourceUrl)) {
-            return audioOnlyBlobCache.get(sourceUrl);
+            return { url: audioOnlyBlobCache.get(sourceUrl), ok: true };
         }
         try {
             const resp = await fetch(sourceUrl);
-            if (!resp.ok) return sourceUrl;
+            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status };
             const buf = await resp.arrayBuffer();
             const audioBlob = stripVideoTrackFromMp4(buf);
-            if (!audioBlob) return sourceUrl;
+            if (!audioBlob) return { url: sourceUrl, ok: true };
 
             const blobUrl = URL.createObjectURL(audioBlob);
             audioOnlyBlobCache.set(sourceUrl, blobUrl);
@@ -1172,9 +1256,9 @@
                 if (oldBlob) URL.revokeObjectURL(oldBlob);
                 audioOnlyBlobCache.delete(oldest);
             }
-            return blobUrl;
+            return { url: blobUrl, ok: true };
         } catch (e) {
-            return sourceUrl;
+            return { url: sourceUrl, ok: true };
         }
     }
 
@@ -1189,22 +1273,31 @@
     masterAudio.onerror = () => {
         if (masterAudio.src === SILENT_AUDIO_DATA_URI) return;
         if (currentHimno && currentActivePlayUrl) {
-            // Si el blob audio-only falló, intentar con la URL directa primero
             if (masterAudio.src !== currentActivePlayUrl) {
                 masterAudio.src = currentActivePlayUrl;
                 if (!isUserPaused) masterAudio.play().catch(() => {});
                 return;
             }
-            useVideoAudioFallback = true;
-            const activeVid = getActiveVideo();
-            if (activeVid) {
-                activeVid.muted = isAudioMuted;
-                activeVid.volume = currentVolume;
-                if (activeVid.src !== currentActivePlayUrl) {
-                    activeVid.src = currentActivePlayUrl;
+            // Probar siguiente variante de nombre si existe (ej. 19.mp4 o 019.MP4)
+            if (currentCandidateIndex + 1 < currentCandidateUrls.length) {
+                currentCandidateIndex++;
+                const altUrl = currentCandidateUrls[currentCandidateIndex];
+                currentActivePlayUrl = altUrl;
+                currentRemoteStreamUrl = altUrl;
+                masterAudio.src = altUrl;
+                if (!isUserPaused) masterAudio.play().catch(() => {});
+                const activeVid = getActiveVideo();
+                if (activeVid && !document.hidden) {
+                    activeVid.dataset.loadedUrl = altUrl;
+                    activeVid.src = altUrl;
+                    activeVid.load();
+                    if (!isUserPaused) activeVid.play().catch(() => {});
                 }
-                if (!isUserPaused) activeVid.play().catch(() => {});
+                return;
             }
+
+            const isInst = document.getElementById('instrumentalCheckbox').checked;
+            mostrarToast(`⚠️ El Himno ${parseInt(currentHimno.num, 10)} no está disponible en modo ${isInst ? 'Instrumental' : 'Cantado'}.`);
         }
     };
 
@@ -1249,25 +1342,39 @@
         return offlineDbPromise;
     }
 
-    function getHymnVideoUrl(h, isInstrumental = null) {
+    function getHymnCandidateUrls(h, isInstrumental = null) {
         const isInst = (isInstrumental !== null)
             ? isInstrumental
             : document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const numInt = parseInt(h.num, 10);
+        const candidates = [];
 
-        let videoUrl = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
         const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
-
         if (localTargetMap && localTargetMap[h.num]) {
-            videoUrl = localTargetMap[h.num];
-        } else {
-            const rawEntry = titulosDiccionario[parseInt(h.num, 10)] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
-            if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
-                const suffix = isInst ? '_pista.mp4' : '.mp4';
-                videoUrl = `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`;
-            }
+            candidates.push(localTargetMap[h.num]);
         }
-        return videoUrl;
+
+        const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
+        if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
+            const suffix = isInst ? '_pista.mp4' : '.mp4';
+            candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
+        }
+
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
+        if (String(numInt) !== h.num) {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
+        }
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
+        if (String(numInt) !== h.num) {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
+        }
+
+        return [...new Set(candidates)];
+    }
+
+    function getHymnVideoUrl(h, isInstrumental = null) {
+        return getHymnCandidateUrls(h, isInstrumental)[0];
     }
 
     async function cargarIndiceOffline() {
@@ -1650,6 +1757,160 @@
         actualizarUIAlmacenamientoLocal();
         renderList(getFilteredList());
         mostrarToast('🗑️ Almacenamiento local liberado');
+    }
+
+    /* =========================================================================
+       AUDITORÍA DE ARCHIVOS EN CLOUDFLARE R2 (CANTADO VS INSTRUMENTAL)
+       ========================================================================= */
+    let isAuditingR2 = false;
+    let lastAuditReportText = "";
+
+    function abrirModalAuditoriaR2() {
+        cerrarModalOffline();
+        document.getElementById('auditModal').classList.add('active');
+    }
+
+    function cerrarModalAuditoriaR2() {
+        document.getElementById('auditModal').classList.remove('active');
+    }
+
+    async function inspeccionarArchivoR2(url) {
+        try {
+            const headRes = await fetch(url, { method: 'HEAD' });
+            if (headRes.ok) {
+                return {
+                    ok: true,
+                    size: headRes.headers.get('content-length') || '',
+                    etag: headRes.headers.get('etag') || ''
+                };
+            }
+            if (headRes.status === 404) {
+                return { ok: false, status: 404 };
+            }
+        } catch (e) {
+            // Respaldo con GET Range: bytes=0-1 si HEAD no está habilitado en CORS
+        }
+
+        try {
+            const getRes = await fetch(url, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=0-1' }
+            });
+            if (getRes.ok || getRes.status === 206) {
+                const cr = getRes.headers.get('content-range');
+                const totalSize = cr ? cr.split('/')[1] : (getRes.headers.get('content-length') || '');
+                return {
+                    ok: true,
+                    size: totalSize,
+                    etag: getRes.headers.get('etag') || ''
+                };
+            }
+            return { ok: false, status: getRes.status };
+        } catch (e) {
+            return { ok: false, status: 'ERR' };
+        }
+    }
+
+    async function ejecutarAuditoriaR2() {
+        if (isAuditingR2) return;
+        isAuditingR2 = true;
+
+        const btn = document.getElementById('startAuditBtn');
+        const copyBtn = document.getElementById('copyAuditBtn');
+        const progressWrap = document.getElementById('auditProgressWrap');
+        const counterEl = document.getElementById('auditCounter');
+        const fillEl = document.getElementById('auditProgressFill');
+        const summaryGrid = document.getElementById('auditSummaryGrid');
+        const reportBox = document.getElementById('auditReportBox');
+
+        btn.disabled = true;
+        btn.innerText = '⏳ Revisando archivos en R2...';
+        copyBtn.style.display = 'none';
+        progressWrap.style.display = 'flex';
+        summaryGrid.style.display = 'none';
+        reportBox.style.display = 'none';
+
+        const missingCantado = [];
+        const missingInstrumental = [];
+        const identicalFiles = [];
+
+        const BATCH_SIZE = 20;
+        let checked = 0;
+
+        for (let i = 0; i < himnosList.length; i += BATCH_SIZE) {
+            const slice = himnosList.slice(i, i + BATCH_SIZE);
+            await Promise.all(slice.map(async (h) => {
+                const urlC = getHymnVideoUrl(h, false);
+                const urlI = getHymnVideoUrl(h, true);
+                const [resC, resI] = await Promise.all([
+                    inspeccionarArchivoR2(urlC),
+                    inspeccionarArchivoR2(urlI)
+                ]);
+
+                if (!resC.ok) {
+                    missingCantado.push(`#${h.num} (${h.title}) -> ${resC.status}`);
+                }
+                if (!resI.ok) {
+                    missingInstrumental.push(`#${h.num} (${h.title}) -> ${resI.status}`);
+                }
+                if (resC.ok && resI.ok) {
+                    const sameSize = resC.size && resI.size && resC.size === resI.size;
+                    const sameEtag = resC.etag && resI.etag && resC.etag === resI.etag;
+                    if (sameSize || sameEtag) {
+                        identicalFiles.push(`#${h.num} (${h.title}) [Bytes: ${resC.size}]`);
+                    }
+                }
+            }));
+
+            checked = Math.min(himnosList.length, i + BATCH_SIZE);
+            counterEl.innerText = `${checked} / ${himnosList.length}`;
+            fillEl.style.width = `${Math.round((checked / himnosList.length) * 100)}%`;
+        }
+
+        document.getElementById('statMissingCantado').innerText = missingCantado.length;
+        document.getElementById('statMissingInst').innerText = missingInstrumental.length;
+        document.getElementById('statIdentical').innerText = identicalFiles.length;
+
+        const lines = [];
+        lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===\n`);
+
+        lines.push(`⚠️ MISMO ARCHIVO EN CANTADO E INSTRUMENTAL (${identicalFiles.length}):`);
+        if (identicalFiles.length === 0) {
+            lines.push(`   Ninguno detectado.`);
+        } else {
+            identicalFiles.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lines.push(`\n❌ FALTAN EN CANTADO (${missingCantado.length}):`);
+        if (missingCantado.length === 0) {
+            lines.push(`   Todos los 613 cantados existen.`);
+        } else {
+            missingCantado.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lines.push(`\n❌ FALTAN EN INSTRUMENTAL (${missingInstrumental.length}):`);
+        if (missingInstrumental.length === 0) {
+            lines.push(`   Todos los 613 instrumentales existen.`);
+        } else {
+            missingInstrumental.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lastAuditReportText = lines.join('\n');
+        reportBox.textContent = lastAuditReportText;
+
+        progressWrap.style.display = 'none';
+        summaryGrid.style.display = 'grid';
+        reportBox.style.display = 'block';
+        copyBtn.style.display = 'inline-flex';
+        btn.disabled = false;
+        btn.innerText = '🔄 Volver a revisar';
+        isAuditingR2 = false;
+    }
+
+    function copiarReporteAuditoria() {
+        if (!lastAuditReportText) return;
+        navigator.clipboard.writeText(lastAuditReportText);
+        mostrarToast('📋 Reporte copiado al portapapeles');
     }
 
     /* =========================================================================
@@ -2247,7 +2508,7 @@
         }
         toast.innerText = mensaje;
         toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+        setTimeout(() => { toast.style.opacity = '0'; }, 2800);
     }
 
     document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -2311,8 +2572,6 @@
         stopHymn();
     }
 
-    /* AL VOLVER A LA PESTAÑA: Sincroniza el video visual con el himno y segundo exacto de masterAudio.
-       (No llamamos mainVideo.pause() al salir para evitar que Android/iOS pausen el MediaSession de la pestaña) */
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && currentHimno && currentActivePlayUrl) {
             const mainVideo = getActiveVideo();
@@ -2350,6 +2609,14 @@
             }
             return;
         }
+
+        // Verificar que la pista cargada coincida exactamente con el himno y modo (Cantado/Instrumental) actual
+        const expectedPrimaryUrl = getHymnVideoUrl(currentHimno);
+        if (!currentCandidateUrls.includes(expectedPrimaryUrl) || !currentActivePlayUrl) {
+            reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
+            return;
+        }
+
         const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
         applyPlaybackSpeedToAll();
@@ -2715,7 +2982,9 @@
         currentShortHymnUrl = '';
 
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
-        const remoteVideoUrl = getHymnVideoUrl(h, isInstrumental);
+        currentCandidateUrls = getHymnCandidateUrls(h, isInstrumental);
+        currentCandidateIndex = 0;
+        let remoteVideoUrl = currentCandidateUrls[0];
         currentRemoteStreamUrl = remoteVideoUrl;
 
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
@@ -2737,7 +3006,30 @@
             }
         }
 
+        // Obtener versión de audio puro; si el nombre principal da 404, probar variantes (19.mp4, 019.MP4, etc.)
+        let audioRes = await obtenerUrlAudioPuro(playUrl);
+        if (reqId !== currentPlayRequestId) return;
+
+        while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
+            currentCandidateIndex++;
+            remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
+            currentRemoteStreamUrl = remoteVideoUrl;
+            playUrl = remoteVideoUrl;
+            audioRes = await obtenerUrlAudioPuro(playUrl);
+            if (reqId !== currentPlayRequestId) return;
+        }
+
+        if (!audioRes.ok && !isLocal) {
+            masterAudio.pause();
+            masterAudio.removeAttribute('src');
+            masterAudio.load();
+            isUserPaused = true;
+            mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
+            return;
+        }
+
         currentActivePlayUrl = playUrl;
+        currentAudioOnlyBlobUrl = audioRes.url;
 
         const localBadge = document.getElementById('localPlaybackBadge');
         if (localBadge) {
@@ -2752,16 +3044,11 @@
             });
         }
 
-        // Obtener versión de audio puro (sin pista 'vide' en moov) para reproducción continua en segundo plano
-        const audioOnlyUrl = await obtenerUrlAudioPuro(playUrl);
-        if (reqId !== currentPlayRequestId) return;
-        currentAudioOnlyBlobUrl = audioOnlyUrl;
-
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        // 1. Iniciar Audio Maestro con pista de audio pura (nunca se pausa al salir de la pestaña en móvil)
-        masterAudio.src = audioOnlyUrl;
+        // 1. Iniciar Audio Maestro con pista de audio pura
+        masterAudio.src = audioRes.url;
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
         masterAudio.muted = isAudioMuted;
@@ -2845,6 +3132,8 @@
         currentRemoteStreamUrl = '';
         currentActivePlayUrl = '';
         currentAudioOnlyBlobUrl = '';
+        currentCandidateUrls = [];
+        currentCandidateIndex = 0;
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
@@ -2910,7 +3199,6 @@
         }
         document.getElementById('playBtn').innerText = engine.paused ? '▶ Repr.' : '⏸ Pausa';
 
-        // Mantener el video visual silenciado sincronizado mientras la pestaña está visible
         if (!document.hidden && !engine.paused && mainVideo && mainVideo !== engine && mainVideo.src) {
             if (mainVideo.paused && mainVideo.readyState >= 2) {
                 mainVideo.play().catch(() => {});
@@ -3013,6 +3301,12 @@
         renderList(getFilteredList());
         updateMediaSessionMetadata();
         currentShortHymnUrl = '';
+
+        // Si hay un himno seleccionado o reproduciéndose, recargarlo en el modo elegido
+        if (currentHimno) {
+            const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
+            reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
+        }
     }
 
     function getFilteredList() {
