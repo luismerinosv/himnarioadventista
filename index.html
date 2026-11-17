@@ -1202,7 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v1";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v2";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1515,7 +1515,6 @@
             }
             return resultObj;
         } catch (e) {
-            // Si fetch falla (por CORS o corte temporal), permitir reproducción directa en el elemento multimedia
             return { url: sourceUrl, ok: true, directFallback: true };
         }
     }
@@ -1647,25 +1646,41 @@
         }
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
 
-        // Variantes con espacio accidental antes de .mp4 (ej. "246 .mp4", "84 .mp4")
+        // Variantes con espacio accidental antes de .mp4 (ej. "186 .mp4", "84 .mp4")
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
 
-        // Variantes con el título del himno incluido en el nombre de archivo
-        const rawTitle = (h.title || '').trim();
-        const cleanTitle = removeAccents(rawTitle).replace(/[\\/:*?"<>|]/g, '').trim();
-        const safeRawTitle = rawTitle.replace(/[\\/:*?"<>|]/g, '').trim();
-        const titleVariants = [...new Set([safeRawTitle, cleanTitle].filter(Boolean))];
+        // Variantes de título (NFC, NFD de macOS/iOS, sin tildes, sin ñ, con _ en lugar de ñ)
+        const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+        const nfcTitle = rawTitle.normalize('NFC');
+        const nfdTitle = rawTitle.normalize('NFD');
+        const asciiTitle = removeAccents(rawTitle);
+        const strippedEnieTitle = rawTitle.replace(/[ñÑ]/g, '');
+        const underscoreEnieTitle = rawTitle.replace(/[ñÑ]/g, '_');
+        const strippedEnieAscii = removeAccents(strippedEnieTitle);
+
+        const titleVariants = [...new Set([
+            nfcTitle,
+            nfdTitle,
+            asciiTitle,
+            strippedEnieTitle,
+            underscoreEnieTitle,
+            strippedEnieAscii
+        ].filter(Boolean))];
 
         titleVariants.forEach(t => {
             const namePatterns = [
                 `${h.num} - ${t}.mp4`,
                 `${numInt} - ${t}.mp4`,
+                `${h.num}-${t}.mp4`,
+                `${numInt}-${t}.mp4`,
                 `${h.num} ${t}.mp4`,
                 `${numInt} ${t}.mp4`,
                 `${h.num}. ${t}.mp4`,
                 `${numInt}. ${t}.mp4`,
+                `${h.num}.${t}.mp4`,
+                `${numInt}.${t}.mp4`,
                 `${h.num}_${t.replace(/\s+/g, '_')}.mp4`,
                 `${numInt}_${t.replace(/\s+/g, '_')}.mp4`,
                 `Himno ${numInt} - ${t}.mp4`,
@@ -1712,15 +1727,19 @@
         try {
             const headRes = await fetch(url, { method: 'HEAD', signal });
             if (headRes.ok) return true;
-            if (headRes.status === 405 || headRes.status === 403) {
-                const rangeRes = await fetch(url, {
-                    method: 'GET',
-                    headers: { 'Range': 'bytes=0-1' },
-                    signal
-                });
-                return rangeRes.ok || rangeRes.status === 206;
-            }
-            return false;
+            if (headRes.status === 404) return false;
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+        }
+
+        // Respaldo con GET parcial en caso de que CORS en R2 no permita HEAD
+        try {
+            const rangeRes = await fetch(url, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=0-1' },
+                signal
+            });
+            return rangeRes.ok || rangeRes.status === 206;
         } catch (e) {
             if (e && e.name === 'AbortError') throw e;
             return false;
@@ -1762,15 +1781,15 @@
             if (savedUrlsSet.has(cand)) return cand;
         }
 
-        // Probar primero el candidato principal (0ms de sobrecarga cuando el nombre estándar existe)
+        // Probar primero el candidato principal
         const primaryUrl = candidates[0];
         if (await urlExisteEnServidor(primaryUrl, signal)) {
             return primaryUrl;
         }
 
-        // Si falló la ruta estándar, buscar en paralelo entre todas las variantes posibles
+        // Buscar en paralelo entre todas las variantes posibles (NFC, NFD, sin ñ, separadores, etc.)
         const remaining = candidates.slice(1);
-        const BATCH = 8;
+        const BATCH = 10;
         for (let i = 0; i < remaining.length; i += BATCH) {
             if (signal && signal.aborted) return null;
             const slice = remaining.slice(i, i + BATCH);
@@ -1920,15 +1939,13 @@
         renderList(getFilteredList());
 
         try {
-            // Resolver la URL exacta del himno (incluyendo variantes de nombre/extensión en R2)
             const validUrl = await resolverUrlHimnoValida(h, isInst, signal);
             if (!validUrl) {
-                throw new Error('HTTP 404');
+                throw new Error('NOT_FOUND_R2');
             }
 
             if (savedUrlsSet.has(validUrl)) return true;
 
-            // Descargar con hasta 2 intentos en caso de microcorte de red
             let blob = null;
             let lastErr = null;
             for (let attempt = 1; attempt <= 2; attempt++) {
@@ -1984,8 +2001,10 @@
             if (!silent) {
                 if (err && err.name === 'QuotaExceededError') {
                     mostrarToast('⚠️ Espacio insuficiente en el dispositivo.');
+                } else if (err && err.message === 'NOT_FOUND_R2') {
+                    mostrarToast(`⚠️ Himno ${parseInt(h.num, 10)} (${modeName}) no encontrado en el servidor.`);
                 } else {
-                    mostrarToast(`No se pudo descargar el Himno ${parseInt(h.num, 10)}`);
+                    mostrarToast(`⚠️ Error de red al descargar el Himno ${parseInt(h.num, 10)}`);
                 }
             }
             return false;
