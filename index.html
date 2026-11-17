@@ -201,7 +201,7 @@
         #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
         #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
-        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #downloadBtn { display: none !important; }
+        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #helpBtn { display: none !important; }
 
         /* --- ESTILOS DE MODALES --- */
         .modal-overlay {
@@ -229,7 +229,7 @@
             border: 1px solid #7a420f;
             border-radius: 12px;
             width: 100%;
-            max-width: 480px;
+            max-width: 500px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.9);
             overflow: hidden;
             display: flex;
@@ -275,6 +275,59 @@
             flex-direction: column;
             gap: 12px;
             overflow-y: auto;
+        }
+
+        /* --- ESTILOS MODAL DE AYUDA / CARACTERÍSTICAS --- */
+        .help-intro {
+            font-size: 0.84rem;
+            color: #ebd1a7;
+            line-height: 1.45;
+            background: rgba(18, 9, 2, 0.55);
+            border: 1px solid rgba(217, 155, 56, 0.22);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .help-features-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .help-feature-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 11px;
+            padding: 10px 12px;
+            background: rgba(18, 9, 2, 0.65);
+            border: 1px solid rgba(217, 155, 56, 0.2);
+            border-radius: 8px;
+        }
+
+        .help-feature-icon {
+            font-size: 1.25rem;
+            line-height: 1.2;
+            flex-shrink: 0;
+            width: 26px;
+            text-align: center;
+        }
+
+        .help-feature-content {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .help-feature-title {
+            font-size: 0.86rem;
+            font-weight: 700;
+            color: #fcecd2;
+        }
+
+        .help-feature-desc {
+            font-size: 0.77rem;
+            color: #d1ba98;
+            line-height: 1.4;
         }
 
         .share-tabs {
@@ -370,39 +423,6 @@
             gap: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             transition: background 0.2s;
-        }
-
-        .download-options { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .download-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            background: rgba(18, 9, 2, 0.6);
-            border: 1px solid rgba(217, 155, 56, 0.2);
-            border-radius: 8px;
-            text-decoration: none;
-            color: #f7dfb8;
-            transition: background 0.2s, border-color 0.2s;
-        }
-        .download-item:hover:not(.disabled) {
-            background: rgba(158, 86, 20, 0.35);
-            border-color: rgba(217, 155, 56, 0.5);
-        }
-        .download-item.disabled { opacity: 0.6; cursor: not-allowed; }
-        .download-info { display: flex; align-items: center; gap: 10px; }
-        .download-icon { font-size: 1.4rem; }
-        .download-title { font-size: 0.88rem; font-weight: 600; color: #fff; }
-        .download-desc { font-size: 0.72rem; color: #d1ba98; }
-        .btn-download-action {
-            background: #7a420f;
-            color: #fff;
-            padding: 6px 12px;
-            border-radius: 5px;
-            font-size: 0.78rem;
-            font-weight: 600;
-            border: 1px solid rgba(242, 203, 148, 0.3);
-            cursor: pointer;
         }
 
         /* --- ESTILOS MODAL GESTIÓN DE LISTAS Y ALMACENAMIENTO LOCAL --- */
@@ -587,7 +607,7 @@
                 white-space: nowrap;
             }
 
-            #shareBtn, #downloadBtn {
+            #shareBtn, #helpBtn {
                 flex: 0 0 auto;
                 padding: 4px 6px !important;
                 font-size: 0.72rem !important;
@@ -827,7 +847,7 @@
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
-                <button class="btn-ctrl" id="downloadBtn" onclick="abrirModalDescarga()">💻 App PC</button>
+                <button class="btn-ctrl" id="helpBtn" onclick="abrirModalAyuda()" title="Características y guía de uso" aria-label="Características y guía de uso">❓</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
@@ -884,6 +904,95 @@
         </div>
         
         <ul id="playlist"></ul>
+    </div>
+</div>
+
+<!-- MODAL: AYUDA Y CARACTERÍSTICAS DEL HIMNARIO -->
+<div id="helpModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>❓ Características y Guía de Uso</span>
+            <button class="modal-close" onclick="cerrarModalAyuda()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="help-intro">
+                <strong>Himnario Adventista en Línea</strong> es un reproductor y proyector diseñado para el culto congregacional, la adoración familiar y el uso personal desde computadoras, tabletas o teléfonos móviles.
+            </div>
+
+            <div class="help-features-list">
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">📖</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Colección Completa de 613 Himnos</div>
+                        <div class="help-feature-desc">Accede a los 613 himnos con letra sincronizada en video. Haz doble clic (o toca el botón circular de reproducción) para iniciar cualquier himno.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🎤</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Modo Cantado e Instrumental</div>
+                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar al instante entre la versión con voces y la pista musical de acompañamiento.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🔍</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Búsqueda Instantánea</div>
+                        <div class="help-feature-desc">Escribe el número del himno o cualquier palabra del título (sin importar mayúsculas o tildes). Presiona <strong>Enter</strong> para reproducir el primer resultado.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🖥️</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Proyección en Segunda Pantalla o Pantalla Completa</div>
+                        <div class="help-feature-desc">Marca <strong>Proyectar en</strong> y elige tu monitor secundario o proyector para enviar la letra limpia a pantalla completa mientras mantienes el panel de control en tu pantalla.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">⭐</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Favoritos y Listas de Reproducción</div>
+                        <div class="help-feature-desc">Marca himnos con <strong>☆</strong>, créales listas personalizadas con <strong>+</strong> y <strong>⚙ Listas</strong> (ej. Culto Divino, Escuela Sabática), reordénalos con <strong>▲ / ▼</strong> y reprodúcelos en secuencia con <strong>▶ Repr. Lista</strong> y repetición continua (<strong>🔁</strong>).</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">💾</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Modo Sin Conexión (Almacenamiento Local)</div>
+                        <div class="help-feature-desc">Pulsa <strong>⬇</strong> junto a un himno o abre <strong>💾 Local</strong> para descargar listas completas o los 613 himnos en tu navegador y usarlos sin internet. También puedes activar el auto-guardado al reproducir.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">📱</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Audio en Segundo Plano en Móviles</div>
+                        <div class="help-feature-desc">Sigue escuchando los himnos incluso al apagar la pantalla o cambiar de aplicación, con controles directos desde la pantalla de bloqueo.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">⏩</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Control de Velocidad y Tiempo</div>
+                        <div class="help-feature-desc">Ajusta el tempo de reproducción entre <strong>0.50x</strong> y <strong>2.00x</strong> con los botones <strong>-</strong> y <strong>+</strong> (toca el número para restablecer a 1.00x), adelanta en la barra de progreso y regula el volumen.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🔗</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Compartir Himnos y Listas</div>
+                        <div class="help-feature-desc">Usa <strong>🔗 Compartir</strong> para generar enlaces cortos de un himno específico (Cantado o Instrumental), de una lista de reproducción completa o de la página principal.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1087,48 +1196,9 @@
     </div>
 </div>
 
-<!-- MODAL DE DESCARGA PARA ESCRITORIO -->
-<div id="downloadModal" class="modal-overlay">
-    <div class="modal-card">
-        <div class="modal-header">
-            <span>💻 Descargar Aplicación de Escritorio</span>
-            <button class="modal-close" onclick="cerrarModalDescarga()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <p style="font-size: 0.85rem; color: #ebd1a7; line-height: 1.4;">
-                Obtén la versión ejecutable para computadora. Ideal para iglesias, proyectar sin navegador e interactuar sin interrupciones.
-            </p>
-            <div class="download-options">
-                <a href="#" id="windowsDownloadLink" target="_blank" class="download-item" onclick="return manejarClicDescargaWindows(event)">
-                    <div class="download-info">
-                        <span class="download-icon">🪟</span>
-                        <div>
-                            <div class="download-title">Windows</div>
-                            <div class="download-desc">Instalador para Windows (64-bit)</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action">Descargar</span>
-                </a>
-
-                <div class="download-item disabled">
-                    <div class="download-info">
-                        <span class="download-icon">🍎</span>
-                        <div>
-                            <div class="download-title">macOS</div>
-                            <div class="download-desc">Versión para Mac</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action" style="background: #4a2d12; color: #a89279; border-color: transparent;">Próximamente</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
-    const WINDOWS_DRIVE_URL = ""; 
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
 
@@ -2516,18 +2586,8 @@
         if (twImage) twImage.setAttribute('content', imgFinal);
     }
 
-    function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
-    function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
-
-    function manejarClicDescargaWindows(e) {
-        if (!WINDOWS_DRIVE_URL || WINDOWS_DRIVE_URL.trim() === "") {
-            e.preventDefault();
-            mostrarToast('El enlace de Google Drive se está procesando. ¡Estará disponible muy pronto!');
-            return false;
-        }
-        document.getElementById('windowsDownloadLink').href = WINDOWS_DRIVE_URL;
-        return true;
-    }
+    function abrirModalAyuda() { document.getElementById('helpModal').classList.add('active'); }
+    function cerrarModalAyuda() { document.getElementById('helpModal').classList.remove('active'); }
 
     function compartirApp() {
         document.getElementById('shareModal').classList.add('active');
