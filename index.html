@@ -1234,7 +1234,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v5";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v6";
 
     const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1247,8 +1247,8 @@
     let titulosDiccionario = {};
     const himnosList = [];
 
-    // Patrón detectado automáticamente en la sesión ('num' | 'num_dash_title' | 'num_dot_dash_title' | 'num_dot_title' | 'num_space_title')
-    let detectedNamingStyle = null;
+    // Patrón detectado automáticamente al reproducir ('title_dash' | 'num_only')
+    let detectedNamingPattern = null;
 
     let resolvedUrlsCache = {};
     try {
@@ -1284,7 +1284,7 @@
     let currentShortPlaylistUrl = '';
 
     /* =========================================================================
-       MOTOR UNIFICADO DE REPRODUCCIÓN Y RESOLUCIÓN SIN CORS
+       MOTOR DIRECTO DE REPRODUCCIÓN Y BÚSQUEDA DE RESPALDO SOLO SI FALLA
        ========================================================================= */
     const masterAudio = document.getElementById('masterAudio');
     masterAudio.onended = () => {
@@ -1300,52 +1300,40 @@
         return isMobileDevice ? masterAudio : getActiveVideo();
     }
 
-    function detectarEstiloNombreUrl(url, h) {
+    function registrarPatronExitoso(url, h) {
         try {
             const fileName = decodeURIComponent(url.split('/').pop() || '');
             if (fileName === `${h.num}.mp4` || fileName === `${parseInt(h.num, 10)}.mp4`) {
-                detectedNamingStyle = 'num';
+                detectedNamingPattern = 'num_only';
             } else if (fileName.startsWith(`${h.num} - `)) {
-                detectedNamingStyle = 'num_dash_title';
-            } else if (fileName.startsWith(`${h.num}.- `)) {
-                detectedNamingStyle = 'num_dot_dash_title';
-            } else if (fileName.startsWith(`${h.num}. `)) {
-                detectedNamingStyle = 'num_dot_title';
-            } else if (fileName.startsWith(`${h.num} `)) {
-                detectedNamingStyle = 'num_space_title';
+                detectedNamingPattern = 'title_dash';
             }
         } catch (e) {}
     }
 
-    // Prueba una URL usando un elemento <video preload="metadata"> nativo (100% libre de CORS)
-    function probarUrlMediaSinCors(url, timeoutMs = 4500) {
+    // Sondas ligeras de metadatos de audio (no consumen decodificadores de video ni requieren CORS)
+    function probarUrlLigeraSinCors(probeEl, url, timeoutMs = 2500) {
         return new Promise((resolve) => {
-            const probe = document.createElement('video');
-            probe.preload = 'metadata';
-            probe.muted = true;
-            probe.playsInline = true;
-
             let settled = false;
-            const cleanup = (ok) => {
+            const finish = (ok) => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
-                probe.onloadedmetadata = null;
-                probe.oncanplay = null;
-                probe.onerror = null;
-                probe.pause();
-                probe.removeAttribute('src');
-                probe.load();
+                probeEl.onloadedmetadata = null;
+                probeEl.oncanplay = null;
+                probeEl.onerror = null;
+                probeEl.removeAttribute('src');
+                probeEl.load();
                 resolve(ok ? url : null);
             };
 
-            const timer = setTimeout(() => cleanup(false), timeoutMs);
-            probe.onloadedmetadata = () => cleanup(true);
-            probe.oncanplay = () => cleanup(true);
-            probe.onerror = () => cleanup(false);
+            const timer = setTimeout(() => finish(false), timeoutMs);
+            probeEl.onloadedmetadata = () => finish(true);
+            probeEl.oncanplay = () => finish(true);
+            probeEl.onerror = () => finish(false);
 
-            probe.src = url;
-            probe.load();
+            probeEl.src = url;
+            probeEl.load();
         });
     }
 
@@ -1363,7 +1351,7 @@
 
         const titleEl = document.getElementById('playerCurrentTitle');
         if (titleEl && currentHimno && currentHimno.num === h.num) {
-            titleEl.innerText = `Cargando: Himno ${parseInt(h.num, 10)} ${h.title}...`;
+            titleEl.innerText = `Buscando: Himno ${parseInt(h.num, 10)} ${h.title}...`;
         }
 
         try {
@@ -1375,7 +1363,7 @@
             }
 
             if (validUrl && validUrl !== currentActivePlayUrl) {
-                detectarEstiloNombreUrl(validUrl, h);
+                registrarPatronExitoso(validUrl, h);
                 currentActivePlayUrl = validUrl;
                 currentRemoteStreamUrl = validUrl;
                 iniciarStreamEnReproductor(h, validUrl, isInst, reqId, !isUserPaused, false);
@@ -1397,7 +1385,7 @@
     }
 
     /* =========================================================================
-       SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB Y GENERACIÓN DE RUTAS R2
+       SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB Y RUTAS DE RESPALDO R2
        ========================================================================= */
     const OFFLINE_DB_NAME = "HimnarioAdventistaOfflineDB";
     const OFFLINE_DB_VERSION = 1;
@@ -1443,7 +1431,7 @@
         return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
     }
 
-    function replaceSpanishNWithN(str) {
+    function replaceEnyeWithN(str) {
         return str.replace(/ñ/g, 'n').replace(/Ñ/g, 'N');
     }
 
@@ -1453,10 +1441,9 @@
             : document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
         const numInt = parseInt(h.num, 10);
-        const numPad4 = String(numInt).padStart(4, '0');
         const candidates = [];
 
-        // 0. URL ya resuelta y guardada en caché para este himno
+        // 0. Ruta ya encontrada y guardada en caché
         const resolvedKey = getResolvedCacheKey(h, isInst);
         if (resolvedUrlsCache[resolvedKey]) {
             candidates.push(resolvedUrlsCache[resolvedKey]);
@@ -1468,7 +1455,7 @@
             candidates.push(localTargetMap[h.num]);
         }
 
-        // Campos explícitos si vienen en titulos.json
+        // Campos explícitos si existen en titulos.json
         const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
         if (rawEntry && typeof rawEntry === 'object') {
             if (isInst && rawEntry.instrumental) candidates.push(rawEntry.instrumental);
@@ -1482,126 +1469,82 @@
         }
 
         const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
-        const noPunctTitle = rawTitle.replace(/[¡!¿?,;.'"()\[\]{}«»—–-]/g, '').replace(/\s+/g, ' ').trim();
-        const noCommaTitle = rawTitle.replace(/[,;:]/g, '').replace(/\s+/g, ' ').trim();
+        const urlDirectaTitulo = rawTitle
+            ? `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${rawTitle.normalize('NFC')}.mp4`)}`
+            : null;
+        const urlDirectaNum = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
 
-        // Si ya detectamos que R2 usa "001 - Título.mp4", ponerlo antes de "001.mp4" para que sea instantáneo
-        if (rawTitle && detectedNamingStyle && detectedNamingStyle !== 'num') {
-            const sepMap = {
-                'num_dash_title': ' - ',
-                'num_dot_dash_title': '.- ',
-                'num_dot_title': '. ',
-                'num_space_title': ' '
-            };
-            const prefSep = sepMap[detectedNamingStyle];
-            if (prefSep) {
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}${prefSep}${rawTitle.normalize('NFC')}.mp4`)}`);
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}${prefSep}${rawTitle.normalize('NFD')}.mp4`)}`);
-            }
+        // Prioridad directa según el patrón que ya funcionó en R2
+        if (detectedNamingPattern === 'num_only') {
+            candidates.push(urlDirectaNum);
+            if (urlDirectaTitulo) candidates.push(urlDirectaTitulo);
+        } else {
+            if (urlDirectaTitulo) candidates.push(urlDirectaTitulo);
+            candidates.push(urlDirectaNum);
         }
 
-        // 1. Rutas numéricas estándar (001.mp4, 1.mp4, 001.MP4, 0001.mp4)
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
-        if (String(numInt) !== h.num) {
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
-        }
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
 
-        // 2. Variantes del título (NFC, NFD para macOS/iOS, ñ -> n, sin tildes, sin puntuación, mayúsculas/minúsculas)
-        const baseForms = [...new Set([rawTitle, noPunctTitle, noCommaTitle].filter(Boolean))];
-        const casedForms = [];
-        baseForms.forEach(b => {
-            casedForms.push(
-                b,
-                toTitleCaseAllWords(b),
-                toSentenceCase(b),
-                b.toUpperCase(),
-                b.toLowerCase()
-            );
-        });
+        // Variantes de respaldo (SOLO se prueban si la carga directa falla)
+        if (rawTitle) {
+            const nfc = rawTitle.normalize('NFC');
+            const nfd = rawTitle.normalize('NFD');
+            const noPunctNfc = nfc.replace(/[¡!¿?,;.'"()\[\]{}«»—–-]/g, '').replace(/\s+/g, ' ').trim();
+            const noPunctNfd = noPunctNfc.normalize('NFD');
+            const enyeToN = replaceEnyeWithN(nfc);
+            const noAccents = removeAccents(nfc);
+            const noPunctNoAccents = removeAccents(noPunctNfc);
+            const strippedEnye = nfc.replace(/[ñÑ]/g, '');
 
-        const titleVariantsSet = new Set();
-        casedForms.forEach(c => {
-            if (!c) return;
-            const nfc = c.normalize('NFC');
-            const nfd = c.normalize('NFD');
-            const noAccents = removeAccents(c); // convierte ñ->n y á->a
-            const onlyNReplaced = replaceSpanishNWithN(nfc); // Señor -> Senor, conserva otras tildes
-            const keepNRemoveOtherAccents = nfc
-                .replace(/ñ/g, '__ENYE_LOW__')
-                .replace(/Ñ/g, '__ENYE_UP__')
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/__ENYE_LOW__/g, 'ñ')
-                .replace(/__ENYE_UP__/g, 'Ñ');
-            const strippedN = nfc.replace(/[ñÑ]/g, '');
+            const titleForms = [...new Set([
+                nfc,
+                nfd,
+                noPunctNfc,
+                noPunctNfd,
+                enyeToN,
+                replaceEnyeWithN(noPunctNfc),
+                noAccents,
+                noPunctNoAccents,
+                strippedEnye,
+                toSentenceCase(nfc),
+                toTitleCaseAllWords(nfc),
+                nfc.toUpperCase(),
+                nfc.toLowerCase()
+            ].filter(Boolean))];
 
-            titleVariantsSet.add(nfc);
-            titleVariantsSet.add(nfd);
-            titleVariantsSet.add(noAccents);
-            titleVariantsSet.add(onlyNReplaced);
-            titleVariantsSet.add(keepNRemoveOtherAccents);
-            titleVariantsSet.add(strippedN);
-            titleVariantsSet.add(removeAccents(strippedN));
-        });
+            // 1. Mismo separador " - " con todas las variantes de ñ, NFD, tildes y puntuación
+            titleForms.forEach(t => {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${t}.mp4`)}`);
+            });
 
-        const titleVariants = [...titleVariantsSet].filter(Boolean);
-        const primarySeparators = [' - ', '.- ', '. ', ' ', '_', '-', '- ', ' -', ' – ', ' — '];
-
-        titleVariants.forEach(t => {
-            primarySeparators.forEach(sep => {
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}${sep}${t}.mp4`)}`);
-                if (String(numInt) !== h.num) {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt}${sep}${t}.mp4`)}`);
+            // 2. Otros separadores habituales con NFC y NFD
+            ['.- ', '. ', ' ', '_', '-', ' – '].forEach(sep => {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}${sep}${nfc}.mp4`)}`);
+                if (nfd !== nfc) {
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}${sep}${nfd}.mp4`)}`);
                 }
             });
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${t}.MP4`)}`);
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${t} .mp4`)}`);
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`Himno ${numInt} - ${t}.mp4`)}`);
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`Himno ${h.num} - ${t}.mp4`)}`);
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${t}.mp4`)}`);
+
+            // 3. Sin ceros a la izquierda y extensión mayúscula / espacio final
+            if (String(numInt) !== h.num) {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt} - ${nfc}.mp4`)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt} - ${nfd}.mp4`)}`);
+            }
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${nfc}.MP4`)}`);
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${nfc} .mp4`)}`);
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${nfc}.mp4`)}`);
 
             if (isInst) {
-                [
-                    `${h.num} - ${t} (Instrumental).mp4`,
-                    `${numInt} - ${t} (Instrumental).mp4`,
-                    `${h.num} - ${t} - Instrumental.mp4`,
-                    `${h.num} - ${t} (Pista).mp4`,
-                    `${numInt} - ${t} (Pista).mp4`,
-                    `${h.num} - ${t} - Pista.mp4`,
-                    `${h.num}_pista.mp4`,
-                    `${numInt}_pista.mp4`,
-                    `${h.num}_instrumental.mp4`
-                ].forEach(fn => {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
-                });
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${nfc} (Instrumental).mp4`)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${nfc} (Pista).mp4`)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num}_pista.mp4`)}`);
             } else {
-                [
-                    `${h.num} - ${t} (Cantado).mp4`,
-                    `${numInt} - ${t} (Cantado).mp4`,
-                    `${h.num} - ${t} - Cantado.mp4`,
-                    `${h.num} - ${t} (Himnario Adventista).mp4`,
-                    `${h.num} - ${t} - Himnario Adventista.mp4`
-                ].forEach(fn => {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
-                });
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${h.num} - ${nfc} (Cantado).mp4`)}`);
             }
-        });
-
-        // 3. Extensiones y carpetas alternativas
-        ['.m4v', '.webm', '.mov', '.mp3', '.m4a'].forEach(ext => {
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}${ext}`);
-            if (String(numInt) !== h.num) {
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}${ext}`);
-            }
-        });
-        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta.toLowerCase()}/${h.num}.mp4`);
+        }
 
         return [...new Set(candidates)];
     }
@@ -1620,20 +1563,32 @@
             if (savedUrlsSet.has(cand)) return cand;
         }
 
-        // Probar en lotes paralelos de 15 usando elementos multimedia nativos (sin CORS)
-        const BATCH = 15;
-        for (let i = 0; i < candidates.length; i += BATCH) {
-            if (signal && signal.aborted) return null;
-            const slice = candidates.slice(i, i + BATCH);
-            const results = await Promise.all(
-                slice.map(u => probarUrlMediaSinCors(u, 4000))
-            );
-            const found = results.find(Boolean);
-            if (found) {
-                resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = found;
-                guardarResolvedUrlsCache();
-                return found;
+        // Reutiliza solo 2 sondas de audio ligeras en paralelo (rápido, sin CORS y sin agotar decoders de video)
+        const probeA = document.createElement('audio');
+        const probeB = document.createElement('audio');
+        probeA.preload = 'metadata';
+        probeB.preload = 'metadata';
+
+        try {
+            for (let i = 0; i < candidates.length; i += 2) {
+                if (signal && signal.aborted) return null;
+                const url1 = candidates[i];
+                const url2 = candidates[i + 1];
+
+                const tasks = [probarUrlLigeraSinCors(probeA, url1, 2200)];
+                if (url2) tasks.push(probarUrlLigeraSinCors(probeB, url2, 2200));
+
+                const results = await Promise.all(tasks);
+                const found = results.find(Boolean);
+                if (found) {
+                    resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = found;
+                    guardarResolvedUrlsCache();
+                    return found;
+                }
             }
+        } finally {
+            probeA.removeAttribute('src');
+            probeB.removeAttribute('src');
         }
 
         return null;
@@ -1827,7 +1782,7 @@
                 } else if (err && err.message === 'NOT_FOUND_R2') {
                     mostrarToast(`⚠️ Himno ${parseInt(h.num, 10)} (${modeName}) no encontrado en el servidor.`);
                 } else {
-                    mostrarToast(`⚠️ No se pudo guardar en local (requiere permiso CORS en el servidor para descarga directa).`);
+                    mostrarToast(`⚠️ No se pudo guardar en local (el servidor requiere CORS para descarga directa).`);
                 }
             }
             return false;
@@ -2097,7 +2052,7 @@
         const missingInstrumental = [];
         const altNamesFound = [];
 
-        const BATCH_SIZE = 12;
+        const BATCH_SIZE = 6;
         let checked = 0;
 
         for (let i = 0; i < himnosList.length; i += BATCH_SIZE) {
@@ -2108,18 +2063,21 @@
                     resolverUrlHimnoValida(h, true)
                 ]);
 
+                const expectedStdC = `${CLOUDFLARE_R2_URL}/Cantado/${encodeURIComponent(`${h.num} - ${h.title}.mp4`)}`;
+                const expectedStdI = `${CLOUDFLARE_R2_URL}/Instrumental/${encodeURIComponent(`${h.num} - ${h.title}.mp4`)}`;
+
                 if (!urlC) {
                     missingCantado.push(`#${h.num} (${h.title})`);
                 } else {
-                    detectarEstiloNombreUrl(urlC, h);
-                    if (!urlC.endsWith(`/Cantado/${h.num}.mp4`)) {
+                    registrarPatronExitoso(urlC, h);
+                    if (urlC !== expectedStdC) {
                         altNamesFound.push(`#${h.num} Cantado -> ${decodeURIComponent(urlC.split('/').pop())}`);
                     }
                 }
 
                 if (!urlI) {
                     missingInstrumental.push(`#${h.num} (${h.title})`);
-                } else if (!urlI.endsWith(`/Instrumental/${h.num}.mp4`)) {
+                } else if (urlI !== expectedStdI) {
                     altNamesFound.push(`#${h.num} Instrumental -> ${decodeURIComponent(urlI.split('/').pop())}`);
                 }
             }));
@@ -2827,7 +2785,6 @@
                     mainVideo.muted = true;
                     mainVideo.dataset.loadedUrl = currentActivePlayUrl;
                     mainVideo.src = currentActivePlayUrl;
-                    mainVideo.load();
                     mainVideo.onloadeddata = () => {
                         mainVideo.currentTime = masterAudio.currentTime || 0;
                         mainVideo.playbackRate = currentSpeed;
@@ -3267,7 +3224,6 @@
             masterAudio.volume = currentVolume;
             masterAudio.muted = isAudioMuted;
             masterAudio.playbackRate = currentSpeed;
-            masterAudio.load();
             if (autoPlay && !isUserPaused) {
                 masterAudio.play().catch(() => {});
             }
@@ -3287,7 +3243,6 @@
         nextVid.dataset.loadedUrl = playUrl;
         nextVid.src = playUrl;
         nextVid.onended = () => { if (!isMobileDevice) handleMediaEnded(); };
-        nextVid.load();
 
         if (autoPlay && !isUserPaused) {
             nextVid.play().catch(() => {});
@@ -3299,7 +3254,7 @@
             transitioned = true;
 
             if (!isLocal) {
-                detectarEstiloNombreUrl(playUrl, h);
+                registrarPatronExitoso(playUrl, h);
             }
 
             document.getElementById('posterOverlay').style.display = 'none';
@@ -3367,7 +3322,7 @@
         updateMediaSessionMetadata();
         updateActiveListItem();
 
-        // 1. Verificar si ya está guardado en almacenamiento local (IndexedDB)
+        // 1. Si existe copia guardada en local (IndexedDB), usarla al instante
         const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
         if (savedLocalUrl) {
             const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
@@ -3379,7 +3334,7 @@
             }
         }
 
-        // 2. Reproducir de inmediato la ruta principal o en caché sin demoras
+        // 2. Reproducción directa e inmediata sin comprobaciones previas
         const primaryUrl = currentCandidateUrls[0];
         currentRemoteStreamUrl = primaryUrl;
         iniciarStreamEnReproductor(h, primaryUrl, isInstrumental, reqId, autoPlay, false);
