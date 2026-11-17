@@ -133,6 +133,7 @@
         .controls-buttons { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
         .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 4px; transition: background 0.2s; white-space: nowrap; }
         .btn-ctrl:hover { background: #9e5614; }
+        #helpBtn { font-weight: 900; color: #fcecd2; min-width: 28px; justify-content: center; }
         
         .speed-container { display: flex; align-items: center; gap: 2px; background: #3b1d05; border: 1px solid rgba(242, 203, 148, 0.25); border-radius: 5px; padding: 1px 3px; }
         .btn-speed { background: #7a420f; color: #f7dfb8; border: none; border-radius: 3px; width: 20px; height: 22px; font-weight: bold; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: background 0.2s; }
@@ -609,8 +610,8 @@
 
             #shareBtn, #helpBtn {
                 flex: 0 0 auto;
-                padding: 4px 6px !important;
-                font-size: 0.72rem !important;
+                padding: 4px 7px !important;
+                font-size: 0.75rem !important;
             }
 
             .volume-container {
@@ -847,7 +848,7 @@
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
-                <button class="btn-ctrl" id="helpBtn" onclick="abrirModalAyuda()" title="Características y guía de uso" aria-label="Características y guía de uso">❓</button>
+                <button class="btn-ctrl" id="helpBtn" onclick="abrirModalAyuda()" title="Características y guía de uso" aria-label="Características y guía de uso">?</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
@@ -911,7 +912,7 @@
 <div id="helpModal" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-header">
-            <span>❓ Características y Guía de Uso</span>
+            <span>? Características y Guía de Uso</span>
             <button class="modal-close" onclick="cerrarModalAyuda()">&times;</button>
         </div>
         <div class="modal-body">
@@ -1201,6 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v1";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1211,6 +1213,20 @@
     let instrumentalFilesMap = {};
     let titulosDiccionario = {};
     const himnosList = [];
+
+    let resolvedUrlsCache = {};
+    try {
+        const rawResolved = localStorage.getItem(RESOLVED_URLS_CACHE_KEY);
+        if (rawResolved) resolvedUrlsCache = JSON.parse(rawResolved) || {};
+    } catch (e) {
+        resolvedUrlsCache = {};
+    }
+
+    function guardarResolvedUrlsCache() {
+        try {
+            localStorage.setItem(RESOLVED_URLS_CACHE_KEY, JSON.stringify(resolvedUrlsCache));
+        } catch (e) {}
+    }
 
     let currentIndex = -1;
     let currentHimno = null;
@@ -1235,9 +1251,6 @@
 
     /* =========================================================================
        LECTOR DE ENCABEZADO MP4 Y EXTRACTOR DE PISTA VOCAL / CANTADA
-       Inspecciona hdlr (nombre de pista), udta (name / ©nam / meta), elng,
-       mdhd (idioma) y tkhd (Track_enabled / alternate_group) para seleccionar
-       automáticamente la pista cantada cuando el himnario está en modo Cantado.
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
     const audioOnlyOrder = [];
@@ -1487,7 +1500,7 @@
             const buf = await resp.arrayBuffer();
             const parsedBlob = stripVideoTrackFromMp4(buf, isInstrumental);
             if (!parsedBlob) {
-                return { url: sourceUrl, ok: true };
+                return { url: sourceUrl, ok: true, directFallback: true };
             }
 
             const blobUrl = URL.createObjectURL(parsedBlob);
@@ -1502,7 +1515,8 @@
             }
             return resultObj;
         } catch (e) {
-            return { url: sourceUrl, ok: true };
+            // Si fetch falla (por CORS o corte temporal), permitir reproducción directa en el elemento multimedia
+            return { url: sourceUrl, ok: true, directFallback: true };
         }
     }
 
@@ -1549,7 +1563,7 @@
     }
 
     /* =========================================================================
-       SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB (PARA REPRODUCCIÓN FLUIDA)
+       SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB Y RESOLUCIÓN DE RUTAS R2
        ========================================================================= */
     const OFFLINE_DB_NAME = "HimnarioAdventistaOfflineDB";
     const OFFLINE_DB_VERSION = 1;
@@ -1585,13 +1599,24 @@
         return offlineDbPromise;
     }
 
+    function getResolvedCacheKey(h, isInst) {
+        return `${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`;
+    }
+
     function getHymnCandidateUrls(h, isInstrumental = null) {
         const isInst = (isInstrumental !== null)
             ? isInstrumental
             : document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const carpetaLower = carpeta.toLowerCase();
         const numInt = parseInt(h.num, 10);
+        const numPad4 = String(numInt).padStart(4, '0');
         const candidates = [];
+
+        const resolvedKey = getResolvedCacheKey(h, isInst);
+        if (resolvedUrlsCache[resolvedKey]) {
+            candidates.push(resolvedUrlsCache[resolvedKey]);
+        }
 
         const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
         if (localTargetMap && localTargetMap[h.num]) {
@@ -1599,11 +1624,19 @@
         }
 
         const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
-        if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
-            const suffix = isInst ? '_pista.mp4' : '.mp4';
-            candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
+        if (rawEntry && typeof rawEntry === 'object') {
+            if (isInst && rawEntry.instrumental) candidates.push(rawEntry.instrumental);
+            if (!isInst && rawEntry.cantado) candidates.push(rawEntry.cantado);
+            if (rawEntry.url) candidates.push(rawEntry.url);
+            if (rawEntry.archivo) {
+                const suffix = isInst ? '_pista.mp4' : '.mp4';
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + '.mp4')}`);
+            }
         }
 
+        // Rutas numéricas estándar (001.mp4, 1.mp4, 001.MP4, 1.MP4, 0001.mp4)
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
@@ -1612,12 +1645,170 @@
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
         }
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
+
+        // Variantes con espacio accidental antes de .mp4 (ej. "246 .mp4", "84 .mp4")
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
+
+        // Variantes con el título del himno incluido en el nombre de archivo
+        const rawTitle = (h.title || '').trim();
+        const cleanTitle = removeAccents(rawTitle).replace(/[\\/:*?"<>|]/g, '').trim();
+        const safeRawTitle = rawTitle.replace(/[\\/:*?"<>|]/g, '').trim();
+        const titleVariants = [...new Set([safeRawTitle, cleanTitle].filter(Boolean))];
+
+        titleVariants.forEach(t => {
+            const namePatterns = [
+                `${h.num} - ${t}.mp4`,
+                `${numInt} - ${t}.mp4`,
+                `${h.num} ${t}.mp4`,
+                `${numInt} ${t}.mp4`,
+                `${h.num}. ${t}.mp4`,
+                `${numInt}. ${t}.mp4`,
+                `${h.num}_${t.replace(/\s+/g, '_')}.mp4`,
+                `${numInt}_${t.replace(/\s+/g, '_')}.mp4`,
+                `Himno ${numInt} - ${t}.mp4`,
+                `Himno ${h.num} - ${t}.mp4`,
+                `Himno ${numInt} ${t}.mp4`
+            ];
+            if (isInst) {
+                namePatterns.push(
+                    `${h.num} - ${t} (Instrumental).mp4`,
+                    `${numInt} - ${t} (Instrumental).mp4`,
+                    `${h.num} - ${t} - Pista.mp4`,
+                    `${numInt} - ${t} - Pista.mp4`,
+                    `${h.num}_pista.mp4`,
+                    `${numInt}_pista.mp4`
+                );
+            }
+            namePatterns.forEach(fileName => {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fileName)}`);
+            });
+        });
+
+        // Otras extensiones posibles de video/audio en R2
+        ['.m4v', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}${ext}`);
+            if (String(numInt) !== h.num) {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}${ext}`);
+            }
+        });
+
+        // Subcarpeta Himnos/ o carpeta en minúsculas
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${numInt}.mp4`);
 
         return [...new Set(candidates)];
     }
 
     function getHymnVideoUrl(h, isInstrumental = null) {
         return getHymnCandidateUrls(h, isInstrumental)[0];
+    }
+
+    async function urlExisteEnServidor(url, signal = null) {
+        try {
+            const headRes = await fetch(url, { method: 'HEAD', signal });
+            if (headRes.ok) return true;
+            if (headRes.status === 405 || headRes.status === 403) {
+                const rangeRes = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Range': 'bytes=0-1' },
+                    signal
+                });
+                return rangeRes.ok || rangeRes.status === 206;
+            }
+            return false;
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+            return false;
+        }
+    }
+
+    async function buscarPorPrefijoXmlR2(carpeta, numStr, numInt, signal = null) {
+        const prefixes = [`${carpeta}/${numStr}`, `${carpeta}/${numInt}`];
+        for (const prefix of prefixes) {
+            try {
+                const listUrl = `${CLOUDFLARE_R2_URL}/?list-type=2&prefix=${encodeURIComponent(prefix)}`;
+                const res = await fetch(listUrl, { signal });
+                if (!res.ok) continue;
+                const xmlText = await res.text();
+                const keyMatches = [...xmlText.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
+                const exactRegex = new RegExp(`^${carpeta}/0*${numInt}(?:[^0-9].*)?\\.(mp4|m4v|webm|mov|mkv|mp3|m4a)$`, 'i');
+                const matchedKey = keyMatches.find(k => exactRegex.test(k));
+                if (matchedKey) {
+                    const encodedPath = matchedKey.split('/').map(seg => encodeURIComponent(seg)).join('/');
+                    return `${CLOUDFLARE_R2_URL}/${encodedPath}`;
+                }
+            } catch (e) {
+                if (e && e.name === 'AbortError') throw e;
+            }
+        }
+        return null;
+    }
+
+    async function resolverUrlHimnoValida(h, isInstrumental = null, signal = null) {
+        const isInst = (isInstrumental !== null)
+            ? isInstrumental
+            : document.getElementById('instrumentalCheckbox').checked;
+        const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const numInt = parseInt(h.num, 10);
+        const candidates = getHymnCandidateUrls(h, isInst);
+
+        // Si ya está guardado en IndexedDB con alguna de las URLs candidatas, devolverla al instante
+        for (const cand of candidates) {
+            if (savedUrlsSet.has(cand)) return cand;
+        }
+
+        // Probar primero el candidato principal (0ms de sobrecarga cuando el nombre estándar existe)
+        const primaryUrl = candidates[0];
+        if (await urlExisteEnServidor(primaryUrl, signal)) {
+            return primaryUrl;
+        }
+
+        // Si falló la ruta estándar, buscar en paralelo entre todas las variantes posibles
+        const remaining = candidates.slice(1);
+        const BATCH = 8;
+        for (let i = 0; i < remaining.length; i += BATCH) {
+            if (signal && signal.aborted) return null;
+            const slice = remaining.slice(i, i + BATCH);
+            const results = await Promise.all(
+                slice.map(async (u) => ((await urlExisteEnServidor(u, signal)) ? u : null))
+            );
+            const found = results.find(Boolean);
+            if (found) {
+                resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = found;
+                guardarResolvedUrlsCache();
+                return found;
+            }
+        }
+
+        // Último intento: consultar listado XML de R2 si el bucket lo permite
+        const xmlFound = await buscarPorPrefijoXmlR2(carpeta, h.num, numInt, signal);
+        if (xmlFound) {
+            resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = xmlFound;
+            guardarResolvedUrlsCache();
+            return xmlFound;
+        }
+
+        return null;
+    }
+
+    function estaHimnoGuardadoEnLocal(h, isInst) {
+        const candidates = getHymnCandidateUrls(h, isInst);
+        return candidates.some(u => savedUrlsSet.has(u));
+    }
+
+    function obtenerUrlGuardadaEnLocal(h, isInst) {
+        const candidates = getHymnCandidateUrls(h, isInst);
+        return candidates.find(u => savedUrlsSet.has(u)) || null;
+    }
+
+    function estaHimnoDescargandoEnLocal(h, isInst) {
+        const candidates = getHymnCandidateUrls(h, isInst);
+        return candidates.some(u => downloadingUrlsSet.has(u));
     }
 
     async function cargarIndiceOffline() {
@@ -1713,10 +1904,11 @@
             ? isInstrumental
             : document.getElementById('instrumentalCheckbox').checked;
         const modeName = isInst ? 'Instrumental' : 'Cantado';
-        const videoUrl = getHymnVideoUrl(h, isInst);
 
-        if (savedUrlsSet.has(videoUrl)) return true;
-        if (downloadingUrlsSet.has(videoUrl)) return false;
+        if (estaHimnoGuardadoEnLocal(h, isInst)) return true;
+
+        const initialKeyUrl = getHymnVideoUrl(h, isInst);
+        if (downloadingUrlsSet.has(initialKeyUrl)) return false;
 
         const db = await abrirOfflineDB();
         if (!db) {
@@ -1724,19 +1916,43 @@
             return false;
         }
 
-        downloadingUrlsSet.add(videoUrl);
+        downloadingUrlsSet.add(initialKeyUrl);
         renderList(getFilteredList());
 
         try {
-            const response = await fetch(videoUrl, { signal });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const blob = await response.blob();
+            // Resolver la URL exacta del himno (incluyendo variantes de nombre/extensión en R2)
+            const validUrl = await resolverUrlHimnoValida(h, isInst, signal);
+            if (!validUrl) {
+                throw new Error('HTTP 404');
+            }
+
+            if (savedUrlsSet.has(validUrl)) return true;
+
+            // Descargar con hasta 2 intentos en caso de microcorte de red
+            let blob = null;
+            let lastErr = null;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    const response = await fetch(validUrl, { signal });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    blob = await response.blob();
+                    break;
+                } catch (fetchErr) {
+                    if (fetchErr && fetchErr.name === 'AbortError') throw fetchErr;
+                    lastErr = fetchErr;
+                    if (attempt < 2) {
+                        await new Promise(r => setTimeout(r, 400));
+                    }
+                }
+            }
+
+            if (!blob) throw lastErr || new Error('Error de descarga');
 
             await new Promise((resolve, reject) => {
                 const tx = db.transaction(OFFLINE_STORE, 'readwrite');
                 const store = tx.objectStore(OFFLINE_STORE);
                 const record = {
-                    url: videoUrl,
+                    url: validUrl,
                     num: h.num,
                     title: h.title,
                     mode: modeName,
@@ -1749,8 +1965,8 @@
                 putReq.onerror = (err) => reject(putReq.error || err);
             });
 
-            savedUrlsSet.add(videoUrl);
-            savedMetaMap.set(videoUrl, {
+            savedUrlsSet.add(validUrl);
+            savedMetaMap.set(validUrl, {
                 num: h.num,
                 title: h.title,
                 mode: modeName,
@@ -1774,7 +1990,7 @@
             }
             return false;
         } finally {
-            downloadingUrlsSet.delete(videoUrl);
+            downloadingUrlsSet.delete(initialKeyUrl);
             actualizarUIAlmacenamientoLocal();
             renderList(getFilteredList());
         }
@@ -1807,18 +2023,18 @@
     async function manejarClicBotonLocal(h, e) {
         if (e) e.stopPropagation();
         const isInst = document.getElementById('instrumentalCheckbox').checked;
-        const videoUrl = getHymnVideoUrl(h, isInst);
 
-        if (downloadingUrlsSet.has(videoUrl)) {
+        if (estaHimnoDescargandoEnLocal(h, isInst)) {
             mostrarToast('Descarga en curso...');
             return;
         }
 
-        if (savedUrlsSet.has(videoUrl)) {
-            const meta = savedMetaMap.get(videoUrl);
+        const savedUrl = obtenerUrlGuardadaEnLocal(h, isInst);
+        if (savedUrl) {
+            const meta = savedMetaMap.get(savedUrl);
             const sizeLabel = meta ? ` (${formatearBytes(meta.size)})` : '';
             if (confirm(`¿Eliminar la copia local del Himno ${parseInt(h.num, 10)}${sizeLabel}?`)) {
-                await eliminarHimnoDeLocal(videoUrl);
+                await eliminarHimnoDeLocal(savedUrl);
             }
         } else {
             await guardarHimnoEnLocal(h, isInst, null, false);
@@ -1911,11 +2127,10 @@
             if (batchAbortController.signal.aborted) break;
 
             const h = items[i];
-            const url = getHymnVideoUrl(h, isInst);
             counterEl.innerText = `${i + 1} / ${total}`;
             fillEl.style.width = `${Math.round(((i) / total) * 100)}%`;
 
-            if (savedUrlsSet.has(url)) {
+            if (estaHimnoGuardadoEnLocal(h, isInst)) {
                 subEl.innerText = `✓ Himno ${parseInt(h.num, 10)} ya estaba guardado`;
                 completed++;
                 continue;
@@ -2017,23 +2232,22 @@
         document.getElementById('auditModal').classList.remove('active');
     }
 
-    async function inspeccionarArchivoR2(url) {
+    async function inspeccionarArchivoR2(h, isInst) {
+        const validUrl = await resolverUrlHimnoValida(h, isInst);
+        if (!validUrl) {
+            return { ok: false, status: 404 };
+        }
         try {
-            const headRes = await fetch(url, { method: 'HEAD' });
+            const headRes = await fetch(validUrl, { method: 'HEAD' });
             if (headRes.ok) {
                 return {
                     ok: true,
+                    url: validUrl,
                     size: headRes.headers.get('content-length') || '',
                     etag: headRes.headers.get('etag') || ''
                 };
             }
-            if (headRes.status === 404) {
-                return { ok: false, status: 404 };
-            }
-        } catch (e) {}
-
-        try {
-            const getRes = await fetch(url, {
+            const getRes = await fetch(validUrl, {
                 method: 'GET',
                 headers: { 'Range': 'bytes=0-1' }
             });
@@ -2042,13 +2256,14 @@
                 const totalSize = cr ? cr.split('/')[1] : (getRes.headers.get('content-length') || '');
                 return {
                     ok: true,
+                    url: validUrl,
                     size: totalSize,
                     etag: getRes.headers.get('etag') || ''
                 };
             }
             return { ok: false, status: getRes.status };
         } catch (e) {
-            return { ok: false, status: 'ERR' };
+            return { ok: true, url: validUrl, size: '', etag: '' };
         }
     }
 
@@ -2074,26 +2289,31 @@
         const missingCantado = [];
         const missingInstrumental = [];
         const identicalFiles = [];
+        const altNamesFound = [];
 
-        const BATCH_SIZE = 20;
+        const BATCH_SIZE = 15;
         let checked = 0;
 
         for (let i = 0; i < himnosList.length; i += BATCH_SIZE) {
             const slice = himnosList.slice(i, i + BATCH_SIZE);
             await Promise.all(slice.map(async (h) => {
-                const urlC = getHymnVideoUrl(h, false);
-                const urlI = getHymnVideoUrl(h, true);
                 const [resC, resI] = await Promise.all([
-                    inspeccionarArchivoR2(urlC),
-                    inspeccionarArchivoR2(urlI)
+                    inspeccionarArchivoR2(h, false),
+                    inspeccionarArchivoR2(h, true)
                 ]);
 
                 if (!resC.ok) {
                     missingCantado.push(`#${h.num} (${h.title}) -> ${resC.status}`);
+                } else if (!resC.url.endsWith(`/Cantado/${h.num}.mp4`)) {
+                    altNamesFound.push(`#${h.num} Cantado -> ${decodeURIComponent(resC.url.split('/').pop())}`);
                 }
+
                 if (!resI.ok) {
                     missingInstrumental.push(`#${h.num} (${h.title}) -> ${resI.status}`);
+                } else if (!resI.url.endsWith(`/Instrumental/${h.num}.mp4`)) {
+                    altNamesFound.push(`#${h.num} Instrumental -> ${decodeURIComponent(resI.url.split('/').pop())}`);
                 }
+
                 if (resC.ok && resI.ok) {
                     const sameSize = resC.size && resI.size && resC.size === resI.size;
                     const sameEtag = resC.etag && resI.etag && resC.etag === resI.etag;
@@ -2114,6 +2334,12 @@
 
         const lines = [];
         lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===\n`);
+
+        if (altNamesFound.length > 0) {
+            lines.push(`✅ ENCONTRADOS CON NOMBRE ALTERNATIVO (${altNamesFound.length}):`);
+            altNamesFound.forEach(item => lines.push(`   - ${item}`));
+            lines.push('');
+        }
 
         lines.push(`⚠️ MISMO ARCHIVO EN CANTADO E INSTRUMENTAL (${identicalFiles.length}):`);
         if (identicalFiles.length === 0) {
@@ -2191,7 +2417,7 @@
 
     function obtenerHimnosGuardadosModoActual() {
         const isInst = document.getElementById('instrumentalCheckbox').checked;
-        return himnosList.filter(h => savedUrlsSet.has(getHymnVideoUrl(h, isInst)));
+        return himnosList.filter(h => estaHimnoGuardadoEnLocal(h, isInst));
     }
 
     function obtenerHimnosDeLista(listId) {
@@ -3072,9 +3298,8 @@
             const li = document.createElement('li');
             const isActive = currentHimno && (h.num === currentHimno.num);
             const isFav = playlistsData.favorites.includes(h.num);
-            const remoteUrl = getHymnVideoUrl(h, isInst);
-            const isSavedLocal = savedUrlsSet.has(remoteUrl);
-            const isDownloadingLocal = downloadingUrlsSet.has(remoteUrl);
+            const isSavedLocal = estaHimnoGuardadoEnLocal(h, isInst);
+            const isDownloadingLocal = estaHimnoDescargandoEnLocal(h, isInst);
 
             li.className = `playlist-item ${isActive ? 'active' : ''}`;
             li.dataset.num = h.num;
@@ -3213,39 +3438,48 @@
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
         currentCandidateUrls = getHymnCandidateUrls(h, isInstrumental);
         currentCandidateIndex = 0;
-        let remoteVideoUrl = currentCandidateUrls[0];
-        currentRemoteStreamUrl = remoteVideoUrl;
 
         document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
         updateMediaSessionMetadata();
         updateActiveListItem();
 
-        let playUrl = remoteVideoUrl;
+        let playUrl = null;
         let isLocal = false;
 
-        if (activeBlobUrls.has(remoteVideoUrl)) {
-            playUrl = activeBlobUrls.get(remoteVideoUrl);
-            isLocal = true;
-        } else if (savedUrlsSet.has(remoteVideoUrl)) {
-            const blobUrl = await obtenerBlobUrlLocal(remoteVideoUrl);
+        // 1. Verificar si alguna de las rutas candidatas ya está en almacenamiento local
+        const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
+        if (savedLocalUrl) {
+            const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
             if (reqId !== currentPlayRequestId) return;
             if (blobUrl) {
                 playUrl = blobUrl;
+                currentRemoteStreamUrl = savedLocalUrl;
                 isLocal = true;
             }
         }
 
-        let audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
-        if (reqId !== currentPlayRequestId) return;
-
-        while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
-            currentCandidateIndex++;
-            remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
-            currentRemoteStreamUrl = remoteVideoUrl;
-            playUrl = remoteVideoUrl;
-            audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
+        // 2. Si no está en local, resolver la URL exacta válida en R2
+        if (!playUrl) {
+            const resolvedRemoteUrl = await resolverUrlHimnoValida(h, isInstrumental);
             if (reqId !== currentPlayRequestId) return;
+
+            if (!resolvedRemoteUrl) {
+                masterAudio.pause();
+                masterAudio.removeAttribute('src');
+                masterAudio.load();
+                isUserPaused = true;
+                mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
+                return;
+            }
+
+            playUrl = resolvedRemoteUrl;
+            currentRemoteStreamUrl = resolvedRemoteUrl;
+            const foundIdx = currentCandidateUrls.indexOf(resolvedRemoteUrl);
+            if (foundIdx >= 0) currentCandidateIndex = foundIdx;
         }
+
+        const audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
+        if (reqId !== currentPlayRequestId) return;
 
         if (!audioRes.ok && !isLocal) {
             masterAudio.pause();
