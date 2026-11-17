@@ -1186,6 +1186,7 @@
 
     let currentIndex = -1;
     let currentHimno = null;
+    let currentLoadedHymnKey = '';
     let clickTimer = null;
     let displaysList = [];
     let isSeeking = false;
@@ -1247,16 +1248,22 @@
 
     function iniciarMasterAudioDesdeTiempo(playUrl, targetTime, shouldPlay, reqId) {
         if (!playUrl) return;
-        masterAudio.onerror = () => {
+        let isRecovering = false;
+        const triggerFallback = () => {
+            if (isRecovering) return;
+            isRecovering = true;
             if (reqId === currentPlayRequestId && isUsingMasterAudio() && currentHimno) {
                 const isInst = document.getElementById('instrumentalCheckbox').checked;
                 recuperarHimnoSiFalla(currentHimno, isInst, reqId, true, targetTime);
             }
         };
+
+        masterAudio.onerror = triggerFallback;
         masterAudio.src = playUrl;
         masterAudio.volume = currentVolume;
         masterAudio.muted = isAudioMuted;
         masterAudio.playbackRate = currentSpeed;
+        masterAudio.load();
 
         const startMaster = () => {
             masterAudio.onloadedmetadata = null;
@@ -1266,9 +1273,12 @@
             }
             if (shouldPlay && !isUserPaused) {
                 masterAudio.play().catch((err) => {
-                    if (err && err.name === 'NotAllowedError') {
+                    if (!err || err.name === 'AbortError') return;
+                    if (err.name === 'NotAllowedError') {
                         isUserPaused = true;
                         document.getElementById('playBtn').innerText = '▶ Repr.';
+                    } else {
+                        triggerFallback();
                     }
                 });
             }
@@ -1279,9 +1289,12 @@
 
         if (shouldPlay && !isUserPaused) {
             masterAudio.play().catch((err) => {
-                if (err && err.name === 'NotAllowedError') {
+                if (!err || err.name === 'AbortError') return;
+                if (err.name === 'NotAllowedError') {
                     isUserPaused = true;
                     document.getElementById('playBtn').innerText = '▶ Repr.';
+                } else {
+                    triggerFallback();
                 }
             });
         }
@@ -1292,6 +1305,7 @@
         myMedia.onloadeddata = null;
         myMedia.onloadedmetadata = null;
         myMedia.oncanplay = null;
+        myMedia.onplaying = null;
         myMedia.pause();
         myMedia.muted = true;
         if (unload) {
@@ -1316,9 +1330,9 @@
         myMedia.muted = isAudioMuted;
         myMedia.volume = currentVolume;
         myMedia.playbackRate = currentSpeed;
+        setPosterOverlayState(false, '');
 
         if (myMedia.src === currentActivePlayUrl && myMedia.readyState >= 2 && !myMedia.error) {
-            setPosterOverlayState(false, '');
             if (targetTime > 0 && isFinite(myMedia.duration) && Math.abs(myMedia.currentTime - targetTime) > 0.25) {
                 myMedia.currentTime = Math.min(targetTime, myMedia.duration);
             }
@@ -1326,13 +1340,12 @@
             return;
         }
 
-        setPosterOverlayState(true, `Cargando Himno ${parseInt(currentHimno.num, 10)}...`);
         myMedia.src = currentActivePlayUrl;
+        myMedia.load();
         const resumeAtTime = () => {
             myMedia.onloadeddata = null;
             myMedia.onloadedmetadata = null;
             myMedia.oncanplay = null;
-            setPosterOverlayState(false, '');
             if (targetTime > 0 && isFinite(myMedia.duration)) {
                 myMedia.currentTime = Math.min(targetTime, myMedia.duration);
             }
@@ -1381,21 +1394,18 @@
         const numInt = parseInt(h.num, 10);
         const list = [];
 
-        // 1. Sin ceros a la izquierda (1.mp4, 25.mp4)
         if (String(numInt) !== h.num) {
             list.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
-        // 2. Extensión en mayúsculas (.MP4)
         list.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
         if (String(numInt) !== h.num) {
             list.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
         }
-        // 3. Carpeta en minúsculas (cantado/ o instrumental/)
         list.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             list.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${numInt}.mp4`);
         }
-        // 4. Nombres con título
+
         const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
         const asciiTitle = removeAccents(rawTitle);
         const titles = [...new Set([rawTitle, asciiTitle].filter(Boolean))];
@@ -1409,7 +1419,7 @@
                 list.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
             });
         });
-        // 5. En la raíz del bucket
+
         list.push(`${CLOUDFLARE_R2_URL}/${h.num}.mp4`);
 
         return [...new Set(list)];
@@ -1417,7 +1427,7 @@
 
     function describirErrorMedia(mediaEl) {
         const err = mediaEl && mediaEl.error;
-        if (!err) return 'Error desconocido';
+        if (!err) return 'No se pudo cargar el archivo';
         switch (err.code) {
             case 1: return 'Carga cancelada';
             case 2: return 'Error de red o conexión';
@@ -1427,7 +1437,7 @@
         }
     }
 
-    // SE EJECUTA ÚNICAMENTE SI EL VIDEO PRINCIPAL DEL HIMNO DISPARA ONERROR
+    // SE EJECUTA ÚNICAMENTE SI EL VIDEO PRINCIPAL DEL HIMNO DISPARA ERROR
     function recuperarHimnoSiFalla(h, isInst, reqId, useAudioEngine = false, seekTime = 0) {
         if (reqId !== currentPlayRequestId || !currentHimno || currentHimno.num !== h.num) return;
 
@@ -1446,9 +1456,12 @@
             if (idx >= alternatives.length) {
                 engine.onerror = null;
                 engine.onloadeddata = null;
+                engine.onplaying = null;
                 isUserPaused = true;
+                currentLoadedHymnKey = '';
                 document.getElementById('playBtn').innerText = '▶ Repr.';
                 const msg = `⚠️ Himno ${parseInt(h.num, 10)} (${carpeta}): ${primerError}`;
+                document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
                 if (!useAudioEngine) {
                     setPosterOverlayState(true, msg);
                 }
@@ -1460,12 +1473,21 @@
             currentActivePlayUrl = candidateUrl;
             currentRemoteStreamUrl = candidateUrl;
 
-            engine.onerror = probarSiguiente;
+            let advanced = false;
+            const onFailCandidate = () => {
+                if (advanced) return;
+                advanced = true;
+                probarSiguiente();
+            };
+
+            engine.onerror = onFailCandidate;
             engine.onloadeddata = () => {
                 if (reqId !== currentPlayRequestId) return;
                 engine.onerror = null;
                 engine.onloadeddata = null;
                 sessionRecoveredUrls[cacheKey] = candidateUrl;
+                currentLoadedHymnKey = `${h.num}|${isInst}`;
+                document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
 
                 if (seekTime > 0 && isFinite(engine.duration)) {
                     engine.currentTime = Math.min(seekTime, engine.duration);
@@ -1480,8 +1502,13 @@
             };
 
             engine.src = candidateUrl;
+            engine.load();
             if (!isUserPaused) {
-                engine.play().catch(() => {});
+                engine.play().catch((err) => {
+                    if (err && err.name === 'NotSupportedError') {
+                        onFailCandidate();
+                    }
+                });
             }
         };
 
@@ -2659,8 +2686,11 @@
             return;
         }
 
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        const expectedKey = `${currentHimno.num}|${isInst}`;
         const engine = getActiveEngine();
-        if (!engine || !engine.src || engine.error || engine.networkState === 3) {
+
+        if (!engine || !engine.src || engine.error || engine.networkState === 3 || engine.readyState < 2 || currentLoadedHymnKey !== expectedKey) {
             reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
             return;
         }
@@ -2668,6 +2698,7 @@
         if (!isUsingMasterAudio()) {
             myMedia.muted = isAudioMuted;
             myMedia.volume = currentVolume;
+            setPosterOverlayState(false, '');
         }
         applyPlaybackSpeedToAll();
         isUserPaused = false;
@@ -3074,42 +3105,10 @@
         actualizarBadgeColaActiva();
     }
 
-    async function reproducirHimno(h, autoPlay = true, keepPlaylistContext = false, seekTime = 0) {
-        const reqId = ++currentPlayRequestId;
-        isUserPaused = !autoPlay;
-
-        if (keepPlaylistContext && currentViewId !== 'all') {
-            activeQueuePlaylistId = currentViewId;
-        } else if (!keepPlaylistContext && currentViewId === 'all') {
-            activeQueuePlaylistId = null;
-        }
-
-        currentHimno = h;
-        currentIndex = himnosList.findIndex(item => item.num === h.num);
-        currentShortHymnUrl = '';
-
-        const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
-        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
-        updateMediaSessionMetadata();
-        updateActiveListItem();
-
-        let playUrl = getHymnVideoUrl(h, isInstrumental);
-        let remoteUrl = playUrl;
-        let isLocal = false;
-
-        const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
-        if (savedLocalUrl) {
-            const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
-            if (reqId !== currentPlayRequestId) return;
-            if (blobUrl) {
-                playUrl = blobUrl;
-                remoteUrl = savedLocalUrl;
-                isLocal = true;
-            }
-        }
-
+    function iniciarCargaEnReproductor(h, isInstrumental, playUrl, remoteUrl, isLocal, autoPlay, seekTime, reqId) {
         currentActivePlayUrl = playUrl;
         currentRemoteStreamUrl = remoteUrl;
+        currentLoadedHymnKey = `${h.num}|${isInstrumental}`;
 
         const localBadge = document.getElementById('localPlaybackBadge');
         if (localBadge) {
@@ -3118,7 +3117,7 @@
 
         if (!isLocal && autoCacheEnabled) {
             guardarHimnoEnLocal(h, isInstrumental, null, true).then((saved) => {
-                if (saved && currentHimno && localBadge) {
+                if (saved && currentHimno && currentHimno.num === h.num && localBadge) {
                     localBadge.style.display = 'inline-block';
                 }
             });
@@ -3138,38 +3137,87 @@
 
         detenerMasterAudio();
 
-        setPosterOverlayState(true, `Cargando Himno ${parseInt(h.num, 10)}...`);
-
-        myMedia.onerror = () => {
-            if (reqId === currentPlayRequestId) {
-                // SOLO si este himno falla, probamos rutas alternativas
-                recuperarHimnoSiFalla(h, isInstrumental, reqId, false, seekTime);
-            }
+        let fallbackStarted = false;
+        const activarRespaldo = () => {
+            if (fallbackStarted || reqId !== currentPlayRequestId) return;
+            fallbackStarted = true;
+            recuperarHimnoSiFalla(h, isInstrumental, reqId, false, seekTime);
         };
 
+        document.getElementById('playerCurrentTitle').innerText = `⏳ Cargando Himno ${parseInt(h.num, 10)}: ${h.title}`;
+        setPosterOverlayState(false, '');
+
+        myMedia.onerror = activarRespaldo;
         myMedia.onloadeddata = () => {
             if (reqId !== currentPlayRequestId) return;
             myMedia.onloadeddata = null;
-            setPosterOverlayState(false, '');
+            document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
             if (seekTime > 0 && isFinite(myMedia.duration)) {
                 myMedia.currentTime = Math.min(seekTime, myMedia.duration);
             }
         };
+        myMedia.onplaying = () => {
+            if (reqId !== currentPlayRequestId) return;
+            myMedia.onplaying = null;
+            document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+        };
 
+        myMedia.pause();
         myMedia.muted = isAudioMuted;
         myMedia.volume = currentVolume;
         myMedia.playbackRate = currentSpeed;
         myMedia.src = playUrl;
+        myMedia.load();
 
         if (autoPlay) {
             myMedia.play().catch((err) => {
-                if (err && err.name === 'NotAllowedError') {
+                if (!err || err.name === 'AbortError') return;
+                if (err.name === 'NotAllowedError') {
                     isUserPaused = true;
                     document.getElementById('playBtn').innerText = '▶ Repr.';
-                    setPosterOverlayState(false, '');
+                    document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+                } else {
+                    activarRespaldo();
                 }
             });
         }
+    }
+
+    function reproducirHimno(h, autoPlay = true, keepPlaylistContext = false, seekTime = 0) {
+        const reqId = ++currentPlayRequestId;
+        isUserPaused = !autoPlay;
+
+        if (keepPlaylistContext && currentViewId !== 'all') {
+            activeQueuePlaylistId = currentViewId;
+        } else if (!keepPlaylistContext && currentViewId === 'all') {
+            activeQueuePlaylistId = null;
+        }
+
+        currentHimno = h;
+        currentIndex = himnosList.findIndex(item => item.num === h.num);
+        currentShortHymnUrl = '';
+
+        const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
+        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+        updateMediaSessionMetadata();
+        updateActiveListItem();
+
+        const primaryUrl = getHymnVideoUrl(h, isInstrumental);
+        const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
+
+        if (savedLocalUrl) {
+            obtenerBlobUrlLocal(savedLocalUrl).then((blobUrl) => {
+                if (reqId !== currentPlayRequestId) return;
+                if (blobUrl) {
+                    iniciarCargaEnReproductor(h, isInstrumental, blobUrl, savedLocalUrl, true, autoPlay, seekTime, reqId);
+                } else {
+                    iniciarCargaEnReproductor(h, isInstrumental, primaryUrl, primaryUrl, false, autoPlay, seekTime, reqId);
+                }
+            });
+            return;
+        }
+
+        iniciarCargaEnReproductor(h, isInstrumental, primaryUrl, primaryUrl, false, autoPlay, seekTime, reqId);
     }
 
     function togglePlay() {
@@ -3189,6 +3237,7 @@
         currentPlayRequestId++;
         isUserPaused = true;
         currentHimno = null;
+        currentLoadedHymnKey = '';
         currentIndex = -1;
         currentShortHymnUrl = '';
         currentRemoteStreamUrl = '';
@@ -3199,6 +3248,7 @@
         myMedia.onerror = null;
         myMedia.onloadeddata = null;
         myMedia.onloadedmetadata = null;
+        myMedia.onplaying = null;
         myMedia.pause();
         myMedia.removeAttribute('src');
         myMedia.load();
@@ -3566,6 +3616,7 @@
                                 if (currentLoadedUrl !== data.videoUrl) {
                                     currentLoadedUrl = data.videoUrl;
                                     v.src = data.videoUrl;
+                                    v.load();
                                     v.onloadeddata = () => {
                                         poster.style.display = 'none';
                                         if (data.currentTime > 0.3 && isFinite(v.duration)) {
