@@ -1132,7 +1132,7 @@
     const WINDOWS_DRIVE_URL = ""; 
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v2";
+    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v3";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1159,6 +1159,7 @@
     let currentCandidateUrls = [];
     let currentCandidateIndex = 0;
     let currentActiveTrackIndex = 0;
+    let currentSoundTracksLabels = [];
     let useVideoAudioFallback = false;
 
     let currentShareType = 'main';
@@ -1167,7 +1168,7 @@
     let currentShortPlaylistUrl = '';
 
     /* =========================================================================
-       PREFERENCIA DE PISTA INTERNA POR ARCHIVO (SOLO SI EL MP4 TIENE 2 PISTAS)
+       PREFERENCIA DE PISTA INTERNA POR ARCHIVO (SOLO SI EL MP4 TIENE 2+ PISTAS)
        ========================================================================= */
     let altTrackPrefs = {};
     try {
@@ -1186,14 +1187,17 @@
         return `${h.num}_${isInst ? 'I' : 'C'}`;
     }
 
-    function actualizarBotonPistaInterna(soundTracksCount, activeTrackIndex) {
+    function actualizarBotonPistaInterna(soundTracksCount, activeTrackIndex, trackLabels = []) {
         const btn = document.getElementById('altAudioTrackBtn');
         if (!btn) return;
         currentActiveTrackIndex = activeTrackIndex || 0;
+        currentSoundTracksLabels = Array.isArray(trackLabels) ? trackLabels : [];
         if (soundTracksCount >= 2) {
             btn.style.display = 'inline-flex';
             const isSecond = (activeTrackIndex === 1);
-            btn.textContent = isSecond ? '🎙️ Pista 2' : '🎙️ Pista 1';
+            const rawLbl = currentSoundTracksLabels[activeTrackIndex] || '';
+            const shortLbl = rawLbl ? ` (${rawLbl.slice(0, 12)})` : '';
+            btn.textContent = (isSecond ? '🎙️ Pista 2' : '🎙️ Pista 1') + shortLbl;
             btn.classList.toggle('active-toggle', isSecond);
         } else {
             btn.style.display = 'none';
@@ -1214,35 +1218,70 @@
     }
 
     /* =========================================================================
-       EXTRACTOR DE PISTA DE AUDIO PURA (ELIMINA PISTA 'vide' DEL ENCABEZADO MP4)
-       Detecta automáticamente si la Pista 2 es la pista activa/español ('spa')
-       como hace Windows Media Player, y habilita tkhd Track_enabled + volumen.
+       LECTOR DE ENCABEZADO MP4 Y EXTRACTOR DE PISTA VOCAL / CANTADA
+       Inspecciona hdlr (nombre de pista), udta (name / ©nam / meta), elng,
+       mdhd (idioma) y tkhd (Track_enabled / alternate_group) para seleccionar
+       automáticamente la pista cantada cuando el himnario está en modo Cantado.
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
     const audioOnlyOrder = [];
+    const utf8Decoder = new TextDecoder('utf-8', { fatal: false });
+
+    function decodeHeaderString(bytes, start, end) {
+        if (start >= end) return '';
+        let sliceEnd = start;
+        while (sliceEnd < end && bytes[sliceEnd] !== 0) {
+            sliceEnd++;
+        }
+        return utf8Decoder.decode(bytes.subarray(start, sliceEnd)).trim();
+    }
+
+    function normalizeHeaderLabel(str) {
+        return String(str || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+    }
 
     function inspectTrackMetadata(bytes, view, start, end) {
         let handler = null;
         let tkhdOffset = -1;
         let volOffset = -1;
+        let altGroupOffset = -1;
         let isEnabled = true;
+        let alternateGroup = 0;
         let lang = 'und';
+        let extLang = '';
+        let hdlrName = '';
+        let udtaNames = [];
 
         function walk(pos, limit) {
             while (pos + 8 <= limit) {
                 const size = view.getUint32(pos, false);
                 if (size < 8 || pos + size > limit) break;
-                const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+                const b0 = bytes[pos + 4], b1 = bytes[pos + 5], b2 = bytes[pos + 6], b3 = bytes[pos + 7];
+                const type = String.fromCharCode(b0, b1, b2, b3);
 
                 if (type === 'tkhd' && pos + 12 <= limit) {
                     tkhdOffset = pos;
                     const version = bytes[pos + 8];
                     const flags = (bytes[pos + 9] << 16) | (bytes[pos + 10] << 8) | bytes[pos + 11];
-                    isEnabled = (flags & 1) !== 0;
+                    isEnabled = (flags & 0x01) !== 0;
+
+                    const agOff = pos + (version === 1 ? 54 : 42);
+                    if (agOff + 2 <= limit) {
+                        altGroupOffset = agOff;
+                        alternateGroup = view.getUint16(agOff, false);
+                    }
                     const vOff = pos + (version === 1 ? 56 : 44);
-                    if (vOff + 2 <= limit) volOffset = vOff;
-                } else if (type === 'mdia') {
+                    if (vOff + 2 <= limit) {
+                        volOffset = vOff;
+                    }
+                } else if (type === 'mdia' || type === 'minf' || type === 'udta' || type === 'ilst') {
                     walk(pos + 8, pos + size);
+                } else if (type === 'meta' && pos + 12 <= limit) {
+                    walk(pos + 12, pos + size);
                 } else if (type === 'mdhd' && pos + 22 <= limit) {
                     const version = bytes[pos + 8];
                     const lOff = pos + (version === 1 ? 32 : 20);
@@ -1253,15 +1292,102 @@
                         const c3 = String.fromCharCode((langCode & 0x1F) + 0x60);
                         lang = c1 + c2 + c3;
                     }
+                } else if (type === 'elng' && pos + 12 <= limit) {
+                    extLang = decodeHeaderString(bytes, pos + 12, pos + size);
                 } else if (type === 'hdlr' && pos + 20 <= limit) {
                     handler = String.fromCharCode(bytes[pos + 16], bytes[pos + 17], bytes[pos + 18], bytes[pos + 19]);
+                    if (pos + 32 < pos + size) {
+                        const pLen = bytes[pos + 32];
+                        if (pLen > 0 && pos + 33 + pLen <= pos + size && pLen === (size - 33)) {
+                            hdlrName = utf8Decoder.decode(bytes.subarray(pos + 33, pos + 33 + pLen)).trim();
+                        } else {
+                            hdlrName = decodeHeaderString(bytes, pos + 32, pos + size);
+                        }
+                    }
+                } else if (type === 'name' || (b0 === 0xA9 && b1 === 0x6E && b2 === 0x61 && b3 === 0x6D)) {
+                    if (pos + 8 < pos + size) {
+                        const rawText = decodeHeaderString(bytes, pos + 8, pos + size);
+                        if (rawText && !rawText.startsWith('data')) {
+                            udtaNames.push(rawText);
+                        } else {
+                            walk(pos + 8, pos + size);
+                        }
+                    }
+                } else if (type === 'data' && pos + 16 < limit) {
+                    const dataText = decodeHeaderString(bytes, pos + 16, pos + size);
+                    if (dataText) udtaNames.push(dataText);
                 }
                 pos += size;
             }
         }
 
         walk(start, end);
-        return { handler, tkhdOffset, volOffset, isEnabled, lang };
+
+        const cleanHdlr = (hdlrName && !/^soundhandler$/i.test(hdlrName)) ? hdlrName : '';
+        const rawParts = [cleanHdlr, ...udtaNames].filter(Boolean);
+        const displayLabel = rawParts[0] || '';
+        const searchableText = normalizeHeaderLabel([...rawParts, lang, extLang].join(' '));
+
+        return {
+            handler,
+            tkhdOffset,
+            volOffset,
+            altGroupOffset,
+            isEnabled,
+            alternateGroup,
+            lang,
+            extLang,
+            displayLabel,
+            searchableText
+        };
+    }
+
+    function seleccionarIndicePistaAudio(soundTracks, isInstrumental, trackChoice) {
+        if (!soundTracks || soundTracks.length === 0) return 0;
+        if (soundTracks.length === 1) return 0;
+
+        if (trackChoice === '2') return 1;
+        if (trackChoice === '1') return 0;
+
+        const reCantado = /\b(cantad[oa]s?|vocal(es)?|voz|voces|canto|letra|con\s*voz)\b/;
+        const reInstrumental = /\b(instrumental(es)?|pista(s)?|karaoke|acompanamiento|sin\s*voz|musica\s*sola)\b/;
+
+        if (!isInstrumental) {
+            // 1. Buscar pista cuyo encabezado indique explícitamente que es cantada
+            const idxCantado = soundTracks.findIndex(t =>
+                reCantado.test(t.searchableText) && !reInstrumental.test(t.searchableText)
+            );
+            if (idxCantado !== -1) return idxCantado;
+
+            // 2. Si una pista dice "instrumental/pista" y otra no, elegir la que NO es instrumental
+            const idxNotInst = soundTracks.findIndex(t => !reInstrumental.test(t.searchableText));
+            const hasExplicitInst = soundTracks.some(t => reInstrumental.test(t.searchableText));
+            if (hasExplicitInst && idxNotInst !== -1) return idxNotInst;
+
+            // 3. Revisar bandera Track_enabled en tkhd (como hace Windows Media Player)
+            const enabledTracks = soundTracks
+                .map((t, idx) => ({ t, idx }))
+                .filter(item => item.t.isEnabled);
+            if (enabledTracks.length === 1) return enabledTracks[0].idx;
+
+            // 4. Revisar idioma español en mdhd / elng
+            const idxSpa = soundTracks.findIndex(t =>
+                t.lang === 'spa' || t.lang === 'esl' || /^es\b/.test(normalizeHeaderLabel(t.extLang))
+            );
+            if (idxSpa !== -1) return idxSpa;
+
+            return 0;
+        } else {
+            // Modo Instrumental
+            const idxInst = soundTracks.findIndex(t => reInstrumental.test(t.searchableText));
+            if (idxInst !== -1) return idxInst;
+
+            const idxNotCantado = soundTracks.findIndex(t => !reCantado.test(t.searchableText));
+            const hasExplicitCantado = soundTracks.some(t => reCantado.test(t.searchableText));
+            if (hasExplicitCantado && idxNotCantado !== -1) return idxNotCantado;
+
+            return 0;
+        }
     }
 
     function stripVideoTrackFromMp4(arrayBuffer, isInstrumental = false, trackChoice = 'auto') {
@@ -1272,6 +1398,7 @@
             let offset = 0;
             let soundTracksCount = 0;
             let activeTrackIndex = 0;
+            let trackLabels = [];
 
             while (offset + 8 <= len) {
                 let boxSize = view.getUint32(offset, false);
@@ -1312,19 +1439,8 @@
                     }
 
                     soundTracksCount = soundTracks.length;
-                    if (soundTracks.length >= 2) {
-                        if (trackChoice === '2') {
-                            activeTrackIndex = 1;
-                        } else if (trackChoice === '1') {
-                            activeTrackIndex = 0;
-                        } else if (!isInstrumental) {
-                            const t1 = soundTracks[0];
-                            const t2 = soundTracks[1];
-                            if ((!t1.isEnabled && t2.isEnabled) || (t1.lang !== 'spa' && t2.lang === 'spa')) {
-                                activeTrackIndex = 1;
-                            }
-                        }
-                    }
+                    trackLabels = soundTracks.map(t => t.displayLabel || '');
+                    activeTrackIndex = seleccionarIndicePistaAudio(soundTracks, isInstrumental, trackChoice);
 
                     for (let i = 0; i < soundTracks.length; i++) {
                         const st = soundTracks[i];
@@ -1336,6 +1452,10 @@
                         } else {
                             if (st.tkhdOffset >= 0) {
                                 bytes[st.tkhdOffset + 11] |= 0x03; // Track_enabled | Track_in_movie
+                            }
+                            if (st.altGroupOffset >= 0) {
+                                bytes[st.altGroupOffset] = 0x00;
+                                bytes[st.altGroupOffset + 1] = 0x00;
                             }
                             if (st.volOffset >= 0) {
                                 const curVol = (bytes[st.volOffset] << 8) | bytes[st.volOffset + 1];
@@ -1350,7 +1470,12 @@
                 }
                 offset += boxSize;
             }
-            return { blob: new Blob([bytes], { type: 'audio/mp4' }), soundTracksCount, activeTrackIndex };
+            return {
+                blob: new Blob([bytes], { type: 'audio/mp4' }),
+                soundTracksCount,
+                activeTrackIndex,
+                trackLabels
+            };
         } catch (e) {
             return null;
         }
@@ -1363,11 +1488,11 @@
         }
         try {
             const resp = await fetch(sourceUrl);
-            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0, activeTrackIndex: 0 };
+            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0, activeTrackIndex: 0, trackLabels: [] };
             const buf = await resp.arrayBuffer();
             const parsed = stripVideoTrackFromMp4(buf, isInstrumental, trackChoice);
             if (!parsed || !parsed.blob) {
-                return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0 };
+                return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0, trackLabels: [] };
             }
 
             const blobUrl = URL.createObjectURL(parsed.blob);
@@ -1375,7 +1500,8 @@
                 url: blobUrl,
                 ok: true,
                 soundTracksCount: parsed.soundTracksCount,
-                activeTrackIndex: parsed.activeTrackIndex
+                activeTrackIndex: parsed.activeTrackIndex,
+                trackLabels: parsed.trackLabels || []
             };
             audioOnlyBlobCache.set(cacheKey, resultObj);
             audioOnlyOrder.push(cacheKey);
@@ -1387,7 +1513,7 @@
             }
             return resultObj;
         } catch (e) {
-            return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0 };
+            return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0, trackLabels: [] };
         }
     }
 
@@ -3148,12 +3274,16 @@
             masterAudio.removeAttribute('src');
             masterAudio.load();
             isUserPaused = true;
-            actualizarBotonPistaInterna(0, 0);
+            actualizarBotonPistaInterna(0, 0, []);
             mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
         }
 
-        actualizarBotonPistaInterna(audioRes.soundTracksCount || 1, audioRes.activeTrackIndex || 0);
+        actualizarBotonPistaInterna(
+            audioRes.soundTracksCount || 1,
+            audioRes.activeTrackIndex || 0,
+            audioRes.trackLabels || []
+        );
 
         currentActivePlayUrl = playUrl;
         currentAudioOnlyBlobUrl = audioRes.url;
@@ -3174,7 +3304,7 @@
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        // 1. Iniciar Audio Maestro con pista de audio pura
+        // 1. Iniciar Audio Maestro con la pista seleccionada desde el encabezado
         masterAudio.src = audioRes.url;
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
@@ -3261,7 +3391,7 @@
         currentAudioOnlyBlobUrl = '';
         currentCandidateUrls = [];
         currentCandidateIndex = 0;
-        actualizarBotonPistaInterna(0, 0);
+        actualizarBotonPistaInterna(0, 0, []);
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
