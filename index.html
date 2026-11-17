@@ -1132,7 +1132,7 @@
     const WINDOWS_DRIVE_URL = ""; 
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v1";
+    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v2";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1158,6 +1158,7 @@
     let currentAudioOnlyBlobUrl = '';
     let currentCandidateUrls = [];
     let currentCandidateIndex = 0;
+    let currentActiveTrackIndex = 0;
     let useVideoAudioFallback = false;
 
     let currentShareType = 'main';
@@ -1185,13 +1186,15 @@
         return `${h.num}_${isInst ? 'I' : 'C'}`;
     }
 
-    function actualizarBotonPistaInterna(soundTracksCount, useAltTrack) {
+    function actualizarBotonPistaInterna(soundTracksCount, activeTrackIndex) {
         const btn = document.getElementById('altAudioTrackBtn');
         if (!btn) return;
+        currentActiveTrackIndex = activeTrackIndex || 0;
         if (soundTracksCount >= 2) {
             btn.style.display = 'inline-flex';
-            btn.textContent = useAltTrack ? '🎙️ Pista 2' : '🎙️ Pista 1';
-            btn.classList.toggle('active-toggle', useAltTrack);
+            const isSecond = (activeTrackIndex === 1);
+            btn.textContent = isSecond ? '🎙️ Pista 2' : '🎙️ Pista 1';
+            btn.classList.toggle('active-toggle', isSecond);
         } else {
             btn.style.display = 'none';
             btn.classList.remove('active-toggle');
@@ -1202,32 +1205,73 @@
         if (!currentHimno) return;
         const isInst = document.getElementById('instrumentalCheckbox').checked;
         const key = getAltTrackKey(currentHimno, isInst);
-        const nextVal = !altTrackPrefs[key];
-        if (nextVal) {
-            altTrackPrefs[key] = true;
-        } else {
-            delete altTrackPrefs[key];
-        }
+        const nextTrack = (currentActiveTrackIndex === 1) ? '1' : '2';
+        altTrackPrefs[key] = nextTrack;
         guardarAltTrackPrefs();
         const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
         reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
-        mostrarToast(nextVal ? '🎙️ Cambiado a Pista 2 del archivo' : '🎙️ Cambiado a Pista 1 del archivo');
+        mostrarToast(`🎙️ Cambiado a Pista ${nextTrack} del archivo`);
     }
 
     /* =========================================================================
        EXTRACTOR DE PISTA DE AUDIO PURA (ELIMINA PISTA 'vide' DEL ENCABEZADO MP4)
-       Por defecto conserva la Pista 1 de audio (Cantado) igual que siempre.
+       Detecta automáticamente si la Pista 2 es la pista activa/español ('spa')
+       como hace Windows Media Player, y habilita tkhd Track_enabled + volumen.
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
     const audioOnlyOrder = [];
 
-    function stripVideoTrackFromMp4(arrayBuffer, useSecondAudio = false) {
+    function inspectTrackMetadata(bytes, view, start, end) {
+        let handler = null;
+        let tkhdOffset = -1;
+        let volOffset = -1;
+        let isEnabled = true;
+        let lang = 'und';
+
+        function walk(pos, limit) {
+            while (pos + 8 <= limit) {
+                const size = view.getUint32(pos, false);
+                if (size < 8 || pos + size > limit) break;
+                const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+
+                if (type === 'tkhd' && pos + 12 <= limit) {
+                    tkhdOffset = pos;
+                    const version = bytes[pos + 8];
+                    const flags = (bytes[pos + 9] << 16) | (bytes[pos + 10] << 8) | bytes[pos + 11];
+                    isEnabled = (flags & 1) !== 0;
+                    const vOff = pos + (version === 1 ? 56 : 44);
+                    if (vOff + 2 <= limit) volOffset = vOff;
+                } else if (type === 'mdia') {
+                    walk(pos + 8, pos + size);
+                } else if (type === 'mdhd' && pos + 22 <= limit) {
+                    const version = bytes[pos + 8];
+                    const lOff = pos + (version === 1 ? 32 : 20);
+                    if (lOff + 2 <= limit) {
+                        const langCode = (bytes[lOff] << 8) | bytes[lOff + 1];
+                        const c1 = String.fromCharCode(((langCode >> 10) & 0x1F) + 0x60);
+                        const c2 = String.fromCharCode(((langCode >> 5) & 0x1F) + 0x60);
+                        const c3 = String.fromCharCode((langCode & 0x1F) + 0x60);
+                        lang = c1 + c2 + c3;
+                    }
+                } else if (type === 'hdlr' && pos + 20 <= limit) {
+                    handler = String.fromCharCode(bytes[pos + 16], bytes[pos + 17], bytes[pos + 18], bytes[pos + 19]);
+                }
+                pos += size;
+            }
+        }
+
+        walk(start, end);
+        return { handler, tkhdOffset, volOffset, isEnabled, lang };
+    }
+
+    function stripVideoTrackFromMp4(arrayBuffer, isInstrumental = false, trackChoice = 'auto') {
         try {
             const bytes = new Uint8Array(arrayBuffer);
             const view = new DataView(arrayBuffer);
             const len = bytes.length;
             let offset = 0;
             let soundTracksCount = 0;
+            let activeTrackIndex = 0;
 
             while (offset + 8 <= len) {
                 let boxSize = view.getUint32(offset, false);
@@ -1246,7 +1290,7 @@
                 if (type === 'moov') {
                     const moovEnd = offset + boxSize;
                     let sub = offset + headerSize;
-                    const soundTrackOffsets = [];
+                    const soundTracks = [];
 
                     while (sub + 8 <= moovEnd) {
                         const subSize = view.getUint32(sub, false);
@@ -1254,10 +1298,10 @@
                         const subType = String.fromCharCode(bytes[sub + 4], bytes[sub + 5], bytes[sub + 6], bytes[sub + 7]);
 
                         if (subType === 'trak') {
-                            const handler = findTrackHandlerType(bytes, view, sub + 8, sub + subSize);
-                            if (handler === 'soun') {
-                                soundTrackOffsets.push(sub);
-                            } else if (handler) {
+                            const info = inspectTrackMetadata(bytes, view, sub + 8, sub + subSize);
+                            if (info.handler === 'soun') {
+                                soundTracks.push({ trakOffset: sub, ...info });
+                            } else if (info.handler) {
                                 bytes[sub + 4] = 0x73; // 's'
                                 bytes[sub + 5] = 0x6B; // 'k'
                                 bytes[sub + 6] = 0x69; // 'i'
@@ -1267,57 +1311,72 @@
                         sub += subSize;
                     }
 
-                    soundTracksCount = soundTrackOffsets.length;
-                    if (useSecondAudio && soundTrackOffsets.length >= 2) {
-                        const firstAudioOffset = soundTrackOffsets[0];
-                        bytes[firstAudioOffset + 4] = 0x73; // 's'
-                        bytes[firstAudioOffset + 5] = 0x6B; // 'k'
-                        bytes[firstAudioOffset + 6] = 0x69; // 'i'
-                        bytes[firstAudioOffset + 7] = 0x70; // 'p'
+                    soundTracksCount = soundTracks.length;
+                    if (soundTracks.length >= 2) {
+                        if (trackChoice === '2') {
+                            activeTrackIndex = 1;
+                        } else if (trackChoice === '1') {
+                            activeTrackIndex = 0;
+                        } else if (!isInstrumental) {
+                            const t1 = soundTracks[0];
+                            const t2 = soundTracks[1];
+                            if ((!t1.isEnabled && t2.isEnabled) || (t1.lang !== 'spa' && t2.lang === 'spa')) {
+                                activeTrackIndex = 1;
+                            }
+                        }
+                    }
+
+                    for (let i = 0; i < soundTracks.length; i++) {
+                        const st = soundTracks[i];
+                        if (i !== activeTrackIndex) {
+                            bytes[st.trakOffset + 4] = 0x73; // 's'
+                            bytes[st.trakOffset + 5] = 0x6B; // 'k'
+                            bytes[st.trakOffset + 6] = 0x69; // 'i'
+                            bytes[st.trakOffset + 7] = 0x70; // 'p'
+                        } else {
+                            if (st.tkhdOffset >= 0) {
+                                bytes[st.tkhdOffset + 11] |= 0x03; // Track_enabled | Track_in_movie
+                            }
+                            if (st.volOffset >= 0) {
+                                const curVol = (bytes[st.volOffset] << 8) | bytes[st.volOffset + 1];
+                                if (curVol === 0) {
+                                    bytes[st.volOffset] = 0x01;
+                                    bytes[st.volOffset + 1] = 0x00;
+                                }
+                            }
+                        }
                     }
                     break;
                 }
                 offset += boxSize;
             }
-            return { blob: new Blob([bytes], { type: 'audio/mp4' }), soundTracksCount };
+            return { blob: new Blob([bytes], { type: 'audio/mp4' }), soundTracksCount, activeTrackIndex };
         } catch (e) {
             return null;
         }
     }
 
-    function findTrackHandlerType(bytes, view, start, end) {
-        let pos = start;
-        while (pos + 8 <= end) {
-            const size = view.getUint32(pos, false);
-            if (size < 8 || pos + size > end) break;
-            const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
-            if (type === 'mdia') {
-                return findTrackHandlerType(bytes, view, pos + 8, pos + size);
-            }
-            if (type === 'hdlr' && pos + 20 <= end) {
-                return String.fromCharCode(bytes[pos + 16], bytes[pos + 17], bytes[pos + 18], bytes[pos + 19]);
-            }
-            pos += size;
-        }
-        return null;
-    }
-
-    async function obtenerUrlAudioPuro(sourceUrl, useSecondAudio = false) {
-        const cacheKey = `${sourceUrl}|alt:${useSecondAudio ? 1 : 0}`;
+    async function obtenerUrlAudioPuro(sourceUrl, isInstrumental = false, trackChoice = 'auto') {
+        const cacheKey = `${sourceUrl}|inst:${isInstrumental ? 1 : 0}|choice:${trackChoice}`;
         if (audioOnlyBlobCache.has(cacheKey)) {
             return audioOnlyBlobCache.get(cacheKey);
         }
         try {
             const resp = await fetch(sourceUrl);
-            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0 };
+            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0, activeTrackIndex: 0 };
             const buf = await resp.arrayBuffer();
-            const parsed = stripVideoTrackFromMp4(buf, useSecondAudio);
+            const parsed = stripVideoTrackFromMp4(buf, isInstrumental, trackChoice);
             if (!parsed || !parsed.blob) {
-                return { url: sourceUrl, ok: true, soundTracksCount: 1 };
+                return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0 };
             }
 
             const blobUrl = URL.createObjectURL(parsed.blob);
-            const resultObj = { url: blobUrl, ok: true, soundTracksCount: parsed.soundTracksCount };
+            const resultObj = {
+                url: blobUrl,
+                ok: true,
+                soundTracksCount: parsed.soundTracksCount,
+                activeTrackIndex: parsed.activeTrackIndex
+            };
             audioOnlyBlobCache.set(cacheKey, resultObj);
             audioOnlyOrder.push(cacheKey);
             if (audioOnlyOrder.length > 15) {
@@ -1328,7 +1387,7 @@
             }
             return resultObj;
         } catch (e) {
-            return { url: sourceUrl, ok: true, soundTracksCount: 1 };
+            return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0 };
         }
     }
 
@@ -3071,9 +3130,8 @@
             }
         }
 
-        // Por defecto usa la Pista 1 (Cantado); solo cambia a Pista 2 si el usuario lo activó para este archivo
-        const useAltTrack = Boolean(altTrackPrefs[getAltTrackKey(h, isInstrumental)]);
-        let audioRes = await obtenerUrlAudioPuro(playUrl, useAltTrack);
+        const trackChoice = altTrackPrefs[getAltTrackKey(h, isInstrumental)] || 'auto';
+        let audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental, trackChoice);
         if (reqId !== currentPlayRequestId) return;
 
         while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
@@ -3081,7 +3139,7 @@
             remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
             currentRemoteStreamUrl = remoteVideoUrl;
             playUrl = remoteVideoUrl;
-            audioRes = await obtenerUrlAudioPuro(playUrl, useAltTrack);
+            audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental, trackChoice);
             if (reqId !== currentPlayRequestId) return;
         }
 
@@ -3090,12 +3148,12 @@
             masterAudio.removeAttribute('src');
             masterAudio.load();
             isUserPaused = true;
-            actualizarBotonPistaInterna(0, false);
+            actualizarBotonPistaInterna(0, 0);
             mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
         }
 
-        actualizarBotonPistaInterna(audioRes.soundTracksCount || 1, useAltTrack);
+        actualizarBotonPistaInterna(audioRes.soundTracksCount || 1, audioRes.activeTrackIndex || 0);
 
         currentActivePlayUrl = playUrl;
         currentAudioOnlyBlobUrl = audioRes.url;
@@ -3203,7 +3261,7 @@
         currentAudioOnlyBlobUrl = '';
         currentCandidateUrls = [];
         currentCandidateIndex = 0;
-        actualizarBotonPistaInterna(0, false);
+        actualizarBotonPistaInterna(0, 0);
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
