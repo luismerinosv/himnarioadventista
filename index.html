@@ -1202,7 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v4";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v2";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1577,11 +1577,6 @@
     let batchAbortController = null;
     let isBatchDownloading = false;
 
-    const detectedFolderTemplates = {
-        Cantado: null,
-        Instrumental: null
-    };
-
     function abrirOfflineDB() {
         if (!('indexedDB' in window)) return Promise.resolve(null);
         if (offlineDbPromise) return offlineDbPromise;
@@ -1607,70 +1602,14 @@
         return `${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`;
     }
 
-    function generarVariantesTextoTitulo(rawTitle) {
-        const clean = (rawTitle || '').replace(/[\\/:*?"<>|]/g, '').trim();
-        if (!clean) return [];
-
-        const nfc = clean.normalize('NFC');
-        const nfd = clean.normalize('NFD');
-        const ascii = removeAccents(nfc);
-        const enieToNi = nfc.replace(/ñ/g, 'ni').replace(/Ñ/g, 'Ni');
-        const strippedEnie = nfc.replace(/[ñÑ]/g, '');
-        const underscoreEnie = nfc.replace(/[ñÑ]/g, '_');
-        const hyphenEnie = nfc.replace(/[ñÑ]/g, '-');
-        const spaceEnie = nfc.replace(/[ñÑ]/g, ' ');
-        const winZipReplacement = nfc.replace(/[ñÑ]/g, '\uFFFD');
-        const mojibakeWin = nfc.replace(/ñ/g, '\u00C3\u00B1').replace(/Ñ/g, '\u00C3\u2018');
-        const cp850Enie = nfc.replace(/ñ/g, '\u00A4').replace(/Ñ/g, '\u00A5');
-
-        return [...new Set([
-            nfc,
-            ascii,
-            enieToNi,
-            strippedEnie,
-            underscoreEnie,
-            hyphenEnie,
-            spaceEnie,
-            nfd,
-            winZipReplacement,
-            mojibakeWin,
-            cp850Enie,
-            removeAccents(strippedEnie),
-            removeAccents(underscoreEnie),
-            nfc.toUpperCase(),
-            ascii.toUpperCase()
-        ].filter(Boolean))];
-    }
-
-    function construirUrlsDesdePlantilla(carpeta, templateId, h, titleVariant) {
-        const numInt = parseInt(h.num, 10);
-        const makeUrl = (rawFileName) => `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawFileName)}`;
-
-        switch (templateId) {
-            case 'pad_dash_space': return [makeUrl(`${h.num} - ${titleVariant}.mp4`)];
-            case 'int_dash_space': return [makeUrl(`${numInt} - ${titleVariant}.mp4`)];
-            case 'pad_dash': return [makeUrl(`${h.num}-${titleVariant}.mp4`)];
-            case 'int_dash': return [makeUrl(`${numInt}-${titleVariant}.mp4`)];
-            case 'pad_space': return [makeUrl(`${h.num} ${titleVariant}.mp4`)];
-            case 'int_space': return [makeUrl(`${numInt} ${titleVariant}.mp4`)];
-            case 'pad_dot_space': return [makeUrl(`${h.num}. ${titleVariant}.mp4`)];
-            case 'int_dot_space': return [makeUrl(`${numInt}. ${titleVariant}.mp4`)];
-            case 'pad_underscore': return [makeUrl(`${h.num}_${titleVariant.replace(/\s+/g, '_')}.mp4`)];
-            case 'int_underscore': return [makeUrl(`${numInt}_${titleVariant.replace(/\s+/g, '_')}.mp4`)];
-            case 'himno_int_dash': return [makeUrl(`Himno ${numInt} - ${titleVariant}.mp4`)];
-            case 'himno_pad_dash': return [makeUrl(`Himno ${h.num} - ${titleVariant}.mp4`)];
-            case 'pad_only': return [`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`];
-            case 'int_only': return [`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`];
-            default: return [makeUrl(`${h.num} - ${titleVariant}.mp4`)];
-        }
-    }
-
     function getHymnCandidateUrls(h, isInstrumental = null) {
         const isInst = (isInstrumental !== null)
             ? isInstrumental
             : document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const carpetaLower = carpeta.toLowerCase();
         const numInt = parseInt(h.num, 10);
+        const numPad4 = String(numInt).padStart(4, '0');
         const candidates = [];
 
         const resolvedKey = getResolvedCacheKey(h, isInst);
@@ -1691,42 +1630,91 @@
             if (rawEntry.archivo) {
                 const suffix = isInst ? '_pista.mp4' : '.mp4';
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + '.mp4')}`);
             }
         }
 
-        const titleVariants = generarVariantesTextoTitulo(h.title);
-        const detectedTpl = detectedFolderTemplates[carpeta];
-
-        if (detectedTpl) {
-            titleVariants.forEach(tv => {
-                candidates.push(...construirUrlsDesdePlantilla(carpeta, detectedTpl, h, tv));
-            });
+        // Rutas numéricas estándar (001.mp4, 1.mp4, 001.MP4, 1.MP4, 0001.mp4)
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
+        if (String(numInt) !== h.num) {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
+        if (String(numInt) !== h.num) {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
+        }
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
 
-        const allTemplates = [
-            'pad_dash_space',
-            'int_dash_space',
-            'pad_only',
-            'int_only',
-            'pad_space',
-            'int_space',
-            'pad_dash',
-            'int_dash',
-            'pad_dot_space',
-            'int_dot_space',
-            'pad_underscore',
-            'int_underscore',
-            'himno_int_dash',
-            'himno_pad_dash'
-        ];
+        // Variantes con espacio accidental antes de .mp4 (ej. "186 .mp4", "84 .mp4")
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
 
-        allTemplates.forEach(tpl => {
-            if (tpl === detectedTpl) return;
-            titleVariants.forEach(tv => {
-                candidates.push(...construirUrlsDesdePlantilla(carpeta, tpl, h, tv));
+        // Variantes de título (NFC, NFD de macOS/iOS, sin tildes, sin ñ, con _ en lugar de ñ)
+        const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+        const nfcTitle = rawTitle.normalize('NFC');
+        const nfdTitle = rawTitle.normalize('NFD');
+        const asciiTitle = removeAccents(rawTitle);
+        const strippedEnieTitle = rawTitle.replace(/[ñÑ]/g, '');
+        const underscoreEnieTitle = rawTitle.replace(/[ñÑ]/g, '_');
+        const strippedEnieAscii = removeAccents(strippedEnieTitle);
+
+        const titleVariants = [...new Set([
+            nfcTitle,
+            nfdTitle,
+            asciiTitle,
+            strippedEnieTitle,
+            underscoreEnieTitle,
+            strippedEnieAscii
+        ].filter(Boolean))];
+
+        titleVariants.forEach(t => {
+            const namePatterns = [
+                `${h.num} - ${t}.mp4`,
+                `${numInt} - ${t}.mp4`,
+                `${h.num}-${t}.mp4`,
+                `${numInt}-${t}.mp4`,
+                `${h.num} ${t}.mp4`,
+                `${numInt} ${t}.mp4`,
+                `${h.num}. ${t}.mp4`,
+                `${numInt}. ${t}.mp4`,
+                `${h.num}.${t}.mp4`,
+                `${numInt}.${t}.mp4`,
+                `${h.num}_${t.replace(/\s+/g, '_')}.mp4`,
+                `${numInt}_${t.replace(/\s+/g, '_')}.mp4`,
+                `Himno ${numInt} - ${t}.mp4`,
+                `Himno ${h.num} - ${t}.mp4`,
+                `Himno ${numInt} ${t}.mp4`
+            ];
+            if (isInst) {
+                namePatterns.push(
+                    `${h.num} - ${t} (Instrumental).mp4`,
+                    `${numInt} - ${t} (Instrumental).mp4`,
+                    `${h.num} - ${t} - Pista.mp4`,
+                    `${numInt} - ${t} - Pista.mp4`,
+                    `${h.num}_pista.mp4`,
+                    `${numInt}_pista.mp4`
+                );
+            }
+            namePatterns.forEach(fileName => {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fileName)}`);
             });
         });
+
+        // Otras extensiones posibles de video/audio en R2
+        ['.m4v', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}${ext}`);
+            if (String(numInt) !== h.num) {
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}${ext}`);
+            }
+        });
+
+        // Subcarpeta Himnos/ o carpeta en minúsculas
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${numInt}.mp4`);
 
         return [...new Set(candidates)];
     }
@@ -1735,60 +1723,49 @@
         return getHymnCandidateUrls(h, isInstrumental)[0];
     }
 
-    // Petición GET simple sin cabeceras extra (evita preflight OPTIONS de CORS) y abortada en cuanto llegan las cabeceras HTTP
-    async function urlExisteEnServidor(url, externalSignal = null) {
-        const probeController = new AbortController();
-        const onExternalAbort = () => probeController.abort();
-        if (externalSignal) {
-            if (externalSignal.aborted) return false;
-            externalSignal.addEventListener('abort', onExternalAbort, { once: true });
-        }
+    async function urlExisteEnServidor(url, signal = null) {
         try {
-            const res = await fetch(url, {
-                method: 'GET',
-                signal: probeController.signal
-            });
-            const exists = res.ok;
-            probeController.abort();
-            return exists;
+            const headRes = await fetch(url, { method: 'HEAD', signal });
+            if (headRes.ok) return true;
+            if (headRes.status === 404) return false;
         } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+        }
+
+        // Respaldo con GET parcial en caso de que CORS en R2 no permita HEAD
+        try {
+            const rangeRes = await fetch(url, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=0-1' },
+                signal
+            });
+            return rangeRes.ok || rangeRes.status === 206;
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
             return false;
-        } finally {
-            if (externalSignal) {
-                externalSignal.removeEventListener('abort', onExternalAbort);
-            }
         }
     }
 
-    async function asegurarPlantillaCarpetaR2(carpeta, signal = null) {
-        if (detectedFolderTemplates[carpeta]) return detectedFolderTemplates[carpeta];
-        const cleanSample = himnosList.find(item => /^[a-zA-Z0-9\s]+$/.test(item.title)) || himnosList[0];
-        if (!cleanSample) return null;
-
-        const numInt = parseInt(cleanSample.num, 10);
-        const t = cleanSample.title.trim();
-
-        const probes = [
-            { id: 'pad_dash_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${cleanSample.num} - ${t}.mp4`)}` },
-            { id: 'int_dash_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt} - ${t}.mp4`)}` },
-            { id: 'pad_only', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${cleanSample.num}.mp4` },
-            { id: 'int_only', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4` },
-            { id: 'pad_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${cleanSample.num} ${t}.mp4`)}` },
-            { id: 'int_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt} ${t}.mp4`)}` },
-            { id: 'pad_dash', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${cleanSample.num}-${t}.mp4`)}` },
-            { id: 'int_dash', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt}-${t}.mp4`)}` },
-            { id: 'pad_dot_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${cleanSample.num}. ${t}.mp4`)}` },
-            { id: 'int_dot_space', url: `${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`${numInt}. ${t}.mp4`)}` }
-        ];
-
-        const results = await Promise.all(
-            probes.map(async p => ((await urlExisteEnServidor(p.url, signal)) ? p.id : null))
-        );
-        const foundTpl = results.find(Boolean);
-        if (foundTpl) {
-            detectedFolderTemplates[carpeta] = foundTpl;
+    async function buscarPorPrefijoXmlR2(carpeta, numStr, numInt, signal = null) {
+        const prefixes = [`${carpeta}/${numStr}`, `${carpeta}/${numInt}`];
+        for (const prefix of prefixes) {
+            try {
+                const listUrl = `${CLOUDFLARE_R2_URL}/?list-type=2&prefix=${encodeURIComponent(prefix)}`;
+                const res = await fetch(listUrl, { signal });
+                if (!res.ok) continue;
+                const xmlText = await res.text();
+                const keyMatches = [...xmlText.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
+                const exactRegex = new RegExp(`^${carpeta}/0*${numInt}(?:[^0-9].*)?\\.(mp4|m4v|webm|mov|mkv|mp3|m4a)$`, 'i');
+                const matchedKey = keyMatches.find(k => exactRegex.test(k));
+                if (matchedKey) {
+                    const encodedPath = matchedKey.split('/').map(seg => encodeURIComponent(seg)).join('/');
+                    return `${CLOUDFLARE_R2_URL}/${encodedPath}`;
+                }
+            } catch (e) {
+                if (e && e.name === 'AbortError') throw e;
+            }
         }
-        return foundTpl;
+        return null;
     }
 
     async function resolverUrlHimnoValida(h, isInstrumental = null, signal = null) {
@@ -1796,23 +1773,22 @@
             ? isInstrumental
             : document.getElementById('instrumentalCheckbox').checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const numInt = parseInt(h.num, 10);
+        const candidates = getHymnCandidateUrls(h, isInst);
 
-        const initialCandidates = getHymnCandidateUrls(h, isInst);
-        for (const cand of initialCandidates) {
+        // Si ya está guardado en IndexedDB con alguna de las URLs candidatas, devolverla al instante
+        for (const cand of candidates) {
             if (savedUrlsSet.has(cand)) return cand;
         }
 
-        await asegurarPlantillaCarpetaR2(carpeta, signal);
-
-        const candidates = getHymnCandidateUrls(h, isInst);
-
-        if (candidates.length > 0 && await urlExisteEnServidor(candidates[0], signal)) {
-            resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = candidates[0];
-            guardarResolvedUrlsCache();
-            return candidates[0];
+        // Probar primero el candidato principal
+        const primaryUrl = candidates[0];
+        if (await urlExisteEnServidor(primaryUrl, signal)) {
+            return primaryUrl;
         }
 
-        const remaining = candidates.slice(1, 60);
+        // Buscar en paralelo entre todas las variantes posibles (NFC, NFD, sin ñ, separadores, etc.)
+        const remaining = candidates.slice(1);
         const BATCH = 10;
         for (let i = 0; i < remaining.length; i += BATCH) {
             if (signal && signal.aborted) return null;
@@ -1826,6 +1802,14 @@
                 guardarResolvedUrlsCache();
                 return found;
             }
+        }
+
+        // Último intento: consultar listado XML de R2 si el bucket lo permite
+        const xmlFound = await buscarPorPrefijoXmlR2(carpeta, h.num, numInt, signal);
+        if (xmlFound) {
+            resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = xmlFound;
+            guardarResolvedUrlsCache();
+            return xmlFound;
         }
 
         return null;
@@ -1955,7 +1939,10 @@
         renderList(getFilteredList());
 
         try {
-            const validUrl = (await resolverUrlHimnoValida(h, isInst, signal)) || initialKeyUrl;
+            const validUrl = await resolverUrlHimnoValida(h, isInst, signal);
+            if (!validUrl) {
+                throw new Error('NOT_FOUND_R2');
+            }
 
             if (savedUrlsSet.has(validUrl)) return true;
 
@@ -2014,8 +2001,10 @@
             if (!silent) {
                 if (err && err.name === 'QuotaExceededError') {
                     mostrarToast('⚠️ Espacio insuficiente en el dispositivo.');
+                } else if (err && err.message === 'NOT_FOUND_R2') {
+                    mostrarToast(`⚠️ Himno ${parseInt(h.num, 10)} (${modeName}) no encontrado en el servidor.`);
                 } else {
-                    mostrarToast(`No se pudo descargar el Himno ${parseInt(h.num, 10)}`);
+                    mostrarToast(`⚠️ Error de red al descargar el Himno ${parseInt(h.num, 10)}`);
                 }
             }
             return false;
@@ -2265,20 +2254,33 @@
     async function inspeccionarArchivoR2(h, isInst) {
         const validUrl = await resolverUrlHimnoValida(h, isInst);
         if (!validUrl) {
-            return { ok: false, status: 404, tried: getHymnCandidateUrls(h, isInst)[0] || '' };
+            return { ok: false, status: 404 };
         }
-        const probeController = new AbortController();
         try {
+            const headRes = await fetch(validUrl, { method: 'HEAD' });
+            if (headRes.ok) {
+                return {
+                    ok: true,
+                    url: validUrl,
+                    size: headRes.headers.get('content-length') || '',
+                    etag: headRes.headers.get('etag') || ''
+                };
+            }
             const getRes = await fetch(validUrl, {
                 method: 'GET',
-                signal: probeController.signal
+                headers: { 'Range': 'bytes=0-1' }
             });
-            const size = getRes.headers.get('content-length') || '';
-            const etag = getRes.headers.get('etag') || '';
-            const ok = getRes.ok;
-            const status = getRes.status;
-            probeController.abort();
-            return ok ? { ok: true, url: validUrl, size, etag } : { ok: false, status, tried: validUrl };
+            if (getRes.ok || getRes.status === 206) {
+                const cr = getRes.headers.get('content-range');
+                const totalSize = cr ? cr.split('/')[1] : (getRes.headers.get('content-length') || '');
+                return {
+                    ok: true,
+                    url: validUrl,
+                    size: totalSize,
+                    etag: getRes.headers.get('etag') || ''
+                };
+            }
+            return { ok: false, status: getRes.status };
         } catch (e) {
             return { ok: true, url: validUrl, size: '', etag: '' };
         }
@@ -2306,8 +2308,9 @@
         const missingCantado = [];
         const missingInstrumental = [];
         const identicalFiles = [];
+        const altNamesFound = [];
 
-        const BATCH_SIZE = 12;
+        const BATCH_SIZE = 15;
         let checked = 0;
 
         for (let i = 0; i < himnosList.length; i += BATCH_SIZE) {
@@ -2320,10 +2323,14 @@
 
                 if (!resC.ok) {
                     missingCantado.push(`#${h.num} (${h.title}) -> ${resC.status}`);
+                } else if (!resC.url.endsWith(`/Cantado/${h.num}.mp4`)) {
+                    altNamesFound.push(`#${h.num} Cantado -> ${decodeURIComponent(resC.url.split('/').pop())}`);
                 }
 
                 if (!resI.ok) {
                     missingInstrumental.push(`#${h.num} (${h.title}) -> ${resI.status}`);
+                } else if (!resI.url.endsWith(`/Instrumental/${h.num}.mp4`)) {
+                    altNamesFound.push(`#${h.num} Instrumental -> ${decodeURIComponent(resI.url.split('/').pop())}`);
                 }
 
                 if (resC.ok && resI.ok) {
@@ -2345,8 +2352,13 @@
         document.getElementById('statIdentical').innerText = identicalFiles.length;
 
         const lines = [];
-        lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===`);
-        lines.push(`Plantilla Cantado: ${detectedFolderTemplates.Cantado || 'auto'} | Instrumental: ${detectedFolderTemplates.Instrumental || 'auto'}\n`);
+        lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===\n`);
+
+        if (altNamesFound.length > 0) {
+            lines.push(`✅ ENCONTRADOS CON NOMBRE ALTERNATIVO (${altNamesFound.length}):`);
+            altNamesFound.forEach(item => lines.push(`   - ${item}`));
+            lines.push('');
+        }
 
         lines.push(`⚠️ MISMO ARCHIVO EN CANTADO E INSTRUMENTAL (${identicalFiles.length}):`);
         if (identicalFiles.length === 0) {
@@ -3074,7 +3086,8 @@
             return;
         }
 
-        if (!currentActivePlayUrl) {
+        const expectedPrimaryUrl = getHymnVideoUrl(currentHimno);
+        if (!currentCandidateUrls.includes(expectedPrimaryUrl) || !currentActivePlayUrl) {
             reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
             return;
         }
@@ -3425,7 +3438,6 @@
         const reqId = ++currentPlayRequestId;
         isUserPaused = !autoPlay;
         useVideoAudioFallback = false;
-        currentActivePlayUrl = '';
 
         if (autoPlay && masterAudio.paused) {
             masterAudio.src = SILENT_AUDIO_DATA_URI;
@@ -3446,15 +3458,14 @@
         currentCandidateUrls = getHymnCandidateUrls(h, isInstrumental);
         currentCandidateIndex = 0;
 
-        const titleBar = document.getElementById('playerCurrentTitle');
-        titleBar.innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
         updateMediaSessionMetadata();
         updateActiveListItem();
 
         let playUrl = null;
         let isLocal = false;
 
-        // 1. Verificar si ya está guardado en almacenamiento local
+        // 1. Verificar si alguna de las rutas candidatas ya está en almacenamiento local
         const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
         if (savedLocalUrl) {
             const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
@@ -3466,26 +3477,24 @@
             }
         }
 
-        // 2. Si no está en local, resolver la URL válida en R2 (con respaldo directo si hace falta)
+        // 2. Si no está en local, resolver la URL exacta válida en R2
         if (!playUrl) {
             const resolvedRemoteUrl = await resolverUrlHimnoValida(h, isInstrumental);
             if (reqId !== currentPlayRequestId) return;
 
-            const chosenUrl = resolvedRemoteUrl || currentCandidateUrls[0];
-            if (!chosenUrl) {
+            if (!resolvedRemoteUrl) {
                 masterAudio.pause();
                 masterAudio.removeAttribute('src');
                 masterAudio.load();
                 isUserPaused = true;
-                mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no está disponible en modo ${isInstrumental ? 'Instrumental' : 'Cantado'}.`);
+                mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
                 return;
             }
 
-            playUrl = chosenUrl;
-            currentRemoteStreamUrl = chosenUrl;
-            currentCandidateUrls = getHymnCandidateUrls(h, isInstrumental);
-            const foundIdx = currentCandidateUrls.indexOf(chosenUrl);
-            currentCandidateIndex = foundIdx >= 0 ? foundIdx : 0;
+            playUrl = resolvedRemoteUrl;
+            currentRemoteStreamUrl = resolvedRemoteUrl;
+            const foundIdx = currentCandidateUrls.indexOf(resolvedRemoteUrl);
+            if (foundIdx >= 0) currentCandidateIndex = foundIdx;
         }
 
         const audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
@@ -3496,7 +3505,7 @@
             masterAudio.removeAttribute('src');
             masterAudio.load();
             isUserPaused = true;
-            mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no está disponible en modo ${isInstrumental ? 'Instrumental' : 'Cantado'}.`);
+            mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
         }
 
@@ -3519,7 +3528,7 @@
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        // 1. Iniciar Audio Maestro con la pista seleccionada
+        // 1. Iniciar Audio Maestro con la pista seleccionada desde el encabezado
         masterAudio.src = audioRes.url;
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
