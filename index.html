@@ -56,6 +56,11 @@
             flex-shrink: 0;
         }
 
+        /* MODO PROYECCIÓN EN SEGUNDA PANTALLA: OCULTA EL VIDEO EN LA PRINCIPAL Y DEJA SOLO CONTROLES Y LISTA */
+        #hymn-player-wrapper.projecting-external .video-section {
+            display: none !important;
+        }
+
         .video-container { 
             position: relative; 
             width: min(100%, calc(38vh * 16 / 9)); 
@@ -229,7 +234,7 @@
         .esc-notice { display: none; font-size: 0.78rem; color: #ebd1a7; font-style: italic; margin-left: 6px; }
 
         #hymn-player-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; padding: 0 !important; margin: 0 !important; background: #000 !important; }
-        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; }
+        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; display: flex !important; }
         #hymn-player-wrapper:fullscreen .video-container { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; aspect-ratio: unset !important; border: none !important; border-radius: 0 !important; }
         #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
         #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
@@ -710,6 +715,16 @@
                 height: 100%;
                 max-height: 100%;
                 overflow: hidden;
+            }
+
+            #hymn-player-wrapper.projecting-external #playerContainer {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "controls"
+                    "search"
+                    "checkboxes"
+                    "header"
+                    "playlist";
             }
 
             .video-section {
@@ -1276,11 +1291,87 @@
     let currentCandidateIndex = 0;
     let useVideoAudioFallback = false;
     let isResolvingFallbackUrl = false;
+    let syncTickCounter = 0;
 
     let currentShareType = 'main';
     let currentShortMainUrl = '';
     let currentShortHymnUrl = '';
     let currentShortPlaylistUrl = '';
+
+    /* =========================================================================
+       DETECCIÓN DE PROYECCIÓN EN SEGUNDA PANTALLA Y CONTROL DEL VIDEO PRINCIPAL
+       ========================================================================= */
+    function isProjectingExternal() {
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        return Boolean(wrapper && wrapper.classList.contains('projecting-external'));
+    }
+
+    function liberarVideosPantallaPrincipal() {
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        [v1, v2].forEach(v => {
+            if (!v) return;
+            v.onloadeddata = null;
+            v.oncanplay = null;
+            v.onerror = null;
+            v.pause();
+            v.removeAttribute('src');
+            delete v.dataset.loadedUrl;
+            v.load();
+            v.classList.remove('active');
+            v.muted = true;
+        });
+        if (v1) v1.classList.add('active');
+        activeVidId = 'myMedia1';
+    }
+
+    function restaurarVideoEnPantallaPrincipal() {
+        if (isProjectingExternal()) return;
+        const mainVideo = getActiveVideo();
+        if (!mainVideo) return;
+
+        if (!currentHimno || !currentActivePlayUrl) {
+            document.getElementById('posterOverlay').style.display = 'flex';
+            return;
+        }
+
+        document.getElementById('posterOverlay').style.display = 'none';
+        mainVideo.classList.add('active');
+        mainVideo.muted = !useVideoAudioFallback;
+        if (useVideoAudioFallback) {
+            mainVideo.volume = currentVolume;
+        }
+
+        if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
+            mainVideo.dataset.loadedUrl = currentActivePlayUrl;
+            mainVideo.src = currentActivePlayUrl;
+            mainVideo.load();
+
+            const resumeAtCurrentTime = () => {
+                mainVideo.onloadedmetadata = null;
+                mainVideo.onloadeddata = null;
+                const targetTime = masterAudio.currentTime || 0;
+                if (targetTime > 0 && isFinite(mainVideo.duration)) {
+                    mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
+                }
+                mainVideo.playbackRate = currentSpeed;
+                if (!masterAudio.paused && !isUserPaused) {
+                    mainVideo.play().catch(() => {});
+                }
+            };
+
+            mainVideo.onloadedmetadata = resumeAtCurrentTime;
+            mainVideo.onloadeddata = resumeAtCurrentTime;
+        } else {
+            if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
+                mainVideo.currentTime = masterAudio.currentTime;
+            }
+            mainVideo.playbackRate = currentSpeed;
+            if (!masterAudio.paused && !isUserPaused) {
+                mainVideo.play().catch(() => {});
+            }
+        }
+    }
 
     /* =========================================================================
        MOTOR DE AUDIO MAESTRO (STREAMING DIRECTO PARA ARRANQUE INMEDIATO)
@@ -1294,7 +1385,7 @@
         const activeVid = getActiveVideo();
 
         // Si el video visual ya cargó bien y solo falló la decodificación en <audio>, usar audio del <video>
-        if (!useVideoAudioFallback && activeVid && activeVid.readyState >= 2 && !activeVid.error) {
+        if (!isProjectingExternal() && !useVideoAudioFallback && activeVid && activeVid.readyState >= 2 && !activeVid.error) {
             activarRespaldoAudioVideo();
             return;
         }
@@ -1304,6 +1395,7 @@
     };
 
     function activarRespaldoAudioVideo() {
+        if (isProjectingExternal()) return;
         const activeVid = getActiveVideo();
         if (!activeVid || !currentActivePlayUrl) return;
         useVideoAudioFallback = true;
@@ -1326,7 +1418,7 @@
     }
 
     function getPrimaryAudioEngine() {
-        return useVideoAudioFallback ? getActiveVideo() : masterAudio;
+        return (!isProjectingExternal() && useVideoAudioFallback) ? getActiveVideo() : masterAudio;
     }
 
     /* =========================================================================
@@ -2902,10 +2994,12 @@
 
     function applyPlaybackSpeedToAll() {
         masterAudio.playbackRate = currentSpeed;
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        if (v1) v1.playbackRate = currentSpeed;
-        if (v2) v2.playbackRate = currentSpeed;
+        if (!isProjectingExternal()) {
+            const v1 = document.getElementById('myMedia1');
+            const v2 = document.getElementById('myMedia2');
+            if (v1) v1.playbackRate = currentSpeed;
+            if (v2) v2.playbackRate = currentSpeed;
+        }
         syncSecondary();
     }
 
@@ -2931,31 +3025,8 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && currentHimno && currentActivePlayUrl) {
-            const mainVideo = getActiveVideo();
-            if (!mainVideo) return;
-            document.getElementById('posterOverlay').style.display = 'none';
-
-            if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
-                mainVideo.muted = !useVideoAudioFallback;
-                mainVideo.dataset.loadedUrl = currentActivePlayUrl;
-                mainVideo.src = currentActivePlayUrl;
-                mainVideo.load();
-                mainVideo.onloadeddata = () => {
-                    mainVideo.onloadeddata = null;
-                    mainVideo.currentTime = masterAudio.currentTime || 0;
-                    mainVideo.playbackRate = currentSpeed;
-                    if (!masterAudio.paused) mainVideo.play().catch(() => {});
-                };
-            } else {
-                if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
-                    mainVideo.currentTime = masterAudio.currentTime;
-                }
-                mainVideo.playbackRate = currentSpeed;
-                if (!masterAudio.paused) {
-                    mainVideo.play().catch(() => {});
-                }
-            }
+        if (!document.hidden && currentHimno && currentActivePlayUrl && !isProjectingExternal()) {
+            restaurarVideoEnPantallaPrincipal();
         }
     });
 
@@ -2983,17 +3054,17 @@
             if (err && err.name === 'NotAllowedError') {
                 isUserPaused = true;
                 document.getElementById('playBtn').innerText = '▶ Repr.';
-            } else if (!useVideoAudioFallback) {
+            } else if (!useVideoAudioFallback && !isProjectingExternal()) {
                 activarRespaldoAudioVideo();
             }
         });
-        if (mainVideo && mainVideo !== engine && mainVideo.src && !document.hidden) {
+        if (!isProjectingExternal() && mainVideo && mainVideo !== engine && mainVideo.src && !document.hidden) {
             if (Math.abs(mainVideo.currentTime - engine.currentTime) > 0.25) {
                 mainVideo.currentTime = engine.currentTime;
             }
             mainVideo.play().catch(() => {});
         }
-        syncSecondary();
+        syncSecondary(true);
     }
 
     function pauseCurrentMedia() {
@@ -3004,7 +3075,7 @@
         if (mainVideo && !mainVideo.paused) {
             mainVideo.pause();
         }
-        syncSecondary();
+        syncSecondary(true);
     }
 
     function setupMediaSession() {
@@ -3022,7 +3093,7 @@
                     engine.currentTime = details.seekTime;
                 }
                 const mainVideo = getActiveVideo();
-                if (mainVideo && mainVideo.src && mainVideo !== engine) {
+                if (!isProjectingExternal() && mainVideo && mainVideo.src && mainVideo !== engine) {
                     mainVideo.currentTime = details.seekTime;
                 }
                 syncSecondary(true);
@@ -3386,10 +3457,7 @@
             });
         }
 
-        const activeVid = getActiveVideo();
-        const nextVid = getInactiveVideo();
-
-        // 1. Streaming progresivo inmediato en el Audio Maestro (sin descargar el MP4 entero antes)
+        // 1. Streaming progresivo inmediato en el Audio Maestro
         masterAudio.src = playUrl;
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
@@ -3404,14 +3472,24 @@
             });
         }
 
-        // 2. Si el móvil tiene la pantalla apagada o está en segundo plano, no cargar el video visual
-        if (document.hidden) {
+        // 2. Si se está proyectando en segunda pantalla, NO cargar ni decodificar video en la pantalla principal
+        if (isProjectingExternal()) {
+            liberarVideosPantallaPrincipal();
             syncSecondary(true);
             updateActiveListItem();
             return;
         }
 
-        // 3. Cargar pista visual silenciada por streaming progresivo y mostrarla apenas llegue el primer fotograma
+        // 3. Si el móvil tiene la pantalla apagada o está en segundo plano, no cargar el video visual
+        if (document.hidden) {
+            updateActiveListItem();
+            return;
+        }
+
+        // 4. Pantalla única visible: cargar pista visual silenciada por streaming progresivo
+        const activeVid = getActiveVideo();
+        const nextVid = getInactiveVideo();
+
         nextVid.muted = true;
         nextVid.dataset.loadedUrl = playUrl;
         nextVid.src = playUrl;
@@ -3420,6 +3498,10 @@
         let transitioned = false;
         const performTransition = () => {
             if (transitioned || reqId !== currentPlayRequestId) return;
+            if (isProjectingExternal()) {
+                liberarVideosPantallaPrincipal();
+                return;
+            }
             transitioned = true;
             nextVid.onloadeddata = null;
             nextVid.oncanplay = null;
@@ -3453,7 +3535,6 @@
             }, 250);
 
             swapActiveVideoPointers();
-            syncSecondary(true);
             updateActiveListItem();
         };
 
@@ -3464,7 +3545,6 @@
             nextVid.oncanplay = null;
             nextVid.onerror = null;
             if (reqId !== currentPlayRequestId) return;
-            // Si el video falla (ej. 404), intentar ruta alternativa en R2
             intentarSiguienteRutaAlternativa(reqId);
         };
 
@@ -3491,7 +3571,6 @@
                 return;
             }
 
-            // Si realmente no existe en R2 en ninguna de sus variantes
             masterAudio.pause();
             masterAudio.removeAttribute('src');
             masterAudio.load();
@@ -3579,14 +3658,7 @@
         masterAudio.removeAttribute('src');
         masterAudio.load();
 
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-
-        v1.onloadeddata = null; v1.oncanplay = null; v1.onerror = null; v1.pause(); v1.removeAttribute('src'); delete v1.dataset.loadedUrl; v1.load(); v1.classList.remove('active'); v1.muted = true;
-        v2.onloadeddata = null; v2.oncanplay = null; v2.onerror = null; v2.pause(); v2.removeAttribute('src'); delete v2.dataset.loadedUrl; v2.load(); v2.classList.remove('active'); v2.muted = true;
-
-        v1.classList.add('active');
-        activeVidId = 'myMedia1';
+        liberarVideosPantallaPrincipal();
 
         const localBadge = document.getElementById('localPlaybackBadge');
         if (localBadge) localBadge.style.display = 'none';
@@ -3603,14 +3675,14 @@
             navigator.mediaSession.playbackState = 'none';
         }
 
-        syncSecondary();
+        syncSecondary(true);
     }
 
     function syncSecondary(forceSeek = false) {
         const engine = getPrimaryAudioEngine();
         const chk = document.getElementById('secondaryScreenCheckbox');
 
-        if (chk && chk.checked) {
+        if (chk && chk.checked && isProjectingExternal()) {
             syncChannel.postMessage({
                 action: 'sync',
                 videoUrl: currentActivePlayUrl || '',
@@ -3636,7 +3708,7 @@
         const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
         const cur = engine.currentTime || 0;
-        const dur = engine.duration || (mainVideo ? mainVideo.duration : 0) || 0;
+        const dur = engine.duration || (!isProjectingExternal() && mainVideo ? mainVideo.duration : 0) || 0;
 
         document.getElementById('timeCurrent').innerText = formatTime(cur);
         document.getElementById('timeTotal').innerText = formatTime(dur);
@@ -3645,7 +3717,7 @@
         }
         document.getElementById('playBtn').innerText = engine.paused ? '▶ Repr.' : '⏸ Pausa';
 
-        if (!document.hidden && !engine.paused && mainVideo && mainVideo !== engine && mainVideo.src) {
+        if (!isProjectingExternal() && !document.hidden && !engine.paused && mainVideo && mainVideo !== engine && mainVideo.src) {
             if (mainVideo.paused && mainVideo.readyState >= 2) {
                 mainVideo.play().catch(() => {});
             }
@@ -3667,7 +3739,11 @@
             }
         }
 
-        syncSecondary(false);
+        // Enviar latido de sincronización cada 1 segundo (4 ciclos de 250ms) para evitar sobrecarga en segunda pantalla
+        syncTickCounter = (syncTickCounter + 1) % 4;
+        if (syncTickCounter === 0) {
+            syncSecondary(false);
+        }
     }
 
     function formatTime(sec) {
@@ -3679,11 +3755,11 @@
     function userSeek(val) {
         const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
-        const dur = engine.duration || (mainVideo ? mainVideo.duration : 0) || 0;
+        const dur = engine.duration || (!isProjectingExternal() && mainVideo ? mainVideo.duration : 0) || 0;
         if (dur > 0) {
             const targetTime = (val / 100) * dur;
             engine.currentTime = targetTime;
-            if (mainVideo && mainVideo !== engine && mainVideo.src) {
+            if (!isProjectingExternal() && mainVideo && mainVideo !== engine && mainVideo.src) {
                 mainVideo.currentTime = targetTime;
             }
             syncSecondary(true);
@@ -3695,7 +3771,7 @@
         isAudioMuted = (val == 0);
         masterAudio.volume = currentVolume;
         masterAudio.muted = isAudioMuted;
-        if (useVideoAudioFallback) {
+        if (!isProjectingExternal() && useVideoAudioFallback) {
             const v = getActiveVideo();
             if (v) { v.volume = currentVolume; v.muted = isAudioMuted; }
         }
@@ -3705,7 +3781,7 @@
     function toggleMute() {
         isAudioMuted = !isAudioMuted;
         masterAudio.muted = isAudioMuted;
-        if (useVideoAudioFallback) {
+        if (!isProjectingExternal() && useVideoAudioFallback) {
             const v = getActiveVideo();
             if (v) v.muted = isAudioMuted;
         }
@@ -3785,10 +3861,19 @@
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
     }
 
+    /* --- ESCUCHA DE CONFIRMACIÓN DESDE VENTANA DE PROYECCIÓN --- */
+    syncChannel.onmessage = (e) => {
+        if (e.data && e.data.action === 'ready') {
+            syncSecondary(true);
+        }
+    };
+
     /* --- LÓGICA DE PROYECCIÓN --- */
     async function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        const wasExternal = isProjectingExternal();
 
         if (chk.checked && !screenDetailsApiGranted && 'getScreenDetails' in window) {
             await cargarPantallas(true);
@@ -3798,6 +3883,7 @@
         const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
 
         if (!chk.checked) {
+            wrapper.classList.remove('projecting-external');
             badge.innerText = 'Pantalla Única';
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
@@ -3811,10 +3897,16 @@
             if (document.fullscreenElement && isPrimaryScreen) {
                 document.exitFullscreen().catch(() => {});
             }
+
+            // Al desactivar la segunda pantalla, restaurar automáticamente el video en la principal
+            if (wasExternal) {
+                restaurarVideoEnPantallaPrincipal();
+            }
             return;
         }
 
         if (isPrimaryScreen) {
+            wrapper.classList.remove('projecting-external');
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
             }
@@ -3825,14 +3917,21 @@
             badge.style.background = '#2ecc71';
             badge.style.color = '#000';
 
+            if (wasExternal) {
+                restaurarVideoEnPantallaPrincipal();
+            }
+
             if (!document.fullscreenElement) {
-                const wrapper = document.getElementById('hymn-player-wrapper');
                 wrapper.requestFullscreen().catch(() => {});
             }
             return;
         }
 
-        badge.innerText = 'Proyectando (Ventana Externa)';
+        // MODO SEGUNDA PANTALLA: Dejar solo controles en la principal y detener video local
+        wrapper.classList.add('projecting-external');
+        liberarVideosPantallaPrincipal();
+
+        badge.innerText = 'Proyectando (2ª Pantalla)';
         badge.style.background = '#2ecc71';
         badge.style.color = '#000';
 
@@ -3900,16 +3999,19 @@
                             <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                             <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                         </div>
-                        <video id="projVideo" muted autoplay playsinline preload="auto" crossorigin="anonymous"></video>
+                        <video id="projVideo" muted playsinline preload="auto" crossorigin="anonymous"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
                             const v = document.getElementById('projVideo');
                             const poster = document.getElementById('projPoster');
                             let lastFallback = '';
+                            let currentLoadedUrl = '';
 
                             v.onerror = () => {
-                                if (lastFallback && v.src !== lastFallback) {
+                                if (lastFallback && currentLoadedUrl !== lastFallback) {
+                                    currentLoadedUrl = lastFallback;
                                     v.src = lastFallback;
+                                    v.load();
                                 }
                             };
                             
@@ -3919,7 +4021,10 @@
                                     window.close();
                                     return;
                                 }
+                                if (data.action !== 'sync') return;
+
                                 if (!data.videoUrl) {
+                                    currentLoadedUrl = '';
                                     v.pause();
                                     v.removeAttribute('src');
                                     v.load();
@@ -3927,30 +4032,47 @@
                                 } else {
                                     poster.style.display = 'none';
                                     lastFallback = data.fallbackUrl || '';
-                                    if (v.src !== data.videoUrl) {
+                                    if (currentLoadedUrl !== data.videoUrl) {
+                                        currentLoadedUrl = data.videoUrl;
                                         v.src = data.videoUrl;
+                                        v.load();
+                                        v.onloadedmetadata = () => {
+                                            v.onloadedmetadata = null;
+                                            if (data.currentTime > 0 && isFinite(v.duration)) {
+                                                v.currentTime = Math.min(data.currentTime, v.duration);
+                                            }
+                                            if (data.playbackRate) v.playbackRate = data.playbackRate;
+                                            if (!data.isPaused) v.play().catch(()=>{});
+                                        };
+                                    } else {
+                                        if (v.readyState >= 1) {
+                                            const drift = Math.abs(v.currentTime - data.currentTime);
+                                            if (data.forceSeek ? drift > 0.25 : drift > 1.5) {
+                                                v.currentTime = data.currentTime;
+                                            }
+                                        }
+                                        if (data.playbackRate && v.playbackRate !== data.playbackRate) {
+                                            v.playbackRate = data.playbackRate;
+                                        }
+                                        if (data.isPaused && !v.paused) v.pause();
+                                        if (!data.isPaused && v.paused && v.readyState >= 2) v.play().catch(()=>{});
                                     }
-                                    const drift = Math.abs(v.currentTime - data.currentTime);
-                                    if (data.forceSeek ? drift > 0.15 : drift > 1.2) {
-                                        v.currentTime = data.currentTime;
-                                    }
-                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) {
-                                        v.playbackRate = data.playbackRate;
-                                    }
-                                    if (data.isPaused && !v.paused) v.pause();
-                                    if (!data.isPaused && v.paused) v.play().catch(()=>{});
                                 }
                             };
+
+                            bc.postMessage({ action: 'ready' });
                         <\/script>
                     </body>
                     </html>
                 `);
                 projectionWindow.document.close();
             } else {
+                wrapper.classList.remove('projecting-external');
                 chk.checked = false;
                 badge.innerText = 'Pantalla Única';
                 badge.style.background = 'rgba(217, 155, 56, 0.2)';
                 badge.style.color = '#fff';
+                restaurarVideoEnPantallaPrincipal();
                 mostrarToast('⚠️ Permite las ventanas emergentes para proyectar en segunda pantalla.');
                 return;
             }
