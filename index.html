@@ -78,7 +78,7 @@
             height: 100%;
             display: block;
             object-fit: contain;
-            background: #000;
+            background: transparent;
             opacity: 0;
             z-index: 1;
             pointer-events: none;
@@ -93,7 +93,7 @@
         .video-element.active {
             opacity: 1;
             z-index: 3;
-            transition: opacity 0.18s ease-in-out;
+            transition: opacity 0.2s ease-in-out;
         }
         
         .poster-overlay { 
@@ -849,8 +849,8 @@
 </head>
 <body>
 
-<!-- AUDIO MAESTRO (STREAMING DIRECTO PARA ARRANQUE INMEDIATO Y SEGUNDO PLANO EN MÓVIL) -->
-<audio id="masterAudio" preload="auto" crossorigin="anonymous" playsinline></audio>
+<!-- AUDIO MAESTRO (STREAMING DIRECTO SIN CORS FORZADO PARA REPRODUCIR LOS 613 HIMNOS) -->
+<audio id="masterAudio" preload="auto" playsinline></audio>
 
 <div id="hymn-player-wrapper">
     <div id="playerContainer">
@@ -861,8 +861,8 @@
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" muted preload="auto" crossorigin="anonymous" playsinline></video>
-                <video id="myMedia2" class="video-element" muted preload="auto" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia1" class="video-element active" muted preload="auto" playsinline></video>
+                <video id="myMedia2" class="video-element" muted preload="auto" playsinline></video>
             </div>
         </div>
 
@@ -1243,7 +1243,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v3";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v4";
     const TITULOS_CACHE_KEY = "himnario_adventista_titulos_cache_v1";
 
     const syncChannel = new BroadcastChannel('hymn_projection_sync');
@@ -1362,51 +1362,24 @@
 
         const resumeAtCurrentTime = () => {
             mainVideo.onloadedmetadata = null;
-            mainVideo.onloadeddata = null;
+            mainVideo.oncanplay = null;
             const targetTime = masterAudio.currentTime || 0;
             if (targetTime > 0 && isFinite(mainVideo.duration)) {
                 mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
             }
             mainVideo.playbackRate = currentSpeed;
-            const revealPrimary = () => {
-                document.getElementById('posterOverlay').style.display = 'none';
-            };
+            document.getElementById('posterOverlay').style.display = 'none';
             if (!masterAudio.paused && !isUserPaused) {
-                mainVideo.play().then(() => {
-                    esperarFotogramaPintado(mainVideo, revealPrimary);
-                }).catch(revealPrimary);
-            } else {
-                esperarFotogramaPintado(mainVideo, revealPrimary);
+                mainVideo.play().catch(() => {});
             }
         };
 
         mainVideo.onloadedmetadata = resumeAtCurrentTime;
-        mainVideo.onloadeddata = resumeAtCurrentTime;
-    }
-
-    function esperarFotogramaPintado(videoEl, callback) {
-        let done = false;
-        const finish = () => {
-            if (done) return;
-            done = true;
-            callback();
-        };
-
-        if (videoEl && typeof videoEl.requestVideoFrameCallback === 'function' && !videoEl.paused) {
-            videoEl.requestVideoFrameCallback(() => {
-                requestAnimationFrame(finish);
-            });
-            setTimeout(finish, 220);
-        } else {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(finish);
-            });
-            setTimeout(finish, 180);
-        }
+        mainVideo.oncanplay = resumeAtCurrentTime;
     }
 
     /* =========================================================================
-       MOTOR DE AUDIO MAESTRO (STREAMING DIRECTO PARA ARRANQUE INMEDIATO)
+       MOTOR DE AUDIO MAESTRO (SIN CORS FORZADO PARA REPRODUCCIÓN DIRECTA R2)
        ========================================================================= */
     const masterAudio = document.getElementById('masterAudio');
     masterAudio.onended = () => {
@@ -1416,7 +1389,10 @@
         if (!currentHimno || !currentActivePlayUrl) return;
         const activeVid = getActiveVideo();
 
-        if (!isProjectingExternal() && !useVideoAudioFallback && activeVid && activeVid.readyState >= 2 && !activeVid.error) {
+        // Solo usar respaldo de video si el video activo corresponde al himno actual y ya está cargado
+        if (!isProjectingExternal() && !useVideoAudioFallback && activeVid &&
+            activeVid.dataset.loadedUrl === currentActivePlayUrl &&
+            activeVid.readyState >= 2 && !activeVid.error) {
             activarRespaldoAudioVideo();
             return;
         }
@@ -1555,6 +1531,13 @@
         const numPad4 = String(numInt).padStart(4, '0');
         const candidates = [];
 
+        // 1. Ruta directa estándar (igual que en la versión de escritorio index_2.html)
+        const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
+        if (localTargetMap && localTargetMap[h.num]) {
+            candidates.push(localTargetMap[h.num]);
+        }
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
+
         if (r2BucketIndexedByNum[carpeta] && r2BucketIndexedByNum[carpeta][numInt]) {
             candidates.push(r2BucketIndexedByNum[carpeta][numInt]);
         }
@@ -1562,11 +1545,6 @@
         const resolvedKey = getResolvedCacheKey(h, isInst);
         if (resolvedUrlsCache[resolvedKey]) {
             candidates.push(resolvedUrlsCache[resolvedKey]);
-        }
-
-        const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
-        if (localTargetMap && localTargetMap[h.num]) {
-            candidates.push(localTargetMap[h.num]);
         }
 
         const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
@@ -1582,7 +1560,6 @@
             }
         }
 
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
@@ -1930,10 +1907,7 @@
         renderList(getFilteredList());
 
         try {
-            const validUrl = await resolverUrlHimnoValida(h, isInst, signal);
-            if (!validUrl) {
-                throw new Error('NOT_FOUND_R2');
-            }
+            const validUrl = (await resolverUrlHimnoValida(h, isInst, signal)) || initialKeyUrl;
 
             if (savedUrlsSet.has(validUrl)) return true;
 
@@ -1992,8 +1966,6 @@
             if (!silent) {
                 if (err && err.name === 'QuotaExceededError') {
                     mostrarToast('⚠️ Espacio insuficiente en el dispositivo.');
-                } else if (err && err.message === 'NOT_FOUND_R2') {
-                    mostrarToast(`⚠️ Himno ${parseInt(h.num, 10)} (${modeName}) no encontrado en el servidor.`);
                 } else {
                     mostrarToast(`⚠️ Error de red al descargar el Himno ${parseInt(h.num, 10)}`);
                 }
@@ -2796,7 +2768,7 @@
             .replace(/"/g, '&quot;');
     }
 
-    /* --- VIDEO DOUBLE BUFFERING (VISUAL SIN PANTALLAS NEGRAS) --- */
+    /* --- VIDEO DOUBLE BUFFERING (VISUAL SIN PANTALLAS NEGRAS, IGUAL QUE EN DESKTOP) --- */
     let activeVidId = 'myMedia1';
     let currentRemoteStreamUrl = '';
     function getActiveVideo() { return document.getElementById(activeVidId); }
@@ -3474,6 +3446,7 @@
 
         // 1. Streaming progresivo inmediato en el Audio Maestro
         masterAudio.src = playUrl;
+        masterAudio.load();
         masterAudio.currentTime = 0;
         masterAudio.volume = currentVolume;
         masterAudio.muted = isAudioMuted;
@@ -3487,7 +3460,7 @@
             });
         }
 
-        // 2. Si se está proyectando en segunda pantalla, mantener la pantalla principal visible pero detenida (sin descargar/reproducir en paralelo)
+        // 2. Si se está proyectando en segunda pantalla, mantener la pantalla principal visible pero detenida
         if (isProjectingExternal()) {
             detenerVideoEnPantallaPrincipal(true);
             syncSecondary(true);
@@ -3501,9 +3474,17 @@
             return;
         }
 
-        // 4. Pantalla única visible: cargar pista visual en el búfer inactivo sin mostrar pantalla negra
+        // 4. Pantalla única visible: transición idéntica a index_2.html (esperar oncanplay antes de cambiar activo)
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
+
+        if (activeVid && activeVid.dataset.loadedUrl === playUrl && activeVid.readyState >= 3) {
+            activeVid.playbackRate = currentSpeed;
+            if (autoPlay && !isUserPaused) activeVid.play().catch(() => {});
+            document.getElementById('posterOverlay').style.display = 'none';
+            updateActiveListItem();
+            return;
+        }
 
         nextVid.classList.remove('active', 'underneath');
         nextVid.muted = true;
@@ -3512,22 +3493,39 @@
         nextVid.load();
 
         let transitioned = false;
-        const revelarNuevoVideoSinNegro = () => {
+        const performTransition = () => {
             if (transitioned || reqId !== currentPlayRequestId) return;
             if (isProjectingExternal()) {
                 detenerVideoEnPantallaPrincipal(true);
                 return;
             }
             transitioned = true;
+            nextVid.oncanplay = null;
+            nextVid.onerror = null;
 
             document.getElementById('posterOverlay').style.display = 'none';
 
-            // Mantener activeVid al 100% de opacidad debajo mientras nextVid aparece encima (z-index: 3)
+            // Sincronizar tiempo con el audio maestro si ya avanzó unos milisegundos
+            const engine = getPrimaryAudioEngine();
+            if (engine && engine.currentTime > 0.15 && isFinite(nextVid.duration)) {
+                nextVid.currentTime = Math.min(engine.currentTime, nextVid.duration);
+            }
+            nextVid.playbackRate = currentSpeed;
+
+            if (useVideoAudioFallback) {
+                nextVid.muted = isAudioMuted;
+                nextVid.volume = currentVolume;
+            }
+
             if (activeVid && activeVid.src) {
                 activeVid.classList.add('underneath');
                 activeVid.classList.remove('active');
             }
             nextVid.classList.add('active');
+
+            if (autoPlay && !isUserPaused) {
+                nextVid.play().catch(() => {});
+            }
 
             setTimeout(() => {
                 if (activeVid) {
@@ -3540,48 +3538,20 @@
                     delete activeVid.dataset.loadedUrl;
                     activeVid.load();
                 }
-            }, 240);
+            }, 250);
 
             swapActiveVideoPointers();
             updateActiveListItem();
         };
 
-        const iniciarPreparacionFotograma = () => {
-            if (reqId !== currentPlayRequestId) return;
-            nextVid.onloadeddata = null;
-            nextVid.oncanplay = null;
-            nextVid.onerror = null;
-
-            const engine = getPrimaryAudioEngine();
-            nextVid.playbackRate = currentSpeed;
-            if (useVideoAudioFallback) {
-                nextVid.muted = isAudioMuted;
-                nextVid.volume = currentVolume;
-            }
-
-            if (!isUserPaused && (!engine.paused || useVideoAudioFallback) && !document.hidden) {
-                nextVid.play().then(() => {
-                    esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
-                }).catch(() => {
-                    esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
-                });
-            } else {
-                esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
-            }
-        };
-
-        nextVid.onloadeddata = iniciarPreparacionFotograma;
-        nextVid.oncanplay = iniciarPreparacionFotograma;
+        nextVid.oncanplay = () => { performTransition(); };
         nextVid.onerror = () => {
-            nextVid.onloadeddata = null;
             nextVid.oncanplay = null;
             nextVid.onerror = null;
-            if (reqId !== currentPlayRequestId) return;
-            intentarSiguienteRutaAlternativa(reqId);
         };
 
-        if (nextVid.readyState >= 2) {
-            iniciarPreparacionFotograma();
+        if (nextVid.readyState >= 3) {
+            performTransition();
         }
 
         updateActiveListItem();
@@ -3595,6 +3565,17 @@
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
 
         try {
+            // Probar primero los siguientes candidatos directos sin depender de CORS HEAD
+            while (currentCandidateIndex + 1 < currentCandidateUrls.length) {
+                currentCandidateIndex++;
+                const nextCandUrl = currentCandidateUrls[currentCandidateIndex];
+                if (nextCandUrl && nextCandUrl !== currentRemoteStreamUrl) {
+                    isResolvingFallbackUrl = false;
+                    aplicarFuenteDeReproduccion(nextCandUrl, nextCandUrl, false, !isUserPaused, reqId);
+                    return;
+                }
+            }
+
             const validAltUrl = await resolverUrlHimnoValida(h, isInstrumental);
             if (reqId !== currentPlayRequestId) return;
 
@@ -4004,9 +3985,9 @@
                         <style>
                             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
                             body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; cursor: pointer; }
-                            .proj-video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; background: #000; opacity: 0; z-index: 1; pointer-events: none; }
+                            .proj-video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; background: transparent; opacity: 0; z-index: 1; pointer-events: none; }
                             .proj-video.underneath { opacity: 1; z-index: 2; }
-                            .proj-video.active { opacity: 1; z-index: 3; transition: opacity 0.18s ease-in-out; }
+                            .proj-video.active { opacity: 1; z-index: 3; transition: opacity 0.2s ease-in-out; }
                             .poster-overlay { 
                                 position: absolute; 
                                 inset: 0; 
@@ -4044,8 +4025,8 @@
                             <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                             <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                         </div>
-                        <video id="projVideo1" class="proj-video active" muted playsinline preload="auto" crossorigin="anonymous"></video>
-                        <video id="projVideo2" class="proj-video" muted playsinline preload="auto" crossorigin="anonymous"></video>
+                        <video id="projVideo1" class="proj-video active" muted playsinline preload="auto"></video>
+                        <video id="projVideo2" class="proj-video" muted playsinline preload="auto"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
                             const poster = document.getElementById('projPoster');
@@ -4056,18 +4037,6 @@
                             function getActiveProj() { return document.getElementById(activeProjId); }
                             function getInactiveProj() { return document.getElementById(activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
                             function swapProj() { activeProjId = (activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
-
-                            function waitFramePainted(v, cb) {
-                                let done = false;
-                                const finish = () => { if (!done) { done = true; cb(); } };
-                                if (v && typeof v.requestVideoFrameCallback === 'function' && !v.paused) {
-                                    v.requestVideoFrameCallback(() => requestAnimationFrame(finish));
-                                    setTimeout(finish, 220);
-                                } else {
-                                    requestAnimationFrame(() => requestAnimationFrame(finish));
-                                    setTimeout(finish, 180);
-                                }
-                            }
                             
                             bc.onmessage = (e) => {
                                 const data = e.data;
@@ -4112,44 +4081,43 @@
                                         }
                                     };
 
-                                    const onReady = () => {
-                                        if (seq !== loadSeq) return;
-                                        nextV.onloadedmetadata = null;
-                                        nextV.onloadeddata = null;
+                                    let transitioned = false;
+                                    const performTransition = () => {
+                                        if (transitioned || seq !== loadSeq) return;
+                                        transitioned = true;
+                                        nextV.oncanplay = null;
 
                                         if (data.currentTime > 0.3 && isFinite(nextV.duration)) {
                                             nextV.currentTime = Math.min(data.currentTime, nextV.duration);
                                         }
                                         if (data.playbackRate) nextV.playbackRate = data.playbackRate;
 
-                                        const reveal = () => {
-                                            if (seq !== loadSeq) return;
-                                            poster.style.display = 'none';
-                                            if (curV && curV.src) {
-                                                curV.classList.add('underneath');
-                                                curV.classList.remove('active');
-                                            }
-                                            nextV.classList.add('active');
-                                            setTimeout(() => {
-                                                if (curV) {
-                                                    curV.pause();
-                                                    curV.classList.remove('underneath', 'active');
-                                                    curV.removeAttribute('src');
-                                                    curV.load();
-                                                }
-                                            }, 240);
-                                            swapProj();
-                                        };
+                                        poster.style.display = 'none';
+                                        if (curV && curV.src) {
+                                            curV.classList.add('underneath');
+                                            curV.classList.remove('active');
+                                        }
+                                        nextV.classList.add('active');
 
                                         if (!data.isPaused) {
-                                            nextV.play().then(() => waitFramePainted(nextV, reveal)).catch(() => waitFramePainted(nextV, reveal));
-                                        } else {
-                                            waitFramePainted(nextV, reveal);
+                                            nextV.play().catch(() => {});
                                         }
+
+                                        setTimeout(() => {
+                                            if (curV) {
+                                                curV.pause();
+                                                curV.classList.remove('underneath', 'active');
+                                                curV.removeAttribute('src');
+                                                curV.load();
+                                            }
+                                        }, 250);
+                                        swapProj();
                                     };
 
-                                    nextV.onloadedmetadata = onReady;
-                                    nextV.onloadeddata = onReady;
+                                    nextV.oncanplay = performTransition;
+                                    if (nextV.readyState >= 3) {
+                                        performTransition();
+                                    }
                                 } else {
                                     const v = getActiveProj();
                                     if (v && v.readyState >= 1) {
