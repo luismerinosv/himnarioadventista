@@ -56,11 +56,6 @@
             flex-shrink: 0;
         }
 
-        /* MODO PROYECCIÓN EN SEGUNDA PANTALLA: OCULTA EL VIDEO EN LA PRINCIPAL Y DEJA SOLO CONTROLES Y LISTA */
-        #hymn-player-wrapper.projecting-external .video-section {
-            display: none !important;
-        }
-
         .video-container { 
             position: relative; 
             width: min(100%, calc(38vh * 16 / 9)); 
@@ -85,13 +80,20 @@
             object-fit: contain;
             background: #000;
             opacity: 0;
-            transition: opacity 0.2s ease-in-out;
             z-index: 1;
+            pointer-events: none;
+        }
+
+        /* El video anterior permanece al 100% debajo mientras el nuevo aparece encima sin dejar ver fondo negro */
+        .video-element.underneath {
+            opacity: 1;
+            z-index: 2;
         }
 
         .video-element.active {
             opacity: 1;
-            z-index: 2;
+            z-index: 3;
+            transition: opacity 0.18s ease-in-out;
         }
         
         .poster-overlay { 
@@ -717,16 +719,6 @@
                 overflow: hidden;
             }
 
-            #hymn-player-wrapper.projecting-external #playerContainer {
-                grid-template-columns: 1fr;
-                grid-template-areas:
-                    "controls"
-                    "search"
-                    "checkboxes"
-                    "header"
-                    "playlist";
-            }
-
             .video-section {
                 grid-area: video;
                 width: 100%;
@@ -1306,23 +1298,34 @@
         return Boolean(wrapper && wrapper.classList.contains('projecting-external'));
     }
 
-    function liberarVideosPantallaPrincipal() {
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        [v1, v2].forEach(v => {
-            if (!v) return;
-            v.onloadeddata = null;
-            v.oncanplay = null;
-            v.onerror = null;
-            v.pause();
-            v.removeAttribute('src');
-            delete v.dataset.loadedUrl;
-            v.load();
-            v.classList.remove('active');
-            v.muted = true;
-        });
-        if (v1) v1.classList.add('active');
-        activeVidId = 'myMedia1';
+    function detenerVideoEnPantallaPrincipal(unloadIfDifferent = false) {
+        const activeVid = getActiveVideo();
+        const inactiveVid = getInactiveVideo();
+
+        if (inactiveVid) {
+            inactiveVid.onloadeddata = null;
+            inactiveVid.oncanplay = null;
+            inactiveVid.onerror = null;
+            inactiveVid.pause();
+            inactiveVid.classList.remove('active', 'underneath');
+            inactiveVid.removeAttribute('src');
+            delete inactiveVid.dataset.loadedUrl;
+            inactiveVid.load();
+        }
+
+        if (activeVid) {
+            activeVid.onloadeddata = null;
+            activeVid.oncanplay = null;
+            activeVid.onerror = null;
+            activeVid.pause();
+            activeVid.muted = true;
+            if (unloadIfDifferent) {
+                activeVid.removeAttribute('src');
+                delete activeVid.dataset.loadedUrl;
+                activeVid.load();
+                document.getElementById('posterOverlay').style.display = 'flex';
+            }
+        }
     }
 
     function restaurarVideoEnPantallaPrincipal() {
@@ -1335,34 +1338,14 @@
             return;
         }
 
-        document.getElementById('posterOverlay').style.display = 'none';
         mainVideo.classList.add('active');
         mainVideo.muted = !useVideoAudioFallback;
         if (useVideoAudioFallback) {
             mainVideo.volume = currentVolume;
         }
 
-        if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
-            mainVideo.dataset.loadedUrl = currentActivePlayUrl;
-            mainVideo.src = currentActivePlayUrl;
-            mainVideo.load();
-
-            const resumeAtCurrentTime = () => {
-                mainVideo.onloadedmetadata = null;
-                mainVideo.onloadeddata = null;
-                const targetTime = masterAudio.currentTime || 0;
-                if (targetTime > 0 && isFinite(mainVideo.duration)) {
-                    mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
-                }
-                mainVideo.playbackRate = currentSpeed;
-                if (!masterAudio.paused && !isUserPaused) {
-                    mainVideo.play().catch(() => {});
-                }
-            };
-
-            mainVideo.onloadedmetadata = resumeAtCurrentTime;
-            mainVideo.onloadeddata = resumeAtCurrentTime;
-        } else {
+        if (mainVideo.dataset.loadedUrl === currentActivePlayUrl && mainVideo.readyState >= 2) {
+            document.getElementById('posterOverlay').style.display = 'none';
             if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
                 mainVideo.currentTime = masterAudio.currentTime;
             }
@@ -1370,6 +1353,55 @@
             if (!masterAudio.paused && !isUserPaused) {
                 mainVideo.play().catch(() => {});
             }
+            return;
+        }
+
+        mainVideo.dataset.loadedUrl = currentActivePlayUrl;
+        mainVideo.src = currentActivePlayUrl;
+        mainVideo.load();
+
+        const resumeAtCurrentTime = () => {
+            mainVideo.onloadedmetadata = null;
+            mainVideo.onloadeddata = null;
+            const targetTime = masterAudio.currentTime || 0;
+            if (targetTime > 0 && isFinite(mainVideo.duration)) {
+                mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
+            }
+            mainVideo.playbackRate = currentSpeed;
+            const revealPrimary = () => {
+                document.getElementById('posterOverlay').style.display = 'none';
+            };
+            if (!masterAudio.paused && !isUserPaused) {
+                mainVideo.play().then(() => {
+                    esperarFotogramaPintado(mainVideo, revealPrimary);
+                }).catch(revealPrimary);
+            } else {
+                esperarFotogramaPintado(mainVideo, revealPrimary);
+            }
+        };
+
+        mainVideo.onloadedmetadata = resumeAtCurrentTime;
+        mainVideo.onloadeddata = resumeAtCurrentTime;
+    }
+
+    function esperarFotogramaPintado(videoEl, callback) {
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            callback();
+        };
+
+        if (videoEl && typeof videoEl.requestVideoFrameCallback === 'function' && !videoEl.paused) {
+            videoEl.requestVideoFrameCallback(() => {
+                requestAnimationFrame(finish);
+            });
+            setTimeout(finish, 220);
+        } else {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(finish);
+            });
+            setTimeout(finish, 180);
         }
     }
 
@@ -1384,13 +1416,11 @@
         if (!currentHimno || !currentActivePlayUrl) return;
         const activeVid = getActiveVideo();
 
-        // Si el video visual ya cargó bien y solo falló la decodificación en <audio>, usar audio del <video>
         if (!isProjectingExternal() && !useVideoAudioFallback && activeVid && activeVid.readyState >= 2 && !activeVid.error) {
             activarRespaldoAudioVideo();
             return;
         }
 
-        // Si falló la URL inicial (ej. 404 porque tiene otro formato/título en R2), resolver URL alternativa
         intentarSiguienteRutaAlternativa(currentPlayRequestId);
     };
 
@@ -1509,9 +1539,7 @@
                     });
                     guardarResolvedUrlsCache();
                 }
-            } catch (e) {
-                // Si CORS bloquea el listado XML, el buscador paralelo de candidatos actúa como respaldo
-            }
+            } catch (e) {}
         }
     }
 
@@ -1554,7 +1582,6 @@
             }
         }
 
-        // Rutas numéricas estándar (001.mp4, 1.mp4, 01.mp4, 001.MP4, 1.MP4, 0001.mp4)
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
@@ -1568,12 +1595,10 @@
         }
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
 
-        // Variantes con espacio accidental antes de .mp4 (ej. "186 .mp4", "84 .mp4")
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
 
-        // Variantes de título (NFC, NFD de macOS/iOS, sin puntuación, sin tildes, sin ñ, con n/_ en lugar de ñ)
         const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
         const noPunctTitle = rawTitle.replace(/[¿?¡!.,;:'"()«»—–-]/g, ' ').replace(/\s+/g, ' ').trim();
         const nfcTitle = rawTitle.normalize('NFC');
@@ -1642,7 +1667,6 @@
             });
         });
 
-        // Otras extensiones posibles de video/audio en R2
         ['.m4v', '.M4V', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}${ext}`);
             if (String(numInt) !== h.num) {
@@ -1650,7 +1674,6 @@
             }
         });
 
-        // Subcarpeta Himnos/ o carpetas en minúsculas / mayúsculas
         candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
@@ -1674,7 +1697,6 @@
             if (e && e.name === 'AbortError') throw e;
         }
 
-        // Respaldo con GET parcial en caso de que CORS en R2 no permita HEAD
         try {
             const rangeRes = await fetch(url, {
                 method: 'GET',
@@ -1743,12 +1765,10 @@
         const numInt = parseInt(h.num, 10);
         const candidates = getHymnCandidateUrls(h, isInst);
 
-        // Si ya está guardado en IndexedDB con alguna de las URLs candidatas, devolverla al instante
         for (const cand of candidates) {
             if (savedUrlsSet.has(cand)) return cand;
         }
 
-        // Probar en paralelo los 3 candidatos principales
         const fastSlice = candidates.slice(0, 3);
         const fastResults = await Promise.all(
             fastSlice.map(async (u) => ((await urlExisteEnServidor(u, signal)) ? u : null))
@@ -1760,7 +1780,6 @@
             return fastFound;
         }
 
-        // Consultar listado XML de R2 si el bucket lo permite antes de probar decenas de variantes
         const xmlFound = await buscarPorPrefijoXmlR2(carpeta, h.num, numInt, signal);
         if (xmlFound) {
             resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = xmlFound;
@@ -1768,7 +1787,6 @@
             return xmlFound;
         }
 
-        // Buscar en paralelo entre todas las variantes posibles
         const remaining = candidates.slice(3);
         const BATCH = 12;
         for (let i = 0; i < remaining.length; i += BATCH) {
@@ -2778,7 +2796,7 @@
             .replace(/"/g, '&quot;');
     }
 
-    /* --- VIDEO DOUBLE BUFFERING (VISUAL) --- */
+    /* --- VIDEO DOUBLE BUFFERING (VISUAL SIN PANTALLAS NEGRAS) --- */
     let activeVidId = 'myMedia1';
     let currentRemoteStreamUrl = '';
     function getActiveVideo() { return document.getElementById(activeVidId); }
@@ -3179,7 +3197,6 @@
             himnosList.push({ num: numStr, title: String(titleStr) });
         }
 
-        // Indexar en segundo plano los archivos de R2 sin bloquear la carga inicial
         precargarIndiceBucketR2();
 
         cargarPlaylistsStorage();
@@ -3315,10 +3332,8 @@
 
             li.className = `playlist-item ${isActive ? 'active' : ''}`;
             li.dataset.num = h.num;
-            // Un clic selecciona; doble clic reproduce
             li.onclick = () => handleHymnClick(h);
 
-            // Botón Play grande: un solo clic/toque reproduce inmediatamente
             const playBullet = document.createElement('div');
             playBullet.className = 'play-bullet';
             playBullet.title = `Reproducir Himno ${parseInt(h.num, 10)}`;
@@ -3472,9 +3487,9 @@
             });
         }
 
-        // 2. Si se está proyectando en segunda pantalla, NO cargar ni decodificar video en la pantalla principal
+        // 2. Si se está proyectando en segunda pantalla, mantener la pantalla principal visible pero detenida (sin descargar/reproducir en paralelo)
         if (isProjectingExternal()) {
-            liberarVideosPantallaPrincipal();
+            detenerVideoEnPantallaPrincipal(true);
             syncSecondary(true);
             updateActiveListItem();
             return;
@@ -3486,60 +3501,77 @@
             return;
         }
 
-        // 4. Pantalla única visible: cargar pista visual silenciada por streaming progresivo
+        // 4. Pantalla única visible: cargar pista visual en el búfer inactivo sin mostrar pantalla negra
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
+        nextVid.classList.remove('active', 'underneath');
         nextVid.muted = true;
         nextVid.dataset.loadedUrl = playUrl;
         nextVid.src = playUrl;
         nextVid.load();
 
         let transitioned = false;
-        const performTransition = () => {
+        const revelarNuevoVideoSinNegro = () => {
             if (transitioned || reqId !== currentPlayRequestId) return;
             if (isProjectingExternal()) {
-                liberarVideosPantallaPrincipal();
+                detenerVideoEnPantallaPrincipal(true);
                 return;
             }
             transitioned = true;
-            nextVid.onloadeddata = null;
-            nextVid.oncanplay = null;
-            nextVid.onerror = null;
 
             document.getElementById('posterOverlay').style.display = 'none';
-            
+
+            // Mantener activeVid al 100% de opacidad debajo mientras nextVid aparece encima (z-index: 3)
+            if (activeVid && activeVid.src) {
+                activeVid.classList.add('underneath');
+                activeVid.classList.remove('active');
+            }
             nextVid.classList.add('active');
-            activeVid.classList.remove('active');
-            
-            const engine = getPrimaryAudioEngine();
-            nextVid.playbackRate = currentSpeed;
-            if (useVideoAudioFallback) {
-                nextVid.muted = isAudioMuted;
-                nextVid.volume = currentVolume;
-            } else if (Math.abs(nextVid.currentTime - masterAudio.currentTime) > 0.15) {
-                nextVid.currentTime = masterAudio.currentTime;
-            }
-            if (!isUserPaused && (!engine.paused || useVideoAudioFallback) && !document.hidden) {
-                nextVid.play().catch(() => {});
-            }
 
             setTimeout(() => {
-                activeVid.pause();
-                activeVid.onloadeddata = null;
-                activeVid.oncanplay = null;
-                activeVid.onerror = null;
-                activeVid.removeAttribute('src');
-                delete activeVid.dataset.loadedUrl;
-                activeVid.load();
-            }, 250);
+                if (activeVid) {
+                    activeVid.pause();
+                    activeVid.classList.remove('underneath', 'active');
+                    activeVid.onloadeddata = null;
+                    activeVid.oncanplay = null;
+                    activeVid.onerror = null;
+                    activeVid.removeAttribute('src');
+                    delete activeVid.dataset.loadedUrl;
+                    activeVid.load();
+                }
+            }, 240);
 
             swapActiveVideoPointers();
             updateActiveListItem();
         };
 
-        nextVid.onloadeddata = () => { performTransition(); };
-        nextVid.oncanplay = () => { performTransition(); };
+        const iniciarPreparacionFotograma = () => {
+            if (reqId !== currentPlayRequestId) return;
+            nextVid.onloadeddata = null;
+            nextVid.oncanplay = null;
+            nextVid.onerror = null;
+
+            const engine = getPrimaryAudioEngine();
+            nextVid.playbackRate = currentSpeed;
+            if (useVideoAudioFallback) {
+                nextVid.muted = isAudioMuted;
+                nextVid.volume = currentVolume;
+            }
+
+            if (!isUserPaused && (!engine.paused || useVideoAudioFallback) && !document.hidden) {
+                nextVid.play().then(() => {
+                    esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
+                }).catch(() => {
+                    esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
+                });
+            } else {
+                esperarFotogramaPintado(nextVid, revelarNuevoVideoSinNegro);
+            }
+        };
+
+        nextVid.onloadeddata = iniciarPreparacionFotograma;
+        nextVid.oncanplay = iniciarPreparacionFotograma;
         nextVid.onerror = () => {
             nextVid.onloadeddata = null;
             nextVid.oncanplay = null;
@@ -3549,7 +3581,7 @@
         };
 
         if (nextVid.readyState >= 2) {
-            performTransition();
+            iniciarPreparacionFotograma();
         }
 
         updateActiveListItem();
@@ -3612,7 +3644,6 @@
         updateMediaSessionMetadata();
         updateActiveListItem();
 
-        // 1. Si está guardado localmente en IndexedDB, reproducir blob local al instante
         const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
         if (savedLocalUrl) {
             const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
@@ -3623,7 +3654,6 @@
             }
         }
 
-        // 2. Arranque directo e inmediato por streaming sin bloquear con descargas previas
         const primaryUrl = currentCandidateUrls[0];
         aplicarFuenteDeReproduccion(primaryUrl, primaryUrl, false, autoPlay, reqId);
     }
@@ -3658,7 +3688,22 @@
         masterAudio.removeAttribute('src');
         masterAudio.load();
 
-        liberarVideosPantallaPrincipal();
+        const v1 = document.getElementById('myMedia1');
+        const v2 = document.getElementById('myMedia2');
+        [v1, v2].forEach(v => {
+            if (!v) return;
+            v.onloadeddata = null;
+            v.oncanplay = null;
+            v.onerror = null;
+            v.pause();
+            v.classList.remove('active', 'underneath');
+            v.removeAttribute('src');
+            delete v.dataset.loadedUrl;
+            v.load();
+            v.muted = true;
+        });
+        if (v1) v1.classList.add('active');
+        activeVidId = 'myMedia1';
 
         const localBadge = document.getElementById('localPlaybackBadge');
         if (localBadge) localBadge.style.display = 'none';
@@ -3721,7 +3766,7 @@
             if (mainVideo.paused && mainVideo.readyState >= 2) {
                 mainVideo.play().catch(() => {});
             }
-            if (Math.abs(mainVideo.currentTime - cur) > 0.4) {
+            if (Math.abs(mainVideo.currentTime - cur) > 0.6) {
                 mainVideo.currentTime = cur;
             }
         }
@@ -3739,7 +3784,6 @@
             }
         }
 
-        // Enviar latido de sincronización cada 1 segundo (4 ciclos de 250ms) para evitar sobrecarga en segunda pantalla
         syncTickCounter = (syncTickCounter + 1) % 4;
         if (syncTickCounter === 0) {
             syncSecondary(false);
@@ -3898,7 +3942,6 @@
                 document.exitFullscreen().catch(() => {});
             }
 
-            // Al desactivar la segunda pantalla, restaurar automáticamente el video en la principal
             if (wasExternal) {
                 restaurarVideoEnPantallaPrincipal();
             }
@@ -3927,9 +3970,9 @@
             return;
         }
 
-        // MODO SEGUNDA PANTALLA: Dejar solo controles en la principal y detener video local
+        // MODO SEGUNDA PANTALLA: Dejar el recuadro de video visible en la pantalla principal pero detenido
         wrapper.classList.add('projecting-external');
-        liberarVideosPantallaPrincipal();
+        detenerVideoEnPantallaPrincipal(false);
 
         badge.innerText = 'Proyectando (2ª Pantalla)';
         badge.style.background = '#2ecc71';
@@ -3961,7 +4004,9 @@
                         <style>
                             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
                             body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; cursor: pointer; }
-                            video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
+                            .proj-video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; background: #000; opacity: 0; z-index: 1; pointer-events: none; }
+                            .proj-video.underneath { opacity: 1; z-index: 2; }
+                            .proj-video.active { opacity: 1; z-index: 3; transition: opacity 0.18s ease-in-out; }
                             .poster-overlay { 
                                 position: absolute; 
                                 inset: 0; 
@@ -3999,21 +4044,30 @@
                             <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                             <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                         </div>
-                        <video id="projVideo" muted playsinline preload="auto" crossorigin="anonymous"></video>
+                        <video id="projVideo1" class="proj-video active" muted playsinline preload="auto" crossorigin="anonymous"></video>
+                        <video id="projVideo2" class="proj-video" muted playsinline preload="auto" crossorigin="anonymous"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
-                            const v = document.getElementById('projVideo');
                             const poster = document.getElementById('projPoster');
-                            let lastFallback = '';
+                            let activeProjId = 'projVideo1';
                             let currentLoadedUrl = '';
+                            let loadSeq = 0;
 
-                            v.onerror = () => {
-                                if (lastFallback && currentLoadedUrl !== lastFallback) {
-                                    currentLoadedUrl = lastFallback;
-                                    v.src = lastFallback;
-                                    v.load();
+                            function getActiveProj() { return document.getElementById(activeProjId); }
+                            function getInactiveProj() { return document.getElementById(activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
+                            function swapProj() { activeProjId = (activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
+
+                            function waitFramePainted(v, cb) {
+                                let done = false;
+                                const finish = () => { if (!done) { done = true; cb(); } };
+                                if (v && typeof v.requestVideoFrameCallback === 'function' && !v.paused) {
+                                    v.requestVideoFrameCallback(() => requestAnimationFrame(finish));
+                                    setTimeout(finish, 220);
+                                } else {
+                                    requestAnimationFrame(() => requestAnimationFrame(finish));
+                                    setTimeout(finish, 180);
                                 }
-                            };
+                            }
                             
                             bc.onmessage = (e) => {
                                 const data = e.data;
@@ -4024,39 +4078,91 @@
                                 if (data.action !== 'sync') return;
 
                                 if (!data.videoUrl) {
+                                    loadSeq++;
                                     currentLoadedUrl = '';
-                                    v.pause();
-                                    v.removeAttribute('src');
-                                    v.load();
-                                    poster.style.display = 'flex';
-                                } else {
-                                    poster.style.display = 'none';
-                                    lastFallback = data.fallbackUrl || '';
-                                    if (currentLoadedUrl !== data.videoUrl) {
-                                        currentLoadedUrl = data.videoUrl;
-                                        v.src = data.videoUrl;
+                                    ['projVideo1', 'projVideo2'].forEach(id => {
+                                        const v = document.getElementById(id);
+                                        v.pause();
+                                        v.classList.remove('active', 'underneath');
+                                        v.removeAttribute('src');
                                         v.load();
-                                        v.onloadedmetadata = () => {
-                                            v.onloadedmetadata = null;
-                                            if (data.currentTime > 0 && isFinite(v.duration)) {
-                                                v.currentTime = Math.min(data.currentTime, v.duration);
+                                    });
+                                    document.getElementById('projVideo1').classList.add('active');
+                                    activeProjId = 'projVideo1';
+                                    poster.style.display = 'flex';
+                                    return;
+                                }
+
+                                if (currentLoadedUrl !== data.videoUrl) {
+                                    currentLoadedUrl = data.videoUrl;
+                                    const seq = ++loadSeq;
+                                    const curV = getActiveProj();
+                                    const nextV = getInactiveProj();
+                                    const fallbackUrl = data.fallbackUrl || '';
+
+                                    nextV.classList.remove('active', 'underneath');
+                                    nextV.src = data.videoUrl;
+                                    nextV.load();
+
+                                    nextV.onerror = () => {
+                                        if (seq !== loadSeq) return;
+                                        if (fallbackUrl && nextV.src !== fallbackUrl) {
+                                            nextV.src = fallbackUrl;
+                                            nextV.load();
+                                        }
+                                    };
+
+                                    const onReady = () => {
+                                        if (seq !== loadSeq) return;
+                                        nextV.onloadedmetadata = null;
+                                        nextV.onloadeddata = null;
+
+                                        if (data.currentTime > 0.3 && isFinite(nextV.duration)) {
+                                            nextV.currentTime = Math.min(data.currentTime, nextV.duration);
+                                        }
+                                        if (data.playbackRate) nextV.playbackRate = data.playbackRate;
+
+                                        const reveal = () => {
+                                            if (seq !== loadSeq) return;
+                                            poster.style.display = 'none';
+                                            if (curV && curV.src) {
+                                                curV.classList.add('underneath');
+                                                curV.classList.remove('active');
                                             }
-                                            if (data.playbackRate) v.playbackRate = data.playbackRate;
-                                            if (!data.isPaused) v.play().catch(()=>{});
+                                            nextV.classList.add('active');
+                                            setTimeout(() => {
+                                                if (curV) {
+                                                    curV.pause();
+                                                    curV.classList.remove('underneath', 'active');
+                                                    curV.removeAttribute('src');
+                                                    curV.load();
+                                                }
+                                            }, 240);
+                                            swapProj();
                                         };
-                                    } else {
-                                        if (v.readyState >= 1) {
-                                            const drift = Math.abs(v.currentTime - data.currentTime);
-                                            if (data.forceSeek ? drift > 0.25 : drift > 1.5) {
-                                                v.currentTime = data.currentTime;
-                                            }
+
+                                        if (!data.isPaused) {
+                                            nextV.play().then(() => waitFramePainted(nextV, reveal)).catch(() => waitFramePainted(nextV, reveal));
+                                        } else {
+                                            waitFramePainted(nextV, reveal);
                                         }
-                                        if (data.playbackRate && v.playbackRate !== data.playbackRate) {
-                                            v.playbackRate = data.playbackRate;
+                                    };
+
+                                    nextV.onloadedmetadata = onReady;
+                                    nextV.onloadeddata = onReady;
+                                } else {
+                                    const v = getActiveProj();
+                                    if (v && v.readyState >= 1) {
+                                        const drift = Math.abs(v.currentTime - data.currentTime);
+                                        if (data.forceSeek ? drift > 0.25 : drift > 1.5) {
+                                            v.currentTime = data.currentTime;
                                         }
-                                        if (data.isPaused && !v.paused) v.pause();
-                                        if (!data.isPaused && v.paused && v.readyState >= 2) v.play().catch(()=>{});
                                     }
+                                    if (v && data.playbackRate && v.playbackRate !== data.playbackRate) {
+                                        v.playbackRate = data.playbackRate;
+                                    }
+                                    if (v && data.isPaused && !v.paused) v.pause();
+                                    if (v && !data.isPaused && v.paused && v.readyState >= 2) v.play().catch(()=>{});
                                 }
                             };
 
