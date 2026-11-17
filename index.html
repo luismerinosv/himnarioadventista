@@ -78,15 +78,21 @@
             height: 100%;
             display: block;
             object-fit: contain;
-            background: #000;
-            opacity: 0;
-            transition: opacity 0.2s ease-in-out;
+            background: transparent;
+            opacity: 0.001;
             z-index: 1;
+            pointer-events: none;
+        }
+
+        .video-element.underneath {
+            opacity: 1;
+            z-index: 2;
         }
 
         .video-element.active {
             opacity: 1;
-            z-index: 2;
+            z-index: 3;
+            transition: opacity 0.2s ease-in-out;
         }
         
         .poster-overlay { 
@@ -124,13 +130,16 @@
         }
         
         #playerControls { background: #231203; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(217, 155, 56, 0.25); display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
-        .controls-header { display: flex; justify-content: space-between; align-items: center; font-size: clamp(0.75rem, 1.8vw, 0.85rem); color: #ebd1a7; gap: 10px; }
+        .controls-header { display: flex; justify-content: space-between; align-items: center; font-size: clamp(0.75rem, 1.8vw, 0.85rem); color: #ebd1a7; gap: 8px; }
+        .header-badges-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .local-play-badge { display: none; font-size: 0.7rem; background: #1e6b38; color: #d8ffdf; border: 1px solid rgba(92, 214, 129, 0.45); padding: 2px 6px; border-radius: 3px; font-weight: 700; }
         .timeline-container { display: flex; align-items: center; gap: 10px; width: 100%; }
         .time-text { font-size: 0.78rem; color: #d1ba98; font-family: monospace; min-width: 40px; }
         .progress-slider { flex: 1; accent-color: #d9822b; cursor: pointer; height: 5px; }
         .controls-buttons { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
         .btn-ctrl { background: #7a420f; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); padding: 5px 9px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: clamp(0.75rem, 1.8vw, 0.85rem); display: flex; align-items: center; gap: 4px; transition: background 0.2s; white-space: nowrap; }
         .btn-ctrl:hover { background: #9e5614; }
+        #helpBtn { font-weight: 900; color: #fcecd2; min-width: 28px; justify-content: center; }
         
         .speed-container { display: flex; align-items: center; gap: 2px; background: #3b1d05; border: 1px solid rgba(242, 203, 148, 0.25); border-radius: 5px; padding: 1px 3px; }
         .btn-speed { background: #7a420f; color: #f7dfb8; border: none; border-radius: 3px; width: 20px; height: 22px; font-weight: bold; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; transition: background 0.2s; }
@@ -142,9 +151,21 @@
         .search-input { width: 100%; padding: 6px 10px; font-size: clamp(0.8rem, 1.8vw, 0.9rem); border: 1px solid #b89363; border-radius: 5px; background-color: #f8ebd5; color: #2d1704; outline: none; flex-shrink: 0; font-weight: 600; }
         .checkbox-container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 5px 10px; background: rgba(18, 9, 2, 0.45); border: 1px solid rgba(217, 155, 56, 0.2); border-radius: 6px; font-size: clamp(0.75rem, 1.8vw, 0.85rem); flex-shrink: 0; }
         .select-pantalla { background: #3b1d05; color: #f7dfb8; border: 1px solid #7a420f; padding: 3px 6px; border-radius: 5px; font-size: clamp(0.72rem, 1.6vw, 0.82rem); outline: none; cursor: pointer; max-width: 240px; font-weight: 500; }
-        .playlist-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1px; flex-shrink: 0; }
-        .playlist-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #ebd1a7; }
-        .mode-badge { font-size: 0.7rem; background: #7a420f; padding: 2px 7px; border-radius: 4px; font-weight: 600; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); }
+        
+        /* --- ENCABEZADO DE LISTA Y CONTROLES DE PLAYLIST / LOCAL --- */
+        .playlist-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1px; flex-shrink: 0; gap: 6px; flex-wrap: nowrap; }
+        .playlist-nav-group { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; }
+        .playlist-select { background: #3b1d05; color: #fcecd2; border: 1px solid #9e5614; padding: 3px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 700; outline: none; cursor: pointer; max-width: 210px; text-overflow: ellipsis; }
+        .btn-mini-pl { background: #59300b; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.25); padding: 3px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.2s; display: inline-flex; align-items: center; gap: 3px; }
+        .btn-mini-pl:hover { background: #8c4b11; }
+        .btn-mini-pl.play-all { background: #266b3a; border-color: #3ca35a; color: #fff; }
+        .btn-mini-pl.play-all:hover { background: #2f8548; }
+        .btn-mini-pl.offline-btn { background: #2c4c6e; border-color: #4b82bd; color: #e6f2ff; }
+        .btn-mini-pl.offline-btn:hover { background: #38618c; }
+        .btn-mini-pl.active-toggle { background: #d9822b; color: #180c02; border-color: #fcecd2; }
+        .playlist-right-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .mode-badge { font-size: 0.7rem; background: #7a420f; padding: 2px 7px; border-radius: 4px; font-weight: 600; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); white-space: nowrap; }
+        .queue-badge { font-size: 0.7rem; background: #1e5c31; padding: 2px 7px; border-radius: 4px; font-weight: 700; color: #d8ffdf; border: 1px solid rgba(92, 214, 129, 0.4); white-space: nowrap; display: none; }
         
         #playlist { 
             list-style: none; 
@@ -160,20 +181,65 @@
 
         #playlist::-webkit-scrollbar { width: 6px; }
         #playlist::-webkit-scrollbar-thumb { background: #7a420f; border-radius: 3px; }
-        .playlist-item { display: flex; align-items: center; gap: 10px; padding: 0 10px; height: 36px; box-sizing: border-box; border-bottom: 1px solid rgba(217, 155, 56, 0.08); font-size: clamp(0.78rem, 1.8vw, 0.88rem); cursor: pointer; transition: background 0.15s; color: #ebd1a7; }
+        .playlist-item { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 8px; height: 42px; box-sizing: border-box; border-bottom: 1px solid rgba(217, 155, 56, 0.08); font-size: clamp(0.8rem, 1.8vw, 0.9rem); cursor: pointer; transition: background 0.15s; color: #ebd1a7; }
         .playlist-item:hover { background: rgba(217, 155, 56, 0.15); }
         .playlist-item.active { background: rgba(158, 86, 20, 0.65); font-weight: 600; color: #ffffff; }
-        .play-bullet { width: 16px; height: 16px; background-color: #7a420f; border: 1px solid rgba(242, 203, 148, 0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
-        .play-bullet::after { content: ''; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid #ffffff; margin-left: 1px; }
+        
+        .play-bullet { 
+            width: 30px; 
+            height: 30px; 
+            background: linear-gradient(180deg, #a35814 0%, #6b3608 100%); 
+            border: 1.5px solid rgba(248, 203, 133, 0.55); 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            flex-shrink: 0; 
+            cursor: pointer; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.45);
+            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+        }
+        .play-bullet:hover { 
+            background: linear-gradient(180deg, #c76f1e 0%, #8c480c 100%); 
+            border-color: #fcecd2; 
+            transform: scale(1.08); 
+        }
+        .play-bullet:active { 
+            transform: scale(0.94); 
+        }
+        .play-bullet::after { 
+            content: ''; 
+            width: 0; 
+            height: 0; 
+            border-top: 6px solid transparent; 
+            border-bottom: 6px solid transparent; 
+            border-left: 10px solid #ffffff; 
+            margin-left: 2.5px; 
+        }
+
+        .hymn-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hymn-item-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .btn-item-icon { background: rgba(59, 29, 5, 0.7); border: 1px solid rgba(217, 155, 56, 0.2); color: #d1ba98; border-radius: 4px; width: 25px; height: 25px; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
+        .btn-item-icon:hover { background: #8c4b11; color: #fff; border-color: rgba(242, 203, 148, 0.5); }
+        .btn-item-icon.fav-active { color: #ffd24c; border-color: rgba(255, 210, 76, 0.45); background: rgba(122, 66, 15, 0.85); }
+        .btn-item-icon.saved-local { color: #7dff9e; border-color: rgba(76, 217, 114, 0.45); background: rgba(25, 87, 45, 0.85); font-weight: bold; }
+        .btn-item-icon.downloading-local { color: #80c4ff; border-color: rgba(91, 168, 255, 0.5); background: rgba(31, 65, 102, 0.85); animation: pulseDown 1s infinite; }
+        .btn-item-icon.danger:hover { background: #8f241e; border-color: #e05a52; }
+
+        @keyframes pulseDown {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.45; }
+        }
+
         .esc-notice { display: none; font-size: 0.78rem; color: #ebd1a7; font-style: italic; margin-left: 6px; }
 
         #hymn-player-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; padding: 0 !important; margin: 0 !important; background: #000 !important; }
-        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; }
+        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; display: flex !important; }
         #hymn-player-wrapper:fullscreen .video-container { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; aspect-ratio: unset !important; border: none !important; border-radius: 0 !important; }
         #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 12px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: transparent !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
         #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
         #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-input, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
-        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #downloadBtn { display: none !important; }
+        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #helpBtn { display: none !important; }
 
         /* --- ESTILOS DE MODALES --- */
         .modal-overlay {
@@ -201,13 +267,14 @@
             border: 1px solid #7a420f;
             border-radius: 12px;
             width: 100%;
-            max-width: 450px;
+            max-width: 500px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.9);
             overflow: hidden;
             display: flex;
             flex-direction: column;
             transform: translateY(15px);
             transition: transform 0.25s ease-out;
+            max-height: 90vh;
         }
 
         .modal-overlay.active .modal-card {
@@ -224,6 +291,7 @@
             color: #fcecd2;
             font-weight: 800;
             font-size: 1.05rem;
+            flex-shrink: 0;
         }
 
         .modal-close {
@@ -244,12 +312,66 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            overflow-y: auto;
+        }
+
+        /* --- ESTILOS MODAL DE AYUDA / CARACTERÍSTICAS --- */
+        .help-intro {
+            font-size: 0.84rem;
+            color: #ebd1a7;
+            line-height: 1.45;
+            background: rgba(18, 9, 2, 0.55);
+            border: 1px solid rgba(217, 155, 56, 0.22);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .help-features-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .help-feature-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 11px;
+            padding: 10px 12px;
+            background: rgba(18, 9, 2, 0.65);
+            border: 1px solid rgba(217, 155, 56, 0.2);
+            border-radius: 8px;
+        }
+
+        .help-feature-icon {
+            font-size: 1.25rem;
+            line-height: 1.2;
+            flex-shrink: 0;
+            width: 26px;
+            text-align: center;
+        }
+
+        .help-feature-content {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .help-feature-title {
+            font-size: 0.86rem;
+            font-weight: 700;
+            color: #fcecd2;
+        }
+
+        .help-feature-desc {
+            font-size: 0.77rem;
+            color: #d1ba98;
+            line-height: 1.4;
         }
 
         .share-tabs {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
             background: #0d0601;
             padding: 4px;
             border-radius: 8px;
@@ -260,16 +382,17 @@
             background: transparent;
             color: #a89279;
             border: none;
-            padding: 8px 10px;
+            padding: 7px 6px;
             border-radius: 6px;
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             cursor: pointer;
             font-weight: 700;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 4px;
             transition: all 0.2s;
+            white-space: nowrap;
         }
 
         .share-tab.active {
@@ -340,36 +463,148 @@
             transition: background 0.2s;
         }
 
-        .download-options { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .download-item {
+        /* --- ESTILOS MODAL GESTIÓN DE LISTAS Y ALMACENAMIENTO LOCAL --- */
+        .pl-modal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+        .pl-modal-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 14px;
-            background: rgba(18, 9, 2, 0.6);
+            gap: 8px;
+            padding: 9px 12px;
+            background: rgba(18, 9, 2, 0.65);
             border: 1px solid rgba(217, 155, 56, 0.2);
-            border-radius: 8px;
-            text-decoration: none;
-            color: #f7dfb8;
-            transition: background 0.2s, border-color 0.2s;
+            border-radius: 7px;
+            color: #fcecd2;
+            font-size: 0.86rem;
         }
-        .download-item:hover:not(.disabled) {
-            background: rgba(158, 86, 20, 0.35);
-            border-color: rgba(217, 155, 56, 0.5);
-        }
-        .download-item.disabled { opacity: 0.6; cursor: not-allowed; }
-        .download-info { display: flex; align-items: center; gap: 10px; }
-        .download-icon { font-size: 1.4rem; }
-        .download-title { font-size: 0.88rem; font-weight: 600; color: #fff; }
-        .download-desc { font-size: 0.72rem; color: #d1ba98; }
-        .btn-download-action {
-            background: #7a420f;
-            color: #fff;
-            padding: 6px 12px;
-            border-radius: 5px;
-            font-size: 0.78rem;
+        .pl-modal-row label {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            cursor: pointer;
+            flex: 1;
             font-weight: 600;
-            border: 1px solid rgba(242, 203, 148, 0.3);
+        }
+        .pl-modal-row input[type="checkbox"] {
+            accent-color: #d9822b;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .pl-count-pill {
+            font-size: 0.72rem;
+            background: rgba(122, 66, 15, 0.6);
+            padding: 2px 7px;
+            border-radius: 10px;
+            color: #ebd1a7;
+        }
+
+        .offline-stats-box {
+            background: #120902;
+            border: 1px solid rgba(75, 130, 189, 0.4);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .offline-stats-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        .offline-progress-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            background: rgba(31, 65, 102, 0.35);
+            border: 1px solid rgba(91, 168, 255, 0.4);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+        .offline-progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: #0d0601;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .offline-progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3a82d6, #5fd687);
+            transition: width 0.25s ease;
+        }
+        .offline-action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .btn-offline-card {
+            background: rgba(18, 9, 2, 0.75);
+            border: 1px solid rgba(217, 155, 56, 0.3);
+            color: #fcecd2;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: all 0.2s;
+        }
+        .btn-offline-card:hover:not(:disabled) {
+            background: rgba(122, 66, 15, 0.45);
+            border-color: #d9822b;
+        }
+        .btn-offline-card:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-offline-card strong { font-size: 0.82rem; color: #fff; }
+        .btn-offline-card span { font-size: 0.71rem; color: #cbb290; }
+
+        /* --- ESTILOS REPORTE AUDITORÍA R2 --- */
+        .audit-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+        .audit-stat-pill {
+            background: #120902;
+            border: 1px solid rgba(217, 155, 56, 0.25);
+            border-radius: 7px;
+            padding: 8px 6px;
+            text-align: center;
+        }
+        .audit-stat-pill strong {
+            display: block;
+            font-size: 1.05rem;
+            color: #fcecd2;
+        }
+        .audit-stat-pill span {
+            font-size: 0.68rem;
+            color: #cbb290;
+        }
+        .audit-report-box {
+            background: #0d0601;
+            border: 1px solid rgba(217, 155, 56, 0.25);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.78rem;
+            color: #ebd1a7;
+            max-height: 250px;
+            overflow-y: auto;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            font-family: monospace;
         }
 
         /* --- MÓVIL EN VERTICAL --- */
@@ -410,10 +645,10 @@
                 white-space: nowrap;
             }
 
-            #shareBtn, #downloadBtn {
+            #shareBtn, #helpBtn {
                 flex: 0 0 auto;
-                padding: 4px 6px !important;
-                font-size: 0.72rem !important;
+                padding: 4px 7px !important;
+                font-size: 0.75rem !important;
             }
 
             .volume-container {
@@ -434,6 +669,28 @@
             }
 
             .volume-slider { width: 45px !important; }
+
+            .playlist-select {
+                max-width: 112px;
+                font-size: 0.7rem;
+                padding: 2px 4px;
+            }
+            .btn-mini-pl {
+                padding: 2px 4px;
+                font-size: 0.65rem;
+            }
+            .mode-badge, .queue-badge {
+                font-size: 0.6rem;
+                padding: 2px 4px;
+            }
+            .btn-item-icon {
+                width: 23px;
+                height: 23px;
+                font-size: 0.74rem;
+            }
+            .hymn-item-actions {
+                gap: 3px;
+            }
         }
 
         /* --- MÓVIL EN HORIZONTAL --- */
@@ -553,8 +810,9 @@
                 margin-top: 0;
             }
 
-            .playlist-label { font-size: 0.62rem; }
-            .mode-badge { font-size: 0.55rem; padding: 1px 3px; }
+            .playlist-select { font-size: 0.58rem; padding: 1px 3px; max-width: 85px; }
+            .btn-mini-pl { font-size: 0.53rem; padding: 1px 3px; }
+            .mode-badge, .queue-badge, .local-play-badge { font-size: 0.5rem; padding: 1px 3px; }
 
             #playlist {
                 grid-area: playlist;
@@ -565,12 +823,15 @@
             }
 
             .playlist-item {
-                height: 25px;
-                font-size: 0.68rem;
+                height: 30px;
+                font-size: 0.7rem;
                 padding: 0 5px;
+                gap: 7px;
             }
 
-            .play-bullet { width: 12px; height: 12px; }
+            .play-bullet { width: 22px; height: 22px; }
+            .play-bullet::after { border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; border-left: 7px solid #ffffff; margin-left: 1.5px; }
+            .btn-item-icon { width: 19px; height: 19px; font-size: 0.65rem; }
 
             .poster-logo {
                 max-width: min(50px, 20cqw);
@@ -586,30 +847,36 @@
 </head>
 <body>
 
+<!-- AUDIO PARA PROYECCIÓN EN 2ª PANTALLA Y SEGUNDO PLANO EN MÓVILES -->
+<audio id="masterAudio" preload="none" playsinline></audio>
+
 <div id="hymn-player-wrapper">
     <div id="playerContainer">
-        <!-- REPRODUCTOR DE VIDEO -->
+        <!-- REPRODUCTOR DE VIDEO PRINCIPAL -->
         <div class="video-section">
             <div class="video-container">
                 <div id="posterOverlay" class="poster-overlay">
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" crossorigin="anonymous" playsinline></video>
-                <video id="myMedia2" class="video-element" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia1" class="video-element active" preload="auto" playsinline></video>
+                <video id="myMedia2" class="video-element" preload="auto" playsinline></video>
             </div>
         </div>
 
         <!-- PANEL DE CONTROLES DEL REPRODUCTOR -->
         <div id="playerControls">
             <div class="controls-header">
-                <span id="playerCurrentTitle" style="font-weight: bold; color: #fff;">Seleccione un himno para comenzar</span>
-                <span id="projectionStatusBadge" style="font-size:0.75rem; background:rgba(217, 155, 56, 0.2); padding:2px 6px; border-radius:3px;">Pantalla Única</span>
+                <span id="playerCurrentTitle" style="font-weight: bold; color: #fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Seleccione un himno para comenzar</span>
+                <div class="header-badges-right">
+                    <span id="localPlaybackBadge" class="local-play-badge" title="Reproduciendo desde el almacenamiento local de tu dispositivo">💾 Local</span>
+                    <span id="projectionStatusBadge" style="font-size:0.75rem; background:rgba(217, 155, 56, 0.2); padding:2px 6px; border-radius:3px;">Pantalla Única</span>
+                </div>
             </div>
 
             <div class="timeline-container">
                 <span id="timeCurrent" class="time-text">00:00</span>
-                <input type="range" id="progressSlider" class="progress-slider" value="0" min="0" max="100" onmousedown="isSeeking=true" onmouseup="isSeeking=false" oninput="userSeek(this.value)" onchange="isSeeking=false">
+                <input type="range" id="progressSlider" class="progress-slider" value="0" min="0" max="100" onmousedown="isSeeking=true" onmouseup="isSeeking=false" ontouchstart="isSeeking=true" ontouchend="isSeeking=false" oninput="userSeek(this.value)" onchange="isSeeking=false">
                 <span id="timeTotal" class="time-text">00:00</span>
             </div>
 
@@ -620,7 +887,7 @@
                 <button class="btn-ctrl" onclick="nextHymn()">Sig. ⏭</button>
                 <button class="btn-ctrl" id="fullscreenBtn" onclick="togglePantallaCompleta()">⛶ Full</button>
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()">🔗 Compartir</button>
-                <button class="btn-ctrl" id="downloadBtn" onclick="abrirModalDescarga()">💻 App PC</button>
+                <button class="btn-ctrl" id="helpBtn" onclick="abrirModalAyuda()" title="Características y guía de uso" aria-label="Características y guía de uso">?</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
 
                 <div class="volume-container">
@@ -649,19 +916,298 @@
                 <option value="-1">Cargando pantallas...</option>
             </select>
 
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-left: auto;">
-                <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
-                <span>Instrumental</span>
-            </label>
+            <div style="display:flex; align-items:center; gap:6px; margin-left: auto;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
+                    <span>Instrumental</span>
+                </label>
+            </div>
         </div>
 
-        <!-- ENCABEZADO Y LISTA DE HIMNOS -->
+        <!-- ENCABEZADO Y SELECTOR DE LISTAS DE REPRODUCCIÓN -->
         <div class="playlist-header">
-            <label class="playlist-label">LISTA DE HIMNOS</label>
-            <span id="modeBadge" class="mode-badge">MODO: CANTADO</span>
+            <div class="playlist-nav-group">
+                <select id="playlistViewSelect" class="playlist-select" onchange="cambiarVistaLista(this.value)" title="Seleccionar vista o lista de reproducción">
+                    <option value="all">📖 Todos los himnos (613)</option>
+                    <option value="favorites">⭐ Favoritos (0)</option>
+                    <option value="offline_saved">💾 Guardados en local (0)</option>
+                </select>
+                <button id="playPlaylistBtn" class="btn-mini-pl play-all" style="display:none;" onclick="iniciarReproduccionListaActual()" title="Reproducir esta lista automáticamente de principio a fin">▶ Repr. Lista</button>
+                <button id="loopPlaylistBtn" class="btn-mini-pl" style="display:none;" onclick="toggleRepetirLista()" title="Repetir lista automáticamente al finalizar">🔁</button>
+                <button class="btn-mini-pl" onclick="abrirModalGestionListas()" title="Crear o administrar listas de reproducción">⚙ Listas</button>
+                <button id="offlineMgrBtn" class="btn-mini-pl offline-btn" onclick="abrirModalOffline()" title="Guardar himnos en el dispositivo o configurar servidor">💾 Local (0)</button>
+            </div>
+            <div class="playlist-right-badges">
+                <span id="queueActiveBadge" class="queue-badge" title="Reproducción automática de lista activa">AUTO-LISTA</span>
+                <span id="modeBadge" class="mode-badge">MODO: CANTADO</span>
+            </div>
         </div>
         
         <ul id="playlist"></ul>
+    </div>
+</div>
+
+<!-- MODAL: AYUDA Y CARACTERÍSTICAS DEL HIMNARIO -->
+<div id="helpModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>? Características y Guía de Uso</span>
+            <button class="modal-close" onclick="cerrarModalAyuda()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="help-intro">
+                <strong>Himnario Adventista en Línea</strong> es un reproductor y proyector diseñado para el culto congregacional, la adoración familiar y el uso personal desde computadoras, tabletas o teléfonos móviles.
+            </div>
+
+            <div class="help-features-list">
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">📖</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Colección Completa de 613 Himnos</div>
+                        <div class="help-feature-desc">Accede a los 613 himnos con letra sincronizada en video. Toca una vez el botón circular de reproducción (<strong>▶</strong>) junto al himno o haz doble clic sobre el título para iniciarlo al instante.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🎤</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Modo Cantado e Instrumental</div>
+                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar al instante entre la versión con voces y la pista musical de acompañamiento.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🔍</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Búsqueda Instantánea</div>
+                        <div class="help-feature-desc">Escribe el número del himno o cualquier palabra del título (sin importar mayúsculas o tildes). Presiona <strong>Enter</strong> para reproducir el primer resultado.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🖥️</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Proyección en Segunda Pantalla o Pantalla Completa</div>
+                        <div class="help-feature-desc">Marca <strong>Proyectar en</strong> y elige tu monitor secundario o proyector para enviar la letra limpia a pantalla completa mientras mantienes el panel de control en tu pantalla.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">⭐</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Favoritos y Listas de Reproducción</div>
+                        <div class="help-feature-desc">Marca himnos con <strong>☆</strong>, créales listas personalizadas con <strong>+</strong> y <strong>⚙ Listas</strong> (ej. Culto Divino, Escuela Sabática), reordénalos con <strong>▲ / ▼</strong> y reprodúcelos en secuencia con <strong>▶ Repr. Lista</strong> y repetición continua (<strong>🔁</strong>).</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">💾</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Modo Sin Conexión (Almacenamiento Local)</div>
+                        <div class="help-feature-desc">Pulsa <strong>⬇</strong> junto a un himno o abre <strong>💾 Local</strong> para descargar listas completas o los 613 himnos en tu navegador y usarlos sin internet. También puedes activar el auto-guardado al reproducir.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">📱</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Audio en Segundo Plano en Móviles</div>
+                        <div class="help-feature-desc">Sigue escuchando los himnos incluso al apagar la pantalla o cambiar de aplicación, con controles directos desde la pantalla de bloqueo.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">⏩</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Control de Velocidad y Tiempo</div>
+                        <div class="help-feature-desc">Ajusta el tempo de reproducción entre <strong>0.50x</strong> y <strong>2.00x</strong> con los botones <strong>-</strong> y <strong>+</strong> (toca el número para restablecer a 1.00x), adelanta en la barra de progreso y regula el volumen.</div>
+                    </div>
+                </div>
+
+                <div class="help-feature-card">
+                    <div class="help-feature-icon">🔗</div>
+                    <div class="help-feature-content">
+                        <div class="help-feature-title">Compartir Himnos y Listas</div>
+                        <div class="help-feature-desc">Usa <strong>🔗 Compartir</strong> para generar enlaces cortos de un himno específico (Cantado o Instrumental), de una lista de reproducción completa o de la página principal.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ALMACENAMIENTO LOCAL / SIN CONEXIÓN / SERVIDOR R2 -->
+<div id="offlineModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>💾 Local y Servidor de Himnos</span>
+            <button class="modal-close" onclick="cerrarModalOffline()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 0.82rem; color: #ebd1a7; line-height: 1.4;">
+                Guarda himnos en tu navegador para reproducción sin conexión o configura el dominio de almacenamiento en Cloudflare R2.
+            </p>
+
+            <div class="offline-stats-box">
+                <div class="offline-stats-row">
+                    <span style="color:#cbb290;">Archivos guardados:</span>
+                    <strong id="offlineCountText" style="color:#7dff9e;">0 archivos</strong>
+                </div>
+                <div class="offline-stats-row">
+                    <span style="color:#cbb290;">Espacio utilizado:</span>
+                    <strong id="offlineSizeText" style="color:#fcecd2;">0.0 MB</strong>
+                </div>
+                <div class="offline-stats-row" id="offlineQuotaRow" style="display:none;">
+                    <span style="color:#cbb290;">Disponible en dispositivo:</span>
+                    <span id="offlineQuotaText" style="color:#a89279; font-size:0.78rem;">Calculando...</span>
+                </div>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; background:rgba(18,9,2,0.6); padding:9px 12px; border-radius:7px; border:1px solid rgba(217,155,56,0.2); font-size:0.83rem;">
+                <input type="checkbox" id="autoCacheCheckbox" style="accent-color:#d9822b; width:16px; height:16px;" onchange="toggleAutoCache(this.checked)">
+                <span>Guardar automáticamente cada himno que reproduzca</span>
+            </label>
+
+            <div id="offlineProgressWrap" class="offline-progress-wrap">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem;">
+                    <strong id="offlineProgressTitle" style="color:#fff;">Descargando...</strong>
+                    <span id="offlineProgressCounter" style="color:#80c4ff; font-family:monospace;">0 / 0</span>
+                </div>
+                <div class="offline-progress-bar-bg">
+                    <div id="offlineProgressFill" class="offline-progress-bar-fill"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                    <span id="offlineProgressSub" style="font-size:0.72rem; color:#cbb290; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:260px;">Preparando...</span>
+                    <button class="btn-mini-pl" style="background:#8f241e; border-color:#e05a52;" onclick="cancelarDescargaMasiva()">✕ Cancelar</button>
+                </div>
+            </div>
+
+            <div class="share-label">DESCARGA RÁPIDA EN LOTE</div>
+            <div class="offline-action-grid">
+                <button id="btnDownloadCurrentList" class="btn-offline-card" onclick="descargarVistaActualEnLote()">
+                    <strong>📋 Lista actual</strong>
+                    <span id="descDownloadCurrentList">Guarda la lista seleccionada</span>
+                </button>
+                <button id="btnDownloadFavorites" class="btn-offline-card" onclick="descargarFavoritosEnLote()">
+                    <strong>⭐ Todos los Favoritos</strong>
+                    <span id="descDownloadFavorites">Guarda tus himnos favoritos</span>
+                </button>
+                <button id="btnDownloadAllCantado" class="btn-offline-card" onclick="descargarTodoElHimnario('Cantado')">
+                    <strong>🎤 Los 613 (Cantado)</strong>
+                    <span>Colección completa cantada</span>
+                </button>
+                <button id="btnDownloadAllInst" class="btn-offline-card" onclick="descargarTodoElHimnario('Instrumental')">
+                    <strong>🎹 Los 613 (Instrumental)</strong>
+                    <span>Colección completa pistas</span>
+                </button>
+            </div>
+
+            <div class="share-link-section" style="border-top:1px solid rgba(217,155,56,0.2); padding-top:10px;">
+                <label class="share-label">SERVIDOR DE VIDEOS (CLOUDFLARE R2)</label>
+                <div class="share-input-group">
+                    <input type="text" id="r2BaseUrlInput" class="share-input-field" placeholder="https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev">
+                    <button class="btn-copy" onclick="guardarUrlServidorR2()">Guardar</button>
+                    <button class="btn-mini-pl" onclick="restablecerUrlServidorR2()" title="Restablecer URL original">↺</button>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; border-top:1px solid rgba(217,155,56,0.2); padding-top:10px; flex-wrap:wrap;">
+                <button class="btn-mini-pl" style="background:#5c3d11; border-color:#d9822b;" onclick="abrirModalAuditoriaR2()">🔍 Revisar 613 en R2</button>
+                <button class="btn-mini-pl" onclick="verSoloGuardadosLocal()">👁 Ver guardados</button>
+                <button class="btn-mini-pl" style="background:#751e19; border-color:#b83830;" onclick="limpiarTodoAlmacenamientoLocal()">🗑️ Liberar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: AUDITORÍA DE ARCHIVOS CANTADO / INSTRUMENTAL EN R2 -->
+<div id="auditModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>🔍 Auditoría Cantado vs Instrumental (R2)</span>
+            <button class="modal-close" onclick="cerrarModalAuditoriaR2()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 0.8rem; color: #ebd1a7; line-height: 1.4;">
+                Verifica los 613 himnos en <code>Cantado/</code> e <code>Instrumental/</code> para detectar archivos faltantes o himnos donde <strong>Cantado</strong> tiene subida la misma pista que <strong>Instrumental</strong>.
+            </p>
+
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button id="startAuditBtn" class="btn-copy" style="flex:1; justify-content:center;" onclick="ejecutarAuditoriaR2()">▶ Iniciar revisión de 613 himnos</button>
+                <button id="copyAuditBtn" class="btn-mini-pl" style="padding:8px 10px; display:none;" onclick="copiarReporteAuditoria()">📋 Copiar</button>
+            </div>
+
+            <div id="auditProgressWrap" class="offline-progress-wrap">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem;">
+                    <strong style="color:#fff;">Escaneando servidor R2...</strong>
+                    <span id="auditCounter" style="color:#80c4ff; font-family:monospace;">0 / 613</span>
+                </div>
+                <div class="offline-progress-bar-bg">
+                    <div id="auditProgressFill" class="offline-progress-bar-fill"></div>
+                </div>
+            </div>
+
+            <div id="auditSummaryGrid" class="audit-summary-grid" style="display:none;">
+                <div class="audit-stat-pill">
+                    <strong id="statMissingCantado" style="color:#ff7b72;">0</strong>
+                    <span>Falta Cantado</span>
+                </div>
+                <div class="audit-stat-pill">
+                    <strong id="statMissingInst" style="color:#ff7b72;">0</strong>
+                    <span>Falta Instrumental</span>
+                </div>
+                <div class="audit-stat-pill">
+                    <strong id="statIdentical" style="color:#ffd24c;">0</strong>
+                    <span>Mismo archivo (C=I)</span>
+                </div>
+            </div>
+
+            <div id="auditReportBox" class="audit-report-box" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: AGREGAR HIMNO A LISTAS -->
+<div id="addToPlaylistModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span id="addToPlModalTitle">➕ Guardar en Lista</span>
+            <button class="modal-close" onclick="cerrarModalAgregarLista()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="addToPlSubtitle" style="font-size: 0.85rem; color: #ebd1a7; font-weight: 600;"></div>
+            
+            <div id="addToPlCheckboxes" class="pl-modal-list"></div>
+
+            <div style="border-top: 1px solid rgba(217, 155, 56, 0.2); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+                <label class="share-label">CREAR NUEVA LISTA Y AÑADIR</label>
+                <div class="share-input-group">
+                    <input type="text" id="quickNewPlaylistName" class="share-input-field" style="font-family: inherit;" placeholder="Ej. Culto Divino, Sábado..." onkeydown="if(event.key==='Enter') crearListaRapidaDesdeModal()">
+                    <button class="btn-copy" onclick="crearListaRapidaDesdeModal()">+ Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ADMINISTRAR LISTAS DE REPRODUCCIÓN -->
+<div id="managePlaylistsModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span>📋 Mis Listas de Reproducción</span>
+            <button class="modal-close" onclick="cerrarModalGestionListas()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="share-link-section">
+                <label class="share-label">NUEVA LISTA DE REPRODUCCIÓN</label>
+                <div class="share-input-group">
+                    <input type="text" id="newPlaylistNameInput" class="share-input-field" style="font-family: inherit;" placeholder="Nombre de la lista (ej. Culto Joven)..." onkeydown="if(event.key==='Enter') crearNuevaLista()">
+                    <button class="btn-copy" onclick="crearNuevaLista()">+ Crear</button>
+                </div>
+            </div>
+
+            <div id="managePlaylistsContainer" class="pl-modal-list"></div>
+        </div>
     </div>
 </div>
 
@@ -674,8 +1220,9 @@
         </div>
         <div class="modal-body">
             <div class="share-tabs">
-                <button class="share-tab" id="tabHymn" onclick="seleccionarTabCompartir('hymn')">🎵 Himno Actual</button>
-                <button class="share-tab active" id="tabMain" onclick="seleccionarTabCompartir('main')">🏠 Página Principal</button>
+                <button class="share-tab" id="tabHymn" onclick="seleccionarTabCompartir('hymn')">🎵 Himno</button>
+                <button class="share-tab" id="tabPlaylist" onclick="seleccionarTabCompartir('playlist')">📋 Lista</button>
+                <button class="share-tab active" id="tabMain" onclick="seleccionarTabCompartir('main')">🏠 Inicio</button>
             </div>
 
             <div id="sharePreviewCard" class="share-preview-card">
@@ -698,50 +1245,35 @@
     </div>
 </div>
 
-<!-- MODAL DE DESCARGA PARA ESCRITORIO -->
-<div id="downloadModal" class="modal-overlay">
-    <div class="modal-card">
-        <div class="modal-header">
-            <span>💻 Descargar Aplicación de Escritorio</span>
-            <button class="modal-close" onclick="cerrarModalDescarga()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <p style="font-size: 0.85rem; color: #ebd1a7; line-height: 1.4;">
-                Obtén la versión ejecutable para computadora. Ideal para iglesias, proyectar sin navegador e interactuar sin interrupciones.
-            </p>
-            <div class="download-options">
-                <a href="#" id="windowsDownloadLink" target="_blank" class="download-item" onclick="return manejarClicDescargaWindows(event)">
-                    <div class="download-info">
-                        <span class="download-icon">🪟</span>
-                        <div>
-                            <div class="download-title">Windows</div>
-                            <div class="download-desc">Instalador para Windows (64-bit)</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action">Descargar</span>
-                </a>
-
-                <div class="download-item disabled">
-                    <div class="download-info">
-                        <span class="download-icon">🍎</span>
-                        <div>
-                            <div class="download-title">macOS</div>
-                            <div class="download-desc">Versión para Mac</div>
-                        </div>
-                    </div>
-                    <span class="btn-download-action" style="background: #4a2d12; color: #a89279; border-color: transparent;">Próximamente</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
-    const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
-    const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
-    const WINDOWS_DRIVE_URL = ""; 
+    const DEFAULT_CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
+    const R2_CUSTOM_URL_KEY = "himnario_adventista_r2_url_v1";
+    let CLOUDFLARE_R2_URL = DEFAULT_CLOUDFLARE_R2_URL;
+    try {
+        const savedR2 = localStorage.getItem(R2_CUSTOM_URL_KEY);
+        if (savedR2 && savedR2.trim().startsWith('http')) {
+            CLOUDFLARE_R2_URL = savedR2.trim().replace(/\/+$/, '');
+        }
+    } catch (e) {}
 
-    const syncChannel = new BroadcastChannel('hymn_projection_sync');
+    const GITHUB_PAGES_BASE = "https://luismerinosv.github.io/himnarioadventista";
+    const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
+    const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
+    const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
+    const TITULOS_CACHE_KEY = "himnario_adventista_titulos_cache_v1";
+
+    let syncChannel = null;
+    try {
+        if ('BroadcastChannel' in window) {
+            syncChannel = new BroadcastChannel('hymn_projection_sync');
+        }
+    } catch (e) {
+        syncChannel = null;
+    }
+    if (!syncChannel) {
+        syncChannel = { postMessage: () => {}, onmessage: null };
+    }
+
     let projectionWindow = null;
 
     let cantadoFilesMap = {};
@@ -755,18 +1287,1314 @@
     let displaysList = [];
     let isSeeking = false;
     let currentSpeed = 1.0;
+    let currentVolume = 1.0;
+    let isAudioMuted = false;
+    let currentPlayRequestId = 0;
+    let isUserPaused = true;
+    let currentActivePlayUrl = '';
+    let currentCandidateUrls = [];
+    let currentCandidateIndex = 0;
+    let syncTickCounter = 0;
 
     let currentShareType = 'main';
     let currentShortMainUrl = '';
     let currentShortHymnUrl = '';
+    let currentShortPlaylistUrl = '';
 
+    /* =========================================================================
+       DETECCIÓN DE MOTOR ACTIVO (<video> EN PANTALLA PRINCIPAL, <audio> EN 2ª PANTALLA / SEGUNDO PLANO)
+       ========================================================================= */
+    function isProjectingExternal() {
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        return Boolean(wrapper && wrapper.classList.contains('projecting-external'));
+    }
+
+    function isUsingMasterAudio() {
+        return isProjectingExternal() || document.hidden;
+    }
+
+    function getActiveEngine() {
+        return isUsingMasterAudio() ? masterAudio : getActiveVideo();
+    }
+
+    function detenerMasterAudio() {
+        masterAudio.onerror = null;
+        masterAudio.onloadedmetadata = null;
+        masterAudio.oncanplay = null;
+        masterAudio.pause();
+        masterAudio.removeAttribute('src');
+        masterAudio.load();
+    }
+
+    function iniciarMasterAudioDesdeTiempo(playUrl, targetTime, shouldPlay, reqId) {
+        if (!playUrl) return;
+        masterAudio.onerror = () => {
+            if (reqId !== currentPlayRequestId || !isUsingMasterAudio()) return;
+            intentarSiguienteRutaAlternativa(reqId);
+        };
+        masterAudio.src = playUrl;
+        masterAudio.volume = currentVolume;
+        masterAudio.muted = isAudioMuted;
+        masterAudio.playbackRate = currentSpeed;
+        masterAudio.load();
+
+        const startMaster = () => {
+            masterAudio.onloadedmetadata = null;
+            masterAudio.oncanplay = null;
+            if (targetTime > 0 && isFinite(masterAudio.duration)) {
+                masterAudio.currentTime = Math.min(targetTime, masterAudio.duration);
+            }
+            if (shouldPlay && !isUserPaused) {
+                masterAudio.play().catch((err) => {
+                    if (err && err.name === 'NotAllowedError') {
+                        isUserPaused = true;
+                        document.getElementById('playBtn').innerText = '▶ Repr.';
+                    }
+                });
+            }
+        };
+
+        masterAudio.onloadedmetadata = startMaster;
+        masterAudio.oncanplay = startMaster;
+
+        if (shouldPlay && !isUserPaused) {
+            masterAudio.play().catch((err) => {
+                if (err && err.name === 'NotAllowedError') {
+                    isUserPaused = true;
+                    document.getElementById('playBtn').innerText = '▶ Repr.';
+                }
+            });
+        }
+    }
+
+    function detenerVideoEnPantallaPrincipal(unloadIfDifferent = false) {
+        const activeVid = getActiveVideo();
+        const inactiveVid = getInactiveVideo();
+
+        if (inactiveVid) {
+            inactiveVid.onloadeddata = null;
+            inactiveVid.oncanplay = null;
+            inactiveVid.onplaying = null;
+            inactiveVid.onerror = null;
+            inactiveVid.pause();
+            inactiveVid.muted = true;
+            inactiveVid.classList.remove('active', 'underneath');
+            inactiveVid.removeAttribute('src');
+            delete inactiveVid.dataset.loadedUrl;
+            inactiveVid.load();
+        }
+
+        if (activeVid) {
+            activeVid.onloadeddata = null;
+            activeVid.oncanplay = null;
+            activeVid.onplaying = null;
+            activeVid.onerror = null;
+            activeVid.pause();
+            activeVid.muted = true;
+            if (unloadIfDifferent) {
+                activeVid.removeAttribute('src');
+                delete activeVid.dataset.loadedUrl;
+                activeVid.load();
+                document.getElementById('posterOverlay').style.display = 'flex';
+            }
+        }
+    }
+
+    function restaurarVideoEnPantallaPrincipal(resumeTime = null, shouldResumePlay = null) {
+        if (isProjectingExternal()) return;
+        const mainVideo = getActiveVideo();
+        if (!mainVideo) return;
+
+        if (!currentHimno || !currentActivePlayUrl) {
+            document.getElementById('posterOverlay').style.display = 'flex';
+            return;
+        }
+
+        const targetTime = (resumeTime !== null) ? resumeTime : (masterAudio.currentTime || 0);
+        const wantPlay = (shouldResumePlay !== null) ? shouldResumePlay : (!masterAudio.paused && !isUserPaused);
+
+        detenerMasterAudio();
+
+        mainVideo.classList.add('active');
+        mainVideo.muted = isAudioMuted;
+        mainVideo.volume = currentVolume;
+        mainVideo.playbackRate = currentSpeed;
+
+        if (mainVideo.dataset.loadedUrl === currentActivePlayUrl && mainVideo.readyState >= 2) {
+            document.getElementById('posterOverlay').style.display = 'none';
+            if (targetTime > 0 && isFinite(mainVideo.duration) && Math.abs(mainVideo.currentTime - targetTime) > 0.25) {
+                mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
+            }
+            if (wantPlay) {
+                mainVideo.play().catch(() => {});
+            }
+            return;
+        }
+
+        mainVideo.dataset.loadedUrl = currentActivePlayUrl;
+        mainVideo.src = currentActivePlayUrl;
+        mainVideo.load();
+
+        const resumeAtCurrentTime = () => {
+            mainVideo.onloadedmetadata = null;
+            mainVideo.oncanplay = null;
+            if (targetTime > 0 && isFinite(mainVideo.duration)) {
+                mainVideo.currentTime = Math.min(targetTime, mainVideo.duration);
+            }
+            mainVideo.playbackRate = currentSpeed;
+            mainVideo.muted = isAudioMuted;
+            mainVideo.volume = currentVolume;
+            document.getElementById('posterOverlay').style.display = 'none';
+            if (wantPlay) {
+                mainVideo.play().catch(() => {});
+            }
+        };
+
+        mainVideo.onloadedmetadata = resumeAtCurrentTime;
+        mainVideo.oncanplay = resumeAtCurrentTime;
+        if (wantPlay) {
+            mainVideo.play().catch(() => {});
+        }
+    }
+
+    const masterAudio = document.getElementById('masterAudio');
+    masterAudio.onended = () => {
+        if (isUsingMasterAudio()) {
+            handleMediaEnded();
+        }
+    };
+
+    /* =========================================================================
+       SISTEMA DE ALMACENAMIENTO LOCAL EN INDEXEDDB Y RUTAS DE VIDEO
+       ========================================================================= */
+    const OFFLINE_DB_NAME = "HimnarioAdventistaOfflineDB";
+    const OFFLINE_DB_VERSION = 1;
+    const OFFLINE_STORE = "hymns";
+
+    let offlineDbPromise = null;
+    let savedUrlsSet = new Set();
+    let savedHymnsIndex = new Set();
+    let savedMetaMap = new Map();
+    let downloadingUrlsSet = new Set();
+    let downloadingHymnsIndex = new Set();
+    let activeBlobUrls = new Map();
+    let autoCacheEnabled = false;
+    let batchAbortController = null;
+    let isBatchDownloading = false;
+
+    function abrirOfflineDB() {
+        try {
+            if (!('indexedDB' in window) || !window.indexedDB) return Promise.resolve(null);
+        } catch (e) {
+            return Promise.resolve(null);
+        }
+        if (offlineDbPromise) return offlineDbPromise;
+
+        offlineDbPromise = new Promise((resolve) => {
+            let settled = false;
+            const finish = (db) => {
+                if (!settled) {
+                    settled = true;
+                    resolve(db);
+                }
+            };
+
+            const fallbackTimer = setTimeout(() => finish(null), 2000);
+
+            try {
+                const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(OFFLINE_STORE)) {
+                        db.createObjectStore(OFFLINE_STORE, { keyPath: 'url' });
+                    }
+                };
+                req.onsuccess = (e) => {
+                    clearTimeout(fallbackTimer);
+                    finish(e.target.result);
+                };
+                req.onerror = () => {
+                    clearTimeout(fallbackTimer);
+                    finish(null);
+                };
+                req.onblocked = () => {
+                    clearTimeout(fallbackTimer);
+                    finish(null);
+                };
+            } catch (e) {
+                clearTimeout(fallbackTimer);
+                finish(null);
+            }
+        });
+        return offlineDbPromise;
+    }
+
+    function getHymnCandidateUrls(h, isInstrumental = null) {
+        const isInst = (isInstrumental !== null)
+            ? isInstrumental
+            : document.getElementById('instrumentalCheckbox').checked;
+        const carpeta = isInst ? 'Instrumental' : 'Cantado';
+        const numInt = parseInt(h.num, 10);
+        const candidates = [];
+
+        const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
+        if (localTargetMap && localTargetMap[h.num]) {
+            candidates.push(localTargetMap[h.num]);
+        }
+
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
+        if (String(numInt) !== h.num) {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
+        }
+
+        return [...new Set(candidates)];
+    }
+
+    function getHymnVideoUrl(h, isInstrumental = null) {
+        return getHymnCandidateUrls(h, isInstrumental)[0];
+    }
+
+    function estaHimnoGuardadoEnLocal(h, isInst) {
+        return savedHymnsIndex.has(`${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`);
+    }
+
+    function obtenerUrlGuardadaEnLocal(h, isInst) {
+        const mode = isInst ? 'Instrumental' : 'Cantado';
+        if (!savedHymnsIndex.has(`${h.num}|${mode}`)) return null;
+        for (const [url, meta] of savedMetaMap.entries()) {
+            if (meta.num === h.num && meta.mode === mode) return url;
+        }
+        const candidates = getHymnCandidateUrls(h, isInst);
+        return candidates.find(u => savedUrlsSet.has(u)) || null;
+    }
+
+    function estaHimnoDescargandoEnLocal(h, isInst) {
+        return downloadingHymnsIndex.has(`${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`);
+    }
+
+    async function cargarIndiceOffline() {
+        try {
+            autoCacheEnabled = (localStorage.getItem(AUTOCACHE_PREF_KEY) === '1');
+        } catch (e) {
+            autoCacheEnabled = false;
+        }
+        const autoChk = document.getElementById('autoCacheCheckbox');
+        if (autoChk) autoChk.checked = autoCacheEnabled;
+
+        const db = await abrirOfflineDB();
+        if (!db) return;
+
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = () => {
+                if (!settled) {
+                    settled = true;
+                    resolve();
+                }
+            };
+            const timer = setTimeout(finish, 2000);
+
+            try {
+                const tx = db.transaction(OFFLINE_STORE, 'readonly');
+                const store = tx.objectStore(OFFLINE_STORE);
+                const req = store.openCursor();
+
+                savedUrlsSet.clear();
+                savedHymnsIndex.clear();
+                savedMetaMap.clear();
+
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const val = cursor.value;
+                        savedUrlsSet.add(val.url);
+                        if (val.num && val.mode) {
+                            savedHymnsIndex.add(`${val.num}|${val.mode}`);
+                        }
+                        savedMetaMap.set(val.url, {
+                            num: val.num,
+                            title: val.title,
+                            mode: val.mode,
+                            size: val.size || (val.blob ? val.blob.size : 0),
+                            savedAt: val.savedAt || Date.now()
+                        });
+                        cursor.continue();
+                    } else {
+                        clearTimeout(timer);
+                        actualizarUIAlmacenamientoLocal();
+                        finish();
+                    }
+                };
+                req.onerror = () => {
+                    clearTimeout(timer);
+                    finish();
+                };
+            } catch (err) {
+                clearTimeout(timer);
+                finish();
+            }
+        });
+    }
+
+    function formatearBytes(bytes) {
+        if (!bytes || bytes <= 0) return "0.0 MB";
+        const mb = bytes / (1024 * 1024);
+        if (mb >= 1024) return (mb / 1024).toFixed(2) + " GB";
+        return mb.toFixed(1) + " MB";
+    }
+
+    function actualizarUIAlmacenamientoLocal() {
+        const count = savedUrlsSet.size;
+        let totalBytes = 0;
+        savedMetaMap.forEach(meta => { totalBytes += (meta.size || 0); });
+
+        const mgrBtn = document.getElementById('offlineMgrBtn');
+        if (mgrBtn) mgrBtn.innerText = `💾 Local (${count})`;
+
+        const countText = document.getElementById('offlineCountText');
+        const sizeText = document.getElementById('offlineSizeText');
+        if (countText) countText.innerText = `${count} ${count === 1 ? 'himno guardado' : 'himnos guardados'}`;
+        if (sizeText) sizeText.innerText = formatearBytes(totalBytes);
+
+        actualizarSelectorListasUI();
+    }
+
+    async function obtenerBlobUrlLocal(remoteUrl) {
+        if (activeBlobUrls.has(remoteUrl)) {
+            return activeBlobUrls.get(remoteUrl);
+        }
+        if (!savedUrlsSet.has(remoteUrl)) return null;
+
+        const db = await abrirOfflineDB();
+        if (!db) return null;
+
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(OFFLINE_STORE, 'readonly');
+                const store = tx.objectStore(OFFLINE_STORE);
+                const req = store.get(remoteUrl);
+                req.onsuccess = (e) => {
+                    const record = e.target.result;
+                    if (record && record.blob) {
+                        const objUrl = URL.createObjectURL(record.blob);
+                        activeBlobUrls.set(remoteUrl, objUrl);
+                        resolve(objUrl);
+                    } else {
+                        resolve(null);
+                    }
+                };
+                req.onerror = () => resolve(null);
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function guardarHimnoEnLocal(h, isInstrumental = null, signal = null, silent = false) {
+        const isInst = (isInstrumental !== null)
+            ? isInstrumental
+            : document.getElementById('instrumentalCheckbox').checked;
+        const modeName = isInst ? 'Instrumental' : 'Cantado';
+        const indexKey = `${h.num}|${modeName}`;
+
+        if (estaHimnoGuardadoEnLocal(h, isInst)) return true;
+
+        const videoUrl = getHymnVideoUrl(h, isInst);
+        if (downloadingHymnsIndex.has(indexKey)) return false;
+
+        const db = await abrirOfflineDB();
+        if (!db) {
+            if (!silent) mostrarToast('Tu navegador no soporta almacenamiento local.');
+            return false;
+        }
+
+        downloadingUrlsSet.add(videoUrl);
+        downloadingHymnsIndex.add(indexKey);
+        renderList(getFilteredList());
+
+        try {
+            const response = await fetch(videoUrl, { signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const blob = await response.blob();
+
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+                const store = tx.objectStore(OFFLINE_STORE);
+                const record = {
+                    url: videoUrl,
+                    num: h.num,
+                    title: h.title,
+                    mode: modeName,
+                    blob: blob,
+                    size: blob.size,
+                    savedAt: Date.now()
+                };
+                const putReq = store.put(record);
+                putReq.onsuccess = () => resolve();
+                putReq.onerror = (err) => reject(putReq.error || err);
+            });
+
+            savedUrlsSet.add(videoUrl);
+            savedHymnsIndex.add(indexKey);
+            savedMetaMap.set(videoUrl, {
+                num: h.num,
+                title: h.title,
+                mode: modeName,
+                size: blob.size,
+                savedAt: Date.now()
+            });
+
+            if (!silent) {
+                mostrarToast(`💾 Himno ${parseInt(h.num, 10)} (${modeName}) guardado en local`);
+            }
+            return true;
+        } catch (err) {
+            if (err && err.name === 'AbortError') return false;
+            if (!silent) {
+                if (err && err.name === 'QuotaExceededError') {
+                    mostrarToast('⚠️ Espacio insuficiente en el dispositivo.');
+                } else {
+                    mostrarToast(`⚠️ Error del servidor R2 al descargar el Himno ${parseInt(h.num, 10)} (${err.message || 'sin conexión'})`);
+                }
+            }
+            return false;
+        } finally {
+            downloadingUrlsSet.delete(videoUrl);
+            downloadingHymnsIndex.delete(indexKey);
+            actualizarUIAlmacenamientoLocal();
+            renderList(getFilteredList());
+        }
+    }
+
+    async function eliminarHimnoDeLocal(videoUrl, silent = false) {
+        const db = await abrirOfflineDB();
+        if (!db) return;
+
+        const meta = savedMetaMap.get(videoUrl);
+
+        await new Promise((resolve) => {
+            try {
+                const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+                const store = tx.objectStore(OFFLINE_STORE);
+                const delReq = store.delete(videoUrl);
+                delReq.onsuccess = () => resolve();
+                delReq.onerror = () => resolve();
+            } catch (e) {
+                resolve();
+            }
+        });
+
+        if (activeBlobUrls.has(videoUrl)) {
+            URL.revokeObjectURL(activeBlobUrls.get(videoUrl));
+            activeBlobUrls.delete(videoUrl);
+        }
+        savedUrlsSet.delete(videoUrl);
+        savedMetaMap.delete(videoUrl);
+
+        if (meta && meta.num && meta.mode) {
+            let stillExists = false;
+            savedMetaMap.forEach(m => {
+                if (m.num === meta.num && m.mode === meta.mode) stillExists = true;
+            });
+            if (!stillExists) {
+                savedHymnsIndex.delete(`${meta.num}|${meta.mode}`);
+            }
+        }
+
+        actualizarUIAlmacenamientoLocal();
+        renderList(getFilteredList());
+
+        if (!silent) mostrarToast('Copia local eliminada');
+    }
+
+    async function manejarClicBotonLocal(h, e) {
+        if (e) e.stopPropagation();
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+
+        if (estaHimnoDescargandoEnLocal(h, isInst)) {
+            mostrarToast('Descarga en curso...');
+            return;
+        }
+
+        const savedUrl = obtenerUrlGuardadaEnLocal(h, isInst);
+        if (savedUrl) {
+            const meta = savedMetaMap.get(savedUrl);
+            const sizeLabel = meta ? ` (${formatearBytes(meta.size)})` : '';
+            if (confirm(`¿Eliminar la copia local del Himno ${parseInt(h.num, 10)}${sizeLabel}?`)) {
+                await eliminarHimnoDeLocal(savedUrl);
+            }
+        } else {
+            await guardarHimnoEnLocal(h, isInst, null, false);
+        }
+    }
+
+    function toggleAutoCache(enabled) {
+        autoCacheEnabled = enabled;
+        try {
+            localStorage.setItem(AUTOCACHE_PREF_KEY, enabled ? '1' : '0');
+        } catch (e) {}
+        mostrarToast(enabled ? '💾 Auto-guardado al reproducir activado' : 'Auto-guardado desactivado');
+    }
+
+    function guardarUrlServidorR2() {
+        const input = document.getElementById('r2BaseUrlInput');
+        if (!input) return;
+        const val = input.value.trim().replace(/\/+$/, '');
+        if (!val.startsWith('http://') && !val.startsWith('https://')) {
+            mostrarToast('Ingresa una URL válida que empiece con https://');
+            return;
+        }
+        CLOUDFLARE_R2_URL = val;
+        try {
+            localStorage.setItem(R2_CUSTOM_URL_KEY, val);
+        } catch (e) {}
+        mostrarToast('✅ Servidor de videos actualizado');
+        if (currentHimno) {
+            reproducirHimno(currentHimno, !isUserPaused, activeQueuePlaylistId !== null);
+        }
+    }
+
+    function restablecerUrlServidorR2() {
+        CLOUDFLARE_R2_URL = DEFAULT_CLOUDFLARE_R2_URL;
+        try {
+            localStorage.removeItem(R2_CUSTOM_URL_KEY);
+        } catch (e) {}
+        const input = document.getElementById('r2BaseUrlInput');
+        if (input) input.value = CLOUDFLARE_R2_URL;
+        mostrarToast('URL de R2 restablecida');
+    }
+
+    async function abrirModalOffline() {
+        actualizarUIAlmacenamientoLocal();
+        const r2Input = document.getElementById('r2BaseUrlInput');
+        if (r2Input) r2Input.value = CLOUDFLARE_R2_URL;
+
+        const isPl = (currentViewId !== 'all' && currentViewId !== 'offline_saved');
+        const btnCur = document.getElementById('btnDownloadCurrentList');
+        const descCur = document.getElementById('descDownloadCurrentList');
+        if (btnCur && descCur) {
+            if (isPl) {
+                const count = obtenerHimnosDeLista(currentViewId).length;
+                btnCur.disabled = (count === 0 || isBatchDownloading);
+                descCur.innerText = `${obtenerNombreLista(currentViewId)} (${count})`;
+            } else {
+                btnCur.disabled = true;
+                descCur.innerText = 'Selecciona una lista primero';
+            }
+        }
+
+        const favCount = playlistsData.favorites.length;
+        const btnFav = document.getElementById('btnDownloadFavorites');
+        const descFav = document.getElementById('descDownloadFavorites');
+        if (btnFav && descFav) {
+            btnFav.disabled = (favCount === 0 || isBatchDownloading);
+            descFav.innerText = `${favCount} ${favCount === 1 ? 'himno' : 'himnos'}`;
+        }
+
+        if (navigator.storage && navigator.storage.estimate) {
+            try {
+                const est = await navigator.storage.estimate();
+                if (est && est.quota) {
+                    const free = Math.max(0, est.quota - (est.usage || 0));
+                    document.getElementById('offlineQuotaRow').style.display = 'flex';
+                    document.getElementById('offlineQuotaText').innerText = formatearBytes(free);
+                }
+            } catch (e) {}
+        }
+
+        document.getElementById('offlineModal').classList.add('active');
+    }
+
+    function cerrarModalOffline() {
+        document.getElementById('offlineModal').classList.remove('active');
+    }
+
+    function verSoloGuardadosLocal() {
+        currentViewId = 'offline_saved';
+        actualizarSelectorListasUI();
+        renderList(getFilteredList());
+        cerrarModalOffline();
+    }
+
+    async function iniciarDescargaMasiva(items, modeName, labelTitulo) {
+        if (isBatchDownloading) {
+            mostrarToast('Ya hay una descarga en lote en progreso.');
+            return;
+        }
+        if (!items || items.length === 0) {
+            mostrarToast('No hay himnos para descargar.');
+            return;
+        }
+
+        const isInst = (modeName === 'Instrumental');
+        isBatchDownloading = true;
+        batchAbortController = new AbortController();
+
+        const wrap = document.getElementById('offlineProgressWrap');
+        const titleEl = document.getElementById('offlineProgressTitle');
+        const counterEl = document.getElementById('offlineProgressCounter');
+        const fillEl = document.getElementById('offlineProgressFill');
+        const subEl = document.getElementById('offlineProgressSub');
+
+        wrap.style.display = 'flex';
+        titleEl.innerText = `Descargando: ${labelTitulo}`;
+
+        let completed = 0;
+        let newlySaved = 0;
+        const total = items.length;
+
+        for (let i = 0; i < total; i++) {
+            if (batchAbortController.signal.aborted) break;
+
+            const h = items[i];
+            counterEl.innerText = `${i + 1} / ${total}`;
+            fillEl.style.width = `${Math.round(((i) / total) * 100)}%`;
+
+            if (estaHimnoGuardadoEnLocal(h, isInst)) {
+                subEl.innerText = `✓ Himno ${parseInt(h.num, 10)} ya estaba guardado`;
+                completed++;
+                continue;
+            }
+
+            subEl.innerText = `⬇ Himno ${parseInt(h.num, 10)}: ${h.title}`;
+            const ok = await guardarHimnoEnLocal(h, isInst, batchAbortController.signal, true);
+            if (ok) {
+                completed++;
+                newlySaved++;
+            }
+        }
+
+        fillEl.style.width = '100%';
+        const wasAborted = batchAbortController.signal.aborted;
+        isBatchDownloading = false;
+        batchAbortController = null;
+
+        setTimeout(() => {
+            wrap.style.display = 'none';
+            fillEl.style.width = '0%';
+        }, 1200);
+
+        actualizarUIAlmacenamientoLocal();
+        renderList(getFilteredList());
+
+        if (wasAborted) {
+            mostrarToast(`Descarga detenida (${newlySaved} nuevos guardados)`);
+        } else {
+            mostrarToast(`✅ Descarga completa: ${completed} de ${total} himnos listos sin conexión`);
+        }
+    }
+
+    function cancelarDescargaMasiva() {
+        if (batchAbortController) {
+            batchAbortController.abort();
+        }
+    }
+
+    function descargarVistaActualEnLote() {
+        if (currentViewId === 'all' || currentViewId === 'offline_saved') return;
+        const items = obtenerHimnosDeLista(currentViewId);
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        iniciarDescargaMasiva(items, isInst ? 'Instrumental' : 'Cantado', obtenerNombreLista(currentViewId));
+    }
+
+    function descargarFavoritosEnLote() {
+        const items = obtenerHimnosDeLista('favorites');
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        iniciarDescargaMasiva(items, isInst ? 'Instrumental' : 'Cantado', 'Favoritos');
+    }
+
+    function descargarTodoElHimnario(modeName) {
+        if (!confirm(`Se descargarán los 613 himnos en modo ${modeName} en el almacenamiento de tu navegador. ¿Deseas continuar?`)) return;
+        iniciarDescargaMasiva(himnosList, modeName, `613 Himnos (${modeName})`);
+    }
+
+    async function limpiarTodoAlmacenamientoLocal() {
+        if (savedUrlsSet.size === 0) {
+            mostrarToast('No hay archivos locales que borrar.');
+            return;
+        }
+        if (!confirm(`¿Eliminar los ${savedUrlsSet.size} archivos guardados en este dispositivo? (Tus listas y favoritos se conservarán)`)) return;
+
+        if (isBatchDownloading) cancelarDescargaMasiva();
+
+        const db = await abrirOfflineDB();
+        if (db) {
+            await new Promise((resolve) => {
+                try {
+                    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+                    const store = tx.objectStore(OFFLINE_STORE);
+                    const req = store.clear();
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => resolve();
+                } catch (e) {
+                    resolve();
+                }
+            });
+        }
+
+        activeBlobUrls.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
+        activeBlobUrls.clear();
+        savedUrlsSet.clear();
+        savedHymnsIndex.clear();
+        savedMetaMap.clear();
+        actualizarUIAlmacenamientoLocal();
+        renderList(getFilteredList());
+        mostrarToast('🗑️ Almacenamiento local liberado');
+    }
+
+    /* =========================================================================
+       AUDITORÍA DE ARCHIVOS EN CLOUDFLARE R2 (CANTADO VS INSTRUMENTAL)
+       ========================================================================= */
+    let isAuditingR2 = false;
+    let lastAuditReportText = "";
+
+    function abrirModalAuditoriaR2() {
+        cerrarModalOffline();
+        document.getElementById('auditModal').classList.add('active');
+    }
+
+    function cerrarModalAuditoriaR2() {
+        document.getElementById('auditModal').classList.remove('active');
+    }
+
+    async function inspeccionarArchivoR2(h, isInst) {
+        const url = getHymnVideoUrl(h, isInst);
+        try {
+            const headRes = await fetch(url, { method: 'HEAD' });
+            if (headRes.ok) {
+                return {
+                    ok: true,
+                    url,
+                    size: headRes.headers.get('content-length') || '',
+                    etag: headRes.headers.get('etag') || ''
+                };
+            }
+            return { ok: false, status: headRes.status };
+        } catch (e) {
+            return { ok: false, status: 'Error de red/CORS' };
+        }
+    }
+
+    async function ejecutarAuditoriaR2() {
+        if (isAuditingR2) return;
+        isAuditingR2 = true;
+
+        const btn = document.getElementById('startAuditBtn');
+        const copyBtn = document.getElementById('copyAuditBtn');
+        const progressWrap = document.getElementById('auditProgressWrap');
+        const counterEl = document.getElementById('auditCounter');
+        const fillEl = document.getElementById('auditProgressFill');
+        const summaryGrid = document.getElementById('auditSummaryGrid');
+        const reportBox = document.getElementById('auditReportBox');
+
+        btn.disabled = true;
+        btn.innerText = '⏳ Revisando archivos en R2...';
+        copyBtn.style.display = 'none';
+        progressWrap.style.display = 'flex';
+        summaryGrid.style.display = 'none';
+        reportBox.style.display = 'none';
+
+        const missingCantado = [];
+        const missingInstrumental = [];
+        const identicalFiles = [];
+
+        const BATCH_SIZE = 15;
+        let checked = 0;
+
+        for (let i = 0; i < himnosList.length; i += BATCH_SIZE) {
+            const slice = himnosList.slice(i, i + BATCH_SIZE);
+            await Promise.all(slice.map(async (h) => {
+                const [resC, resI] = await Promise.all([
+                    inspeccionarArchivoR2(h, false),
+                    inspeccionarArchivoR2(h, true)
+                ]);
+
+                if (!resC.ok) {
+                    missingCantado.push(`#${h.num} (${h.title}) -> ${resC.status}`);
+                }
+
+                if (!resI.ok) {
+                    missingInstrumental.push(`#${h.num} (${h.title}) -> ${resI.status}`);
+                }
+
+                if (resC.ok && resI.ok) {
+                    const sameSize = resC.size && resI.size && resC.size === resI.size;
+                    const sameEtag = resC.etag && resI.etag && resC.etag === resI.etag;
+                    if (sameSize || sameEtag) {
+                        identicalFiles.push(`#${h.num} (${h.title}) [Bytes: ${resC.size}]`);
+                    }
+                }
+            }));
+
+            checked = Math.min(himnosList.length, i + BATCH_SIZE);
+            counterEl.innerText = `${checked} / ${himnosList.length}`;
+            fillEl.style.width = `${Math.round((checked / himnosList.length) * 100)}%`;
+        }
+
+        document.getElementById('statMissingCantado').innerText = missingCantado.length;
+        document.getElementById('statMissingInst').innerText = missingInstrumental.length;
+        document.getElementById('statIdentical').innerText = identicalFiles.length;
+
+        const lines = [];
+        lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===`);
+        lines.push(`Servidor: ${CLOUDFLARE_R2_URL}\n`);
+
+        lines.push(`⚠️ MISMO ARCHIVO EN CANTADO E INSTRUMENTAL (${identicalFiles.length}):`);
+        if (identicalFiles.length === 0) {
+            lines.push(`   Ninguno detectado.`);
+        } else {
+            identicalFiles.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lines.push(`\n❌ FALTAN O FALLAN EN CANTADO (${missingCantado.length}):`);
+        if (missingCantado.length === 0) {
+            lines.push(`   Todos los 613 cantados existen.`);
+        } else {
+            missingCantado.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lines.push(`\n❌ FALTAN O FALLAN EN INSTRUMENTAL (${missingInstrumental.length}):`);
+        if (missingInstrumental.length === 0) {
+            lines.push(`   Todos los 613 instrumentales existen.`);
+        } else {
+            missingInstrumental.forEach(item => lines.push(`   - ${item}`));
+        }
+
+        lastAuditReportText = lines.join('\n');
+        reportBox.textContent = lastAuditReportText;
+
+        progressWrap.style.display = 'none';
+        summaryGrid.style.display = 'grid';
+        reportBox.style.display = 'block';
+        copyBtn.style.display = 'inline-flex';
+        btn.disabled = false;
+        btn.innerText = '🔄 Volver a revisar';
+        isAuditingR2 = false;
+    }
+
+    function copiarReporteAuditoria() {
+        if (!lastAuditReportText) return;
+        navigator.clipboard.writeText(lastAuditReportText);
+        mostrarToast('📋 Reporte copiado al portapapeles');
+    }
+
+    /* =========================================================================
+       SISTEMA DE LISTAS DE REPRODUCCIÓN Y FAVORITOS
+       ========================================================================= */
+    let playlistsData = {
+        favorites: [],
+        custom: []
+    };
+    let currentViewId = 'all';
+    let activeQueuePlaylistId = null;
+    let repeatPlaylist = false;
+    let modalTargetHymnNum = null;
+
+    function cargarPlaylistsStorage() {
+        try {
+            const raw = localStorage.getItem(PLAYLIST_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    playlistsData.favorites = Array.isArray(parsed.favorites) ? parsed.favorites : [];
+                    playlistsData.custom = Array.isArray(parsed.custom) ? parsed.custom : [];
+                }
+            }
+        } catch (e) {
+            console.warn("Error leyendo listas guardadas:", e);
+        }
+        actualizarSelectorListasUI();
+    }
+
+    function guardarPlaylistsStorage() {
+        try {
+            localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify(playlistsData));
+        } catch (e) {
+            console.warn("Error guardando listas:", e);
+        }
+        actualizarSelectorListasUI();
+    }
+
+    function obtenerHimnosGuardadosModoActual() {
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        return himnosList.filter(h => estaHimnoGuardadoEnLocal(h, isInst));
+    }
+
+    function obtenerHimnosDeLista(listId) {
+        if (listId === 'offline_saved') {
+            return obtenerHimnosGuardadosModoActual();
+        }
+        let nums = [];
+        if (listId === 'favorites') {
+            nums = playlistsData.favorites;
+        } else {
+            const found = playlistsData.custom.find(p => p.id === listId);
+            if (found) nums = found.hymns;
+        }
+        return nums
+            .map(n => himnosList.find(h => h.num === n))
+            .filter(Boolean);
+    }
+
+    function obtenerNombreLista(listId) {
+        if (listId === 'favorites') return 'Favoritos';
+        if (listId === 'offline_saved') return 'Guardados en local';
+        const found = playlistsData.custom.find(p => p.id === listId);
+        return found ? found.name : 'Lista de reproducción';
+    }
+
+    function actualizarSelectorListasUI() {
+        const select = document.getElementById('playlistViewSelect');
+        if (!select) return;
+
+        const prevVal = currentViewId;
+        select.innerHTML = '';
+
+        const optAll = document.createElement('option');
+        optAll.value = 'all';
+        optAll.textContent = `📖 Todos los himnos (${himnosList.length || 613})`;
+        select.appendChild(optAll);
+
+        const optFav = document.createElement('option');
+        optFav.value = 'favorites';
+        optFav.textContent = `⭐ Favoritos (${playlistsData.favorites.length})`;
+        select.appendChild(optFav);
+
+        const localModeCount = himnosList.length > 0 ? obtenerHimnosGuardadosModoActual().length : 0;
+        const optOffline = document.createElement('option');
+        optOffline.value = 'offline_saved';
+        optOffline.textContent = `💾 Guardados en local (${localModeCount})`;
+        select.appendChild(optOffline);
+
+        playlistsData.custom.forEach(pl => {
+            const opt = document.createElement('option');
+            opt.value = pl.id;
+            opt.textContent = `🎵 ${pl.name} (${pl.hymns.length})`;
+            select.appendChild(opt);
+        });
+
+        if (prevVal === 'all' || prevVal === 'favorites' || prevVal === 'offline_saved' || playlistsData.custom.some(p => p.id === prevVal)) {
+            select.value = prevVal;
+        } else {
+            currentViewId = 'all';
+            select.value = 'all';
+        }
+
+        const isPlaylistView = (currentViewId !== 'all');
+        const playBtn = document.getElementById('playPlaylistBtn');
+        const loopBtn = document.getElementById('loopPlaylistBtn');
+        if (playBtn) playBtn.style.display = isPlaylistView ? 'inline-flex' : 'none';
+        if (loopBtn) {
+            loopBtn.style.display = isPlaylistView ? 'inline-flex' : 'none';
+            loopBtn.classList.toggle('active-toggle', repeatPlaylist);
+        }
+
+        actualizarBadgeColaActiva();
+    }
+
+    function actualizarBadgeColaActiva() {
+        const badge = document.getElementById('queueActiveBadge');
+        if (!badge) return;
+        if (activeQueuePlaylistId) {
+            const queueHymns = obtenerHimnosDeLista(activeQueuePlaylistId);
+            const pos = currentHimno ? queueHymns.findIndex(h => h.num === currentHimno.num) : -1;
+            const posText = pos >= 0 ? ` (${pos + 1}/${queueHymns.length})` : '';
+            badge.style.display = 'inline-block';
+            badge.innerText = `▶ ${obtenerNombreLista(activeQueuePlaylistId)}${posText}`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function cambiarVistaLista(viewId) {
+        currentViewId = viewId;
+        actualizarSelectorListasUI();
+        renderList(getFilteredList());
+    }
+
+    function toggleFavorito(numStr, e) {
+        if (e) e.stopPropagation();
+        const idx = playlistsData.favorites.indexOf(numStr);
+        if (idx === -1) {
+            playlistsData.favorites.push(numStr);
+            mostrarToast(`⭐ Himno ${parseInt(numStr, 10)} añadido a Favoritos`);
+        } else {
+            playlistsData.favorites.splice(idx, 1);
+            mostrarToast(`Quitado de Favoritos`);
+            if (activeQueuePlaylistId === 'favorites' && playlistsData.favorites.length === 0) {
+                activeQueuePlaylistId = null;
+            }
+        }
+        guardarPlaylistsStorage();
+        renderList(getFilteredList());
+    }
+
+    function iniciarReproduccionListaActual() {
+        if (currentViewId === 'all') return;
+        const items = obtenerHimnosDeLista(currentViewId);
+        if (items.length === 0) {
+            mostrarToast('Esta lista está vacía. Agrega himnos primero.');
+            return;
+        }
+        activeQueuePlaylistId = currentViewId;
+        actualizarBadgeColaActiva();
+        reproducirHimno(items[0], true, true);
+        mostrarToast(`▶ Reproduciendo: ${obtenerNombreLista(currentViewId)}`);
+    }
+
+    function toggleRepetirLista() {
+        repeatPlaylist = !repeatPlaylist;
+        const loopBtn = document.getElementById('loopPlaylistBtn');
+        if (loopBtn) loopBtn.classList.toggle('active-toggle', repeatPlaylist);
+        mostrarToast(repeatPlaylist ? '🔁 Repetición de lista activada' : '🔁 Repetición de lista desactivada');
+    }
+
+    function moverHimnoEnLista(listId, index, direction, e) {
+        if (e) e.stopPropagation();
+        const arr = (listId === 'favorites')
+            ? playlistsData.favorites
+            : (playlistsData.custom.find(p => p.id === listId)?.hymns);
+        if (!arr) return;
+
+        const targetIdx = index + direction;
+        if (targetIdx < 0 || targetIdx >= arr.length) return;
+
+        const temp = arr[index];
+        arr[index] = arr[targetIdx];
+        arr[targetIdx] = temp;
+
+        guardarPlaylistsStorage();
+        renderList(getFilteredList());
+    }
+
+    function quitarHimnoDeLista(listId, numStr, e) {
+        if (e) e.stopPropagation();
+        if (listId === 'favorites') {
+            playlistsData.favorites = playlistsData.favorites.filter(n => n !== numStr);
+        } else {
+            const pl = playlistsData.custom.find(p => p.id === listId);
+            if (pl) pl.hymns = pl.hymns.filter(n => n !== numStr);
+        }
+        if (activeQueuePlaylistId === listId && obtenerHimnosDeLista(listId).length === 0) {
+            activeQueuePlaylistId = null;
+        }
+        guardarPlaylistsStorage();
+        renderList(getFilteredList());
+        mostrarToast('Himno quitado de la lista');
+    }
+
+    /* --- MODALES DE LISTAS --- */
+    function abrirModalAgregarLista(hymnObj, e) {
+        if (e) e.stopPropagation();
+        modalTargetHymnNum = hymnObj.num;
+        document.getElementById('addToPlSubtitle').innerText = `Himno ${parseInt(hymnObj.num, 10)}: ${hymnObj.title}`;
+        document.getElementById('quickNewPlaylistName').value = '';
+        renderizarCheckboxesAgregarLista();
+        document.getElementById('addToPlaylistModal').classList.add('active');
+    }
+
+    function cerrarModalAgregarLista() {
+        document.getElementById('addToPlaylistModal').classList.remove('active');
+        modalTargetHymnNum = null;
+    }
+
+    function renderizarCheckboxesAgregarLista() {
+        const container = document.getElementById('addToPlCheckboxes');
+        container.innerHTML = '';
+        if (!modalTargetHymnNum) return;
+
+        const favRow = document.createElement('div');
+        favRow.className = 'pl-modal-row';
+        const isFav = playlistsData.favorites.includes(modalTargetHymnNum);
+        favRow.innerHTML = `
+            <label>
+                <input type="checkbox" ${isFav ? 'checked' : ''} onchange="toggleHimnoEnListaDesdeModal('favorites', this.checked)">
+                <span>⭐ Favoritos</span>
+            </label>
+            <span class="pl-count-pill">${playlistsData.favorites.length}</span>
+        `;
+        container.appendChild(favRow);
+
+        if (playlistsData.custom.length === 0) {
+            const emptyHint = document.createElement('div');
+            emptyHint.style.cssText = 'font-size:0.78rem; color:#a89279; text-align:center; padding:8px;';
+            emptyHint.innerText = 'Aún no tienes listas personalizadas. Crea una abajo.';
+            container.appendChild(emptyHint);
+        } else {
+            playlistsData.custom.forEach(pl => {
+                const row = document.createElement('div');
+                row.className = 'pl-modal-row';
+                const checked = pl.hymns.includes(modalTargetHymnNum);
+                row.innerHTML = `
+                    <label>
+                        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHimnoEnListaDesdeModal('${pl.id}', this.checked)">
+                        <span>🎵 ${escapeHtml(pl.name)}</span>
+                    </label>
+                    <span class="pl-count-pill">${pl.hymns.length}</span>
+                `;
+                container.appendChild(row);
+            });
+        }
+    }
+
+    function toggleHimnoEnListaDesdeModal(listId, isChecked) {
+        if (!modalTargetHymnNum) return;
+        if (listId === 'favorites') {
+            if (isChecked && !playlistsData.favorites.includes(modalTargetHymnNum)) {
+                playlistsData.favorites.push(modalTargetHymnNum);
+            } else if (!isChecked) {
+                playlistsData.favorites = playlistsData.favorites.filter(n => n !== modalTargetHymnNum);
+            }
+        } else {
+            const pl = playlistsData.custom.find(p => p.id === listId);
+            if (pl) {
+                if (isChecked && !pl.hymns.includes(modalTargetHymnNum)) {
+                    pl.hymns.push(modalTargetHymnNum);
+                } else if (!isChecked) {
+                    pl.hymns = pl.hymns.filter(n => n !== modalTargetHymnNum);
+                }
+            }
+        }
+        guardarPlaylistsStorage();
+        renderizarCheckboxesAgregarLista();
+        renderList(getFilteredList());
+    }
+
+    function crearListaRapidaDesdeModal() {
+        const input = document.getElementById('quickNewPlaylistName');
+        const name = input.value.trim();
+        if (!name) {
+            mostrarToast('Escribe un nombre para la lista');
+            return;
+        }
+        const newId = 'pl_' + Date.now();
+        const initialHymns = modalTargetHymnNum ? [modalTargetHymnNum] : [];
+        playlistsData.custom.push({ id: newId, name, hymns: initialHymns });
+        input.value = '';
+        guardarPlaylistsStorage();
+        renderizarCheckboxesAgregarLista();
+        renderList(getFilteredList());
+        mostrarToast(`Lista "${name}" creada`);
+    }
+
+    function abrirModalGestionListas() {
+        document.getElementById('newPlaylistNameInput').value = '';
+        renderizarGestionListas();
+        document.getElementById('managePlaylistsModal').classList.add('active');
+    }
+
+    function cerrarModalGestionListas() {
+        document.getElementById('managePlaylistsModal').classList.remove('active');
+    }
+
+    function crearNuevaLista() {
+        const input = document.getElementById('newPlaylistNameInput');
+        const name = input.value.trim();
+        if (!name) {
+            mostrarToast('Escribe un nombre para la lista');
+            return;
+        }
+        const newId = 'pl_' + Date.now();
+        playlistsData.custom.push({ id: newId, name, hymns: [] });
+        input.value = '';
+        currentViewId = newId;
+        guardarPlaylistsStorage();
+        renderizarGestionListas();
+        renderList(getFilteredList());
+        mostrarToast(`Lista "${name}" creada`);
+    }
+
+    function renombrarLista(listId) {
+        const pl = playlistsData.custom.find(p => p.id === listId);
+        if (!pl) return;
+        const nuevoNombre = prompt('Nuevo nombre para la lista:', pl.name);
+        if (nuevoNombre && nuevoNombre.trim()) {
+            pl.name = nuevoNombre.trim();
+            guardarPlaylistsStorage();
+            renderizarGestionListas();
+            mostrarToast('Lista renombrada');
+        }
+    }
+
+    function eliminarLista(listId) {
+        const pl = playlistsData.custom.find(p => p.id === listId);
+        if (!pl) return;
+        if (!confirm(`¿Eliminar la lista "${pl.name}"?`)) return;
+
+        playlistsData.custom = playlistsData.custom.filter(p => p.id !== listId);
+        if (currentViewId === listId) currentViewId = 'all';
+        if (activeQueuePlaylistId === listId) activeQueuePlaylistId = null;
+        guardarPlaylistsStorage();
+        renderizarGestionListas();
+        renderList(getFilteredList());
+        mostrarToast('Lista eliminada');
+    }
+
+    function abrirVistaDesdeGestion(listId) {
+        currentViewId = listId;
+        actualizarSelectorListasUI();
+        renderList(getFilteredList());
+        cerrarModalGestionListas();
+    }
+
+    function renderizarGestionListas() {
+        const container = document.getElementById('managePlaylistsContainer');
+        container.innerHTML = '';
+
+        const favDiv = document.createElement('div');
+        favDiv.className = 'pl-modal-row';
+        favDiv.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1;" onclick="abrirVistaDesdeGestion('favorites')">
+                <span>⭐ <strong>Favoritos</strong></span>
+                <span class="pl-count-pill">${playlistsData.favorites.length} himnos</span>
+            </div>
+            <button class="btn-mini-pl" onclick="abrirVistaDesdeGestion('favorites')">Ver</button>
+        `;
+        container.appendChild(favDiv);
+
+        if (playlistsData.custom.length === 0) {
+            const msg = document.createElement('div');
+            msg.style.cssText = 'font-size:0.8rem; color:#a89279; text-align:center; padding:12px;';
+            msg.innerText = 'No has creado listas personalizadas todavía.';
+            container.appendChild(msg);
+            return;
+        }
+
+        playlistsData.custom.forEach(pl => {
+            const div = document.createElement('div');
+            div.className = 'pl-modal-row';
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0;" onclick="abrirVistaDesdeGestion('${pl.id}')">
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🎵 <strong>${escapeHtml(pl.name)}</strong></span>
+                    <span class="pl-count-pill">${pl.hymns.length}</span>
+                </div>
+                <div style="display:flex; gap:4px; flex-shrink:0;">
+                    <button class="btn-mini-pl" onclick="abrirVistaDesdeGestion('${pl.id}')">Ver</button>
+                    <button class="btn-mini-pl" onclick="renombrarLista('${pl.id}')" title="Renombrar">✏️</button>
+                    <button class="btn-mini-pl" style="background:#751e19;" onclick="eliminarLista('${pl.id}')" title="Eliminar">🗑️</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    /* --- VIDEO DOUBLE BUFFERING --- */
     let activeVidId = 'myMedia1';
+    let currentRemoteStreamUrl = '';
     function getActiveVideo() { return document.getElementById(activeVidId); }
     function getInactiveVideo() { return document.getElementById(activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
     function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
 
     function actualizarMetaTags(titulo, descripcion, imagen) {
-        const logoDefecto = "https://luismerinosv.github.io/himnarioadventista/portada.jpg";
+        const logoDefecto = `${GITHUB_PAGES_BASE}/portada.jpg`;
         const imgFinal = imagen || logoDefecto;
 
         const ogTitle = document.getElementById('ogTitle');
@@ -784,22 +2612,14 @@
         if (twImage) twImage.setAttribute('content', imgFinal);
     }
 
-    function abrirModalDescarga() { document.getElementById('downloadModal').classList.add('active'); }
-    function cerrarModalDescarga() { document.getElementById('downloadModal').classList.remove('active'); }
-
-    function manejarClicDescargaWindows(e) {
-        if (!WINDOWS_DRIVE_URL || WINDOWS_DRIVE_URL.trim() === "") {
-            e.preventDefault();
-            mostrarToast('El enlace de Google Drive se está procesando. ¡Estará disponible muy pronto!');
-            return false;
-        }
-        document.getElementById('windowsDownloadLink').href = WINDOWS_DRIVE_URL;
-        return true;
-    }
+    function abrirModalAyuda() { document.getElementById('helpModal').classList.add('active'); }
+    function cerrarModalAyuda() { document.getElementById('helpModal').classList.remove('active'); }
 
     function compartirApp() {
         document.getElementById('shareModal').classList.add('active');
-        if (currentHimno) {
+        if (currentViewId !== 'all' && currentViewId !== 'offline_saved' && obtenerHimnosDeLista(currentViewId).length > 0) {
+            seleccionarTabCompartir('playlist');
+        } else if (currentHimno) {
             seleccionarTabCompartir('hymn');
         } else {
             seleccionarTabCompartir('main');
@@ -825,13 +2645,17 @@
         currentShareType = type;
         const tabMain = document.getElementById('tabMain');
         const tabHymn = document.getElementById('tabHymn');
+        const tabPlaylist = document.getElementById('tabPlaylist');
         const input = document.getElementById('shareUrlInput');
         const previewTitle = document.getElementById('sharePreviewTitle');
         const previewSubtitle = document.getElementById('sharePreviewSubtitle');
 
+        tabMain.classList.remove('active');
+        tabHymn.classList.remove('active');
+        tabPlaylist.classList.remove('active');
+
         if (type === 'main') {
             tabMain.classList.add('active');
-            tabHymn.classList.remove('active');
             previewTitle.innerText = 'Himnario Adventista en Línea';
             previewSubtitle.innerText = 'Accede a la colección completa de himnos';
             input.value = 'Generando enlace...';
@@ -839,16 +2663,41 @@
             actualizarMetaTags(
                 'Himnario Adventista en Línea',
                 'Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.',
-                'https://luismerinosv.github.io/himnarioadventista/portada.jpg'
+                `${GITHUB_PAGES_BASE}/portada.jpg`
             );
 
             if (!currentShortMainUrl) {
                 currentShortMainUrl = await shortenUrl(WORKER_URL);
             }
             input.value = currentShortMainUrl;
+        } else if (type === 'playlist') {
+            tabPlaylist.classList.add('active');
+            const targetListId = (currentViewId !== 'all' && currentViewId !== 'offline_saved')
+                ? currentViewId
+                : (activeQueuePlaylistId && activeQueuePlaylistId !== 'offline_saved' ? activeQueuePlaylistId : 'favorites');
+            const items = obtenerHimnosDeLista(targetListId);
+            const listName = obtenerNombreLista(targetListId);
+
+            if (items.length === 0) {
+                previewTitle.innerText = 'Lista sin himnos';
+                previewSubtitle.innerText = 'Selecciona o crea una lista con himnos para compartirla';
+                input.value = 'Agrega himnos a una lista primero';
+                return;
+            }
+
+            const isInst = document.getElementById('instrumentalCheckbox').checked;
+            const numsCsv = items.map(h => parseInt(h.num, 10)).join(',');
+            previewTitle.innerText = `📋 Lista: ${listName} (${items.length} himnos)`;
+            previewSubtitle.innerText = items.slice(0, 4).map(h => `#${parseInt(h.num, 10)}`).join(', ') + (items.length > 4 ? '...' : '');
+            input.value = 'Generando enlace...';
+
+            const hasHttpOrigin = window.location.origin && window.location.origin.startsWith('http');
+            const baseShareUrl = hasHttpOrigin ? (window.location.origin + window.location.pathname) : WORKER_URL;
+            const longPlUrl = `${baseShareUrl}?pl=${numsCsv}&pln=${encodeURIComponent(listName)}${isInst ? '&inst=1' : ''}`;
+            currentShortPlaylistUrl = await shortenUrl(longPlUrl);
+            input.value = currentShortPlaylistUrl;
         } else {
             tabHymn.classList.add('active');
-            tabMain.classList.remove('active');
 
             if (!currentHimno) {
                 previewTitle.innerText = 'Sin himno seleccionado';
@@ -862,7 +2711,7 @@
             const numPadded = String(numInt).padStart(3, '0');
             const tituloHimno = `Himno ${numInt}: ${currentHimno.title}`;
             const descHimno = `Escucha el ${tituloHimno} (${isInst ? 'Instrumental' : 'Cantado'}) en el Himnario Adventista en Línea.`;
-            const imagenPortada = `https://luismerinosv.github.io/himnarioadventista/portadas/${numPadded}.jpg`;
+            const imagenPortada = `${GITHUB_PAGES_BASE}/portadas/${numPadded}.jpg`;
 
             previewTitle.innerText = tituloHimno;
             previewSubtitle.innerText = `Modo: ${isInst ? 'Instrumental' : 'Cantado'} • Himnario Adventista`;
@@ -878,7 +2727,7 @@
 
     function copiarEnlaceCompartir() {
         const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
+        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione') || input.value.startsWith('Agrega')) return;
 
         navigator.clipboard.writeText(input.value);
         mostrarToast('¡Enlace copiado al portapapeles!');
@@ -886,11 +2735,19 @@
 
     function compartirNativo() {
         const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione')) return;
+        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione') || input.value.startsWith('Agrega')) return;
 
-        const isMain = currentShareType === 'main';
-        const title = isMain ? 'Himnario Adventista en Línea' : `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
-        const text = isMain ? 'Te comparto el Himnario Adventista en Línea' : `Escucha el Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title} en el Himnario Adventista`;
+        let title = 'Himnario Adventista en Línea';
+        let text = 'Te comparto el Himnario Adventista en Línea';
+
+        if (currentShareType === 'hymn' && currentHimno) {
+            title = `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`;
+            text = `Escucha el ${title} en el Himnario Adventista`;
+        } else if (currentShareType === 'playlist') {
+            const targetListId = (currentViewId !== 'all' && currentViewId !== 'offline_saved') ? currentViewId : (activeQueuePlaylistId || 'favorites');
+            title = `Lista de Himnos: ${obtenerNombreLista(targetListId)}`;
+            text = `Te comparto la lista de reproducción "${obtenerNombreLista(targetListId)}" del Himnario Adventista`;
+        }
 
         if (navigator.share) {
             navigator.share({ title: title, text: text, url: input.value }).catch(e => console.log('Error compartiendo:', e));
@@ -904,12 +2761,12 @@
         if (!toast) {
             toast = document.createElement('div');
             toast.id = 'toastNotice';
-            toast.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#d9822b; color:#fff; padding:8px 16px; border-radius:20px; font-size:0.85rem; font-weight:bold; z-index:2000; box-shadow:0 4px 12px rgba(0,0,0,0.5); opacity:0; transition:opacity 0.3s; pointer-events:none;';
+            toast.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#d9822b; color:#fff; padding:8px 16px; border-radius:20px; font-size:0.85rem; font-weight:bold; z-index:2000; box-shadow:0 4px 12px rgba(0,0,0,0.5); opacity:0; transition:opacity 0.3s; pointer-events:none; text-align:center; max-width:90vw;';
             document.body.appendChild(toast);
         }
         toast.innerText = mensaje;
         toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+        setTimeout(() => { toast.style.opacity = '0'; }, 4000);
     }
 
     document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -920,12 +2777,6 @@
 
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    }
-
-    function applyPlaybackSpeed(mediaElement) {
-        if (mediaElement) {
-            mediaElement.playbackRate = currentSpeed;
-        }
     }
 
     function changeSpeed(delta) {
@@ -950,68 +2801,109 @@
     }
 
     function applyPlaybackSpeedToAll() {
+        masterAudio.playbackRate = currentSpeed;
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
         if (v1) v1.playbackRate = currentSpeed;
         if (v2) v2.playbackRate = currentSpeed;
-        if (bgAudio) bgAudio.playbackRate = currentSpeed;
         syncSecondary();
     }
 
-    const bgAudio = new Audio();
-    bgAudio.preload = 'auto';
-
-    bgAudio.onended = () => { nextHymn(); };
+    function handleMediaEnded() {
+        if (activeQueuePlaylistId) {
+            const queue = obtenerHimnosDeLista(activeQueuePlaylistId);
+            if (queue.length > 0 && currentHimno) {
+                const idx = queue.findIndex(h => h.num === currentHimno.num);
+                if (idx >= 0 && idx < queue.length - 1) {
+                    reproducirHimno(queue[idx + 1], true, true);
+                    return;
+                } else if (idx === queue.length - 1 && repeatPlaylist) {
+                    reproducirHimno(queue[0], true, true);
+                    return;
+                } else {
+                    stopHymn();
+                    mostrarToast(`Fin de la lista: ${obtenerNombreLista(activeQueuePlaylistId)}`);
+                    return;
+                }
+            }
+        }
+        stopHymn();
+    }
 
     document.addEventListener('visibilitychange', () => {
-        const mainVideo = getActiveVideo();
+        if (!currentHimno || !currentActivePlayUrl || isProjectingExternal()) return;
+        const activeVid = getActiveVideo();
+
         if (document.hidden) {
-            if (mainVideo && !mainVideo.paused && mainVideo.src) {
-                bgAudio.src = mainVideo.src;
-                bgAudio.currentTime = mainVideo.currentTime;
-                bgAudio.volume = mainVideo.volume;
-                bgAudio.muted = mainVideo.muted;
-                applyPlaybackSpeed(bgAudio);
-                bgAudio.play().catch(err => console.log("Bg audio error:", err));
-                mainVideo.pause();
+            const curTime = activeVid ? (activeVid.currentTime || 0) : 0;
+            const wasPlaying = activeVid && !activeVid.paused && !isUserPaused;
+            if (activeVid) {
+                activeVid.pause();
+                activeVid.muted = true;
             }
+            iniciarMasterAudioDesdeTiempo(currentActivePlayUrl, curTime, wasPlaying, currentPlayRequestId);
         } else {
-            if (!bgAudio.paused && bgAudio.src) {
-                if (mainVideo) {
-                    if (mainVideo.src !== bgAudio.src) {
-                        mainVideo.src = bgAudio.src;
-                        mainVideo.load();
-                    }
-                    mainVideo.currentTime = bgAudio.currentTime;
-                    applyPlaybackSpeed(mainVideo);
-                    mainVideo.play().catch(() => {});
-                }
-                bgAudio.pause();
-                bgAudio.removeAttribute('src');
-            } else if (mainVideo && bgAudio.currentTime > 0) {
-                if (mainVideo.src !== bgAudio.src && bgAudio.src) {
-                    mainVideo.src = bgAudio.src;
-                    mainVideo.load();
-                }
-                mainVideo.currentTime = bgAudio.currentTime;
-                applyPlaybackSpeed(mainVideo);
-            }
+            const curTime = masterAudio.currentTime || 0;
+            const wasPlaying = !masterAudio.paused && !isUserPaused;
+            restaurarVideoEnPantallaPrincipal(curTime, wasPlaying);
         }
     });
 
+    function playCurrentMedia() {
+        if (!currentHimno) {
+            if (currentViewId !== 'all') {
+                iniciarReproduccionListaActual();
+            } else {
+                reproducirHimno(himnosList[0], true);
+            }
+            return;
+        }
+
+        const expectedPrimaryUrl = getHymnVideoUrl(currentHimno);
+        if (!currentCandidateUrls.includes(expectedPrimaryUrl) || !currentActivePlayUrl) {
+            reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
+            return;
+        }
+
+        const engine = getActiveEngine();
+        if (!isUsingMasterAudio() && engine) {
+            engine.muted = isAudioMuted;
+            engine.volume = currentVolume;
+        }
+        applyPlaybackSpeedToAll();
+        isUserPaused = false;
+        engine.play().catch((err) => {
+            if (err && err.name === 'NotAllowedError') {
+                isUserPaused = true;
+                document.getElementById('playBtn').innerText = '▶ Repr.';
+            }
+        });
+        syncSecondary(true);
+    }
+
+    function pauseCurrentMedia() {
+        const engine = getActiveEngine();
+        if (engine) engine.pause();
+        isUserPaused = true;
+        syncSecondary(true);
+    }
+
     function setupMediaSession() {
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
-            navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+            navigator.mediaSession.setActionHandler('play', () => { playCurrentMedia(); });
+            navigator.mediaSession.setActionHandler('pause', () => { pauseCurrentMedia(); });
+            navigator.mediaSession.setActionHandler('stop', () => { stopHymn(); });
             navigator.mediaSession.setActionHandler('previoustrack', () => { prevHymn(); });
             navigator.mediaSession.setActionHandler('nexttrack', () => { nextHymn(); });
             navigator.mediaSession.setActionHandler('seekto', (details) => {
-                const activeMedia = document.hidden ? bgAudio : getActiveVideo();
-                if (details.fastSeek && ('fastSeek' in activeMedia)) {
-                    activeMedia.fastSeek(details.seekTime);
+                const engine = getActiveEngine();
+                if (!engine) return;
+                if (details.fastSeek && ('fastSeek' in engine)) {
+                    engine.fastSeek(details.seekTime);
                 } else {
-                    activeMedia.currentTime = details.seekTime;
+                    engine.currentTime = details.seekTime;
                 }
+                syncSecondary(true);
             });
         }
     }
@@ -1021,7 +2913,7 @@
             const isInst = document.getElementById('instrumentalCheckbox').checked;
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: `Himno ${parseInt(currentHimno.num, 10)}: ${currentHimno.title}`,
-                artist: 'Himnario Adventista',
+                artist: activeQueuePlaylistId ? `Lista: ${obtenerNombreLista(activeQueuePlaylistId)}` : 'Himnario Adventista',
                 album: isInst ? 'Modo Instrumental' : 'Modo Cantado',
                 artwork: [
                     { src: 'logo-adventista.webp', sizes: '512x512', type: 'image/webp' }
@@ -1030,62 +2922,155 @@
         }
     }
 
-    async function cargarCalculoLocal() {
-        try {
-            const response = await fetch(`${CLOUDFLARE_R2_URL}/titulos.json`);
-            if (response.ok) {
-                titulosDiccionario = await response.json();
-            } else {
-                throw new Error("No se pudo cargar titulos.json desde R2");
-            }
-        } catch (e) {
-            try {
-                const resLocal = await fetch('titulos.json');
-                if (resLocal.ok) {
-                    titulosDiccionario = await resLocal.json();
-                } else if (window.electronAPI && window.electronAPI.getHimnosData) {
-                    const data = await window.electronAPI.getHimnosData();
-                    titulosDiccionario = data.titulos || {};
-                    cantadoFilesMap = data.cantado || {};
-                    instrumentalFilesMap = data.instrumental || {};
-                }
-            } catch (err) {
-                titulosDiccionario = {};
-            }
+    function extraerTituloDesdeDiccionario(dict, numInt, numStr, fallbackTitle) {
+        if (!dict || typeof dict !== 'object') return fallbackTitle;
+        let rawEntry = null;
+        if (Array.isArray(dict)) {
+            if (dict.length === 613) rawEntry = dict[numInt - 1];
+            else if (dict[numInt] !== undefined) rawEntry = dict[numInt];
+            else rawEntry = dict[numInt - 1];
+        } else {
+            rawEntry = dict[numInt] ?? dict[String(numInt)] ?? dict[numStr];
         }
+
+        if (typeof rawEntry === 'string' && rawEntry.trim()) {
+            return rawEntry.trim();
+        }
+        if (rawEntry && typeof rawEntry === 'object') {
+            if (typeof rawEntry.titulo === 'string' && rawEntry.titulo.trim()) return rawEntry.titulo.trim();
+            if (typeof rawEntry.title === 'string' && rawEntry.title.trim()) return rawEntry.title.trim();
+            if (typeof rawEntry.nombre === 'string' && rawEntry.nombre.trim()) return rawEntry.nombre.trim();
+        }
+        return fallbackTitle;
+    }
+
+    function construirListaHimnos() {
+        const offlineTitlesByNum = {};
+        savedMetaMap.forEach(meta => {
+            if (meta && meta.num && meta.title) {
+                offlineTitlesByNum[meta.num] = meta.title;
+            }
+        });
 
         himnosList.length = 0;
         for (let i = 1; i <= 613; i++) {
             const numStr = String(i).padStart(3, '0');
-            const rawEntry = titulosDiccionario[i] || titulosDiccionario[String(i)] || titulosDiccionario[numStr];
-            let titleStr = `Himno ${i}`;
-            
-            if (typeof rawEntry === 'string') {
-                titleStr = rawEntry;
-            } else if (rawEntry && typeof rawEntry === 'object') {
-                if (typeof rawEntry.titulo === 'string') titleStr = rawEntry.titulo;
-                else if (typeof rawEntry.title === 'string') titleStr = rawEntry.title;
-                else if (typeof rawEntry.nombre === 'string') titleStr = rawEntry.nombre;
-            }
-
+            const fallback = offlineTitlesByNum[numStr] || `Himno ${i}`;
+            const titleStr = extraerTituloDesdeDiccionario(titulosDiccionario, i, numStr, fallback);
             himnosList.push({ num: numStr, title: String(titleStr) });
         }
 
+        if (currentHimno) {
+            const updatedCurrent = himnosList.find(item => item.num === currentHimno.num);
+            if (updatedCurrent) {
+                currentHimno = updatedCurrent;
+                document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(currentHimno.num, 10)} ${currentHimno.title}`;
+            }
+        }
+    }
+
+    async function fetchJsonConTimeout(url, timeoutMs = 5000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { signal: controller.signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (!data || typeof data !== 'object') throw new Error('JSON inválido');
+            return data;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function cargarCalculoLocal() {
+        try {
+            const cachedTitulos = localStorage.getItem(TITULOS_CACHE_KEY);
+            if (cachedTitulos) {
+                const parsed = JSON.parse(cachedTitulos);
+                if (parsed && typeof parsed === 'object') {
+                    titulosDiccionario = parsed;
+                }
+            }
+        } catch (e) {}
+
+        construirListaHimnos();
+        cargarPlaylistsStorage();
         renderList(getFilteredList());
-        await cargarPantallas();
+        cargarPantallas(false);
         verificarHimnoUrl();
+
+        cargarIndiceOffline().then(() => {
+            construirListaHimnos();
+            actualizarSelectorListasUI();
+            renderList(getFilteredList());
+        });
+
+        const aplicarTitulosDescargados = (data) => {
+            if (!data || typeof data !== 'object') return;
+            titulosDiccionario = data;
+            try {
+                localStorage.setItem(TITULOS_CACHE_KEY, JSON.stringify(titulosDiccionario));
+            } catch (e) {}
+            construirListaHimnos();
+            renderList(getFilteredList());
+        };
+
+        try {
+            const dataTitulos = await Promise.any([
+                fetchJsonConTimeout('titulos.json', 4000),
+                fetchJsonConTimeout(`${GITHUB_PAGES_BASE}/titulos.json`, 5000),
+                fetchJsonConTimeout(`${CLOUDFLARE_R2_URL}/titulos.json`, 6000)
+            ]);
+            aplicarTitulosDescargados(dataTitulos);
+        } catch (e) {
+            if (window.electronAPI && window.electronAPI.getHimnosData) {
+                try {
+                    const data = await window.electronAPI.getHimnosData();
+                    titulosDiccionario = (data && data.titulos) || {};
+                    cantadoFilesMap = (data && data.cantado) || {};
+                    instrumentalFilesMap = (data && data.instrumental) || {};
+                    construirListaHimnos();
+                    renderList(getFilteredList());
+                } catch (errElectron) {}
+            }
+        }
     }
 
     function verificarHimnoUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const hymnNum = urlParams.get('h');
         const isInst = urlParams.get('inst');
+        const sharedPl = urlParams.get('pl');
+        const sharedPlName = urlParams.get('pln');
 
         if (isInst === '1') {
             const chk = document.getElementById('instrumentalCheckbox');
             if (chk) {
                 chk.checked = true;
                 cambiarModoAudio();
+            }
+        }
+
+        if (sharedPl) {
+            const nums = sharedPl.split(',')
+                .map(n => String(parseInt(n.trim(), 10)).padStart(3, '0'))
+                .filter(n => himnosList.some(h => h.num === n));
+
+            if (nums.length > 0) {
+                const name = sharedPlName ? sharedPlName.trim() : 'Lista Compartida';
+                let existing = playlistsData.custom.find(p => p.name.toLowerCase() === name.toLowerCase());
+                if (existing) {
+                    existing.hymns = nums;
+                } else {
+                    existing = { id: 'pl_' + Date.now(), name, hymns: nums };
+                    playlistsData.custom.push(existing);
+                }
+                currentViewId = existing.id;
+                guardarPlaylistsStorage();
+                renderList(getFilteredList());
+                mostrarToast(`📋 Lista "${name}" cargada (${nums.length} himnos)`);
+                return;
             }
         }
 
@@ -1098,14 +3083,18 @@
         }
     }
 
-    async function cargarPantallas() {
+    let screenDetailsApiGranted = false;
+
+    async function cargarPantallas(fromUserGesture = false) {
         const select = document.getElementById('screenSelect');
-        select.innerHTML = '';
+        if (!select) return;
+        const previousValue = select.value;
         displaysList = [];
 
-        if ('getScreenDetails' in window) {
+        if ('getScreenDetails' in window && (fromUserGesture || screenDetailsApiGranted)) {
             try {
                 const screenDetails = await window.getScreenDetails();
+                screenDetailsApiGranted = true;
                 displaysList = screenDetails.screens.map((s, idx) => ({
                     id: idx,
                     label: s.isPrimary ? `Mon. Principal (${s.width}x${s.height})` : `Mon. Secundario (${s.width}x${s.height})`,
@@ -1116,8 +3105,8 @@
                     isPrimary: s.isPrimary
                 }));
 
-                screenDetails.oncurrentscreenchange = () => cargarPantallas();
-                screenDetails.onscreenschange = () => cargarPantallas();
+                screenDetails.oncurrentscreenchange = () => cargarPantallas(false);
+                screenDetails.onscreenschange = () => cargarPantallas(false);
             } catch (err) {
                 console.log("Acceso a API de pantallas denegado o cerrado.");
             }
@@ -1130,6 +3119,7 @@
             ];
         }
 
+        select.innerHTML = '';
         displaysList.forEach((d) => {
             const opt = document.createElement('option');
             opt.value = d.id;
@@ -1137,7 +3127,9 @@
             select.appendChild(opt);
         });
 
-        if (displaysList.length > 1) {
+        if (previousValue && displaysList.some(d => String(d.id) === String(previousValue))) {
+            select.value = previousValue;
+        } else if (displaysList.length > 1) {
             select.selectedIndex = 1;
         } else {
             select.selectedIndex = 0;
@@ -1146,15 +3138,33 @@
 
     function renderList(items) {
         const ul = document.getElementById('playlist');
+        if (!ul) return;
         ul.innerHTML = '';
+        const isPlaylistView = (currentViewId !== 'all');
+        const isEditableCustomOrFav = (currentViewId !== 'all' && currentViewId !== 'offline_saved');
+        const isSearching = document.getElementById('searchInput').value.trim().length > 0;
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+
         if (items.length === 0) {
-            ul.innerHTML = '<li style="padding:12px; text-align:center; color:#aaa;">No se encontraron himnos.</li>';
+            let emptyText = 'No se encontraron himnos.';
+            if (currentViewId === 'offline_saved' && !isSearching) {
+                emptyText = 'Aún no has guardado himnos en este modo. Pulsa ⬇ en cualquier himno o abre "💾 Local" para descargar en lote.';
+            } else if (isEditableCustomOrFav && !isSearching) {
+                emptyText = 'Esta lista está vacía. Usa el botón + o ☆ en cualquier himno para agregarlo.';
+            }
+            ul.innerHTML = `<li style="padding:14px; text-align:center; color:#cbb290; font-size:0.84rem; line-height:1.4;">${emptyText}</li>`;
             return;
         }
 
-        items.forEach(h => {
+        const frag = document.createDocumentFragment();
+        const favSet = new Set(playlistsData.favorites);
+
+        items.forEach((h, idx) => {
             const li = document.createElement('li');
             const isActive = currentHimno && (h.num === currentHimno.num);
+            const isFav = favSet.has(h.num);
+            const isSavedLocal = estaHimnoGuardadoEnLocal(h, isInst);
+            const isDownloadingLocal = estaHimnoDescargandoEnLocal(h, isInst);
 
             li.className = `playlist-item ${isActive ? 'active' : ''}`;
             li.dataset.num = h.num;
@@ -1162,27 +3172,100 @@
 
             const playBullet = document.createElement('div');
             playBullet.className = 'play-bullet';
-            playBullet.onclick = (e) => { e.stopPropagation(); reproducirHimno(h, true); };
+            playBullet.title = `Reproducir Himno ${parseInt(h.num, 10)}`;
+            playBullet.onclick = (e) => {
+                e.stopPropagation();
+                if (clickTimer !== null) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                }
+                reproducirHimno(h, true, isPlaylistView);
+            };
 
             const textDiv = document.createElement('div');
-            textDiv.textContent = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+            textDiv.className = 'hymn-item-title';
+            const prefixOrder = (isPlaylistView && !isSearching) ? `${idx + 1}. ` : '';
+            textDiv.textContent = `${prefixOrder}Himno ${parseInt(h.num, 10)}: ${h.title}`;
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'hymn-item-actions';
+
+            const localBtn = document.createElement('button');
+            if (isDownloadingLocal) {
+                localBtn.className = 'btn-item-icon downloading-local';
+                localBtn.textContent = '⏳';
+                localBtn.title = 'Descargando en almacenamiento local...';
+            } else if (isSavedLocal) {
+                localBtn.className = 'btn-item-icon saved-local';
+                localBtn.textContent = '✓';
+                localBtn.title = 'Guardado en local para reproducción sin internet (Clic para quitar)';
+            } else {
+                localBtn.className = 'btn-item-icon';
+                localBtn.textContent = '⬇';
+                localBtn.title = 'Guardar en local en este dispositivo';
+            }
+            localBtn.onclick = (e) => manejarClicBotonLocal(h, e);
+            actionsDiv.appendChild(localBtn);
+
+            const favBtn = document.createElement('button');
+            favBtn.className = `btn-item-icon ${isFav ? 'fav-active' : ''}`;
+            favBtn.textContent = isFav ? '★' : '☆';
+            favBtn.title = isFav ? 'Quitar de Favoritos' : 'Agregar a Favoritos';
+            favBtn.onclick = (e) => toggleFavorito(h.num, e);
+            actionsDiv.appendChild(favBtn);
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'btn-item-icon';
+            addBtn.textContent = '+';
+            addBtn.title = 'Agregar a una lista de reproducción';
+            addBtn.onclick = (e) => abrirModalAgregarLista(h, e);
+            actionsDiv.appendChild(addBtn);
+
+            if (isEditableCustomOrFav && !isSearching) {
+                const upBtn = document.createElement('button');
+                upBtn.className = 'btn-item-icon';
+                upBtn.textContent = '▲';
+                upBtn.title = 'Subir en la lista';
+                upBtn.style.opacity = idx === 0 ? '0.35' : '1';
+                upBtn.onclick = (e) => moverHimnoEnLista(currentViewId, idx, -1, e);
+                actionsDiv.appendChild(upBtn);
+
+                const downBtn = document.createElement('button');
+                downBtn.className = 'btn-item-icon';
+                downBtn.textContent = '▼';
+                downBtn.title = 'Bajar en la lista';
+                downBtn.style.opacity = idx === items.length - 1 ? '0.35' : '1';
+                downBtn.onclick = (e) => moverHimnoEnLista(currentViewId, idx, 1, e);
+                actionsDiv.appendChild(downBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn-item-icon danger';
+                delBtn.textContent = '✕';
+                delBtn.title = 'Quitar de esta lista';
+                delBtn.onclick = (e) => quitarHimnoDeLista(currentViewId, h.num, e);
+                actionsDiv.appendChild(delBtn);
+            }
 
             li.appendChild(playBullet);
             li.appendChild(textDiv);
-            ul.appendChild(li);
+            li.appendChild(actionsDiv);
+            frag.appendChild(li);
         });
 
         const spacer = document.createElement('li');
         spacer.style.height = '45px';
         spacer.style.pointerEvents = 'none';
-        ul.appendChild(spacer);
+        frag.appendChild(spacer);
+
+        ul.appendChild(frag);
     }
 
     function handleHymnClick(h) {
+        const isPlaylistView = (currentViewId !== 'all');
         if (clickTimer !== null) {
             clearTimeout(clickTimer);
             clickTimer = null;
-            reproducirHimno(h, true);
+            reproducirHimno(h, true, isPlaylistView);
         } else {
             clickTimer = setTimeout(() => {
                 clickTimer = null;
@@ -1192,7 +3275,7 @@
                 updateActiveListItem();
                 updateMediaSessionMetadata();
                 currentShortHymnUrl = '';
-            }, 220);
+            }, 250);
         }
     }
 
@@ -1201,129 +3284,281 @@
             if (currentHimno && li.dataset.num === currentHimno.num) li.classList.add('active');
             else li.classList.remove('active');
         });
+        actualizarBadgeColaActiva();
     }
 
-    function reproducirHimno(h, autoPlay = true) {
-        currentHimno = h;
-        currentIndex = himnosList.findIndex(item => item.num === h.num);
-        currentShortHymnUrl = '';
+    function aplicarFuenteDeReproduccion(playUrl, remoteUrl, isLocal, autoPlay, reqId) {
+        if (reqId !== currentPlayRequestId || !currentHimno) return;
 
         const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
-        const carpeta = isInstrumental ? 'Instrumental' : 'Cantado';
+        currentActivePlayUrl = playUrl;
+        currentRemoteStreamUrl = remoteUrl;
 
-        let videoUrl = `${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`;
-        const localTargetMap = isInstrumental ? instrumentalFilesMap : cantadoFilesMap;
-        
-        if (localTargetMap && localTargetMap[h.num]) {
-            videoUrl = localTargetMap[h.num];
-        } else {
-            const rawEntry = titulosDiccionario[parseInt(h.num, 10)] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
-            if (rawEntry && typeof rawEntry === 'object' && rawEntry.archivo) {
-                const suffix = isInstrumental ? '_pista.mp4' : '.mp4';
-                videoUrl = `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`;
-            }
+        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(currentHimno.num, 10)} ${currentHimno.title}`;
+
+        const localBadge = document.getElementById('localPlaybackBadge');
+        if (localBadge) {
+            localBadge.style.display = isLocal ? 'inline-block' : 'none';
         }
 
-        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
-        updateMediaSessionMetadata();
+        if (!isLocal && autoCacheEnabled) {
+            guardarHimnoEnLocal(currentHimno, isInstrumental, null, true).then((saved) => {
+                if (saved && currentHimno && localBadge) {
+                    localBadge.style.display = 'inline-block';
+                }
+            });
+        }
 
-        if (document.hidden) {
-            bgAudio.src = videoUrl;
-            bgAudio.currentTime = 0;
-            bgAudio.volume = getActiveVideo().volume;
-            bgAudio.muted = getActiveVideo().muted;
-            applyPlaybackSpeed(bgAudio);
-            if (autoPlay) bgAudio.play().catch(() => {});
-            
-            const activeVid = getActiveVideo();
-            activeVid.src = videoUrl;
-            applyPlaybackSpeed(activeVid);
-
+        if (isProjectingExternal()) {
+            detenerVideoEnPantallaPrincipal(true);
+            iniciarMasterAudioDesdeTiempo(playUrl, 0, autoPlay, reqId);
+            syncSecondary(true);
             updateActiveListItem();
             return;
         }
+
+        if (document.hidden) {
+            iniciarMasterAudioDesdeTiempo(playUrl, 0, autoPlay, reqId);
+            updateActiveListItem();
+            return;
+        }
+
+        detenerMasterAudio();
 
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
-        if (activeVid.src === videoUrl && !activeVid.ended) {
-            applyPlaybackSpeed(activeVid);
-            if (autoPlay) activeVid.play().catch(() => {});
+        if (activeVid && activeVid.dataset.loadedUrl === playUrl && activeVid.readyState >= 2 && !activeVid.error) {
+            activeVid.muted = isAudioMuted;
+            activeVid.volume = currentVolume;
+            activeVid.playbackRate = currentSpeed;
             document.getElementById('posterOverlay').style.display = 'none';
+            if (autoPlay && !isUserPaused) activeVid.play().catch(() => {});
             updateActiveListItem();
             return;
         }
 
-        nextVid.src = videoUrl;
+        nextVid.onloadeddata = null;
+        nextVid.oncanplay = null;
+        nextVid.onplaying = null;
+        nextVid.onerror = null;
+        nextVid.onended = null;
+
+        nextVid.classList.remove('active', 'underneath');
+        nextVid.muted = isAudioMuted;
+        nextVid.volume = currentVolume;
+        nextVid.playbackRate = currentSpeed;
+        nextVid.dataset.loadedUrl = playUrl;
+        nextVid.src = playUrl;
         nextVid.load();
+
+        if (autoPlay && !isUserPaused) {
+            nextVid.play().catch((err) => {
+                if (err && err.name === 'NotAllowedError') {
+                    isUserPaused = true;
+                    document.getElementById('playBtn').innerText = '▶ Repr.';
+                }
+            });
+        }
 
         let transitioned = false;
         const performTransition = () => {
-            if (transitioned) return;
+            if (transitioned || reqId !== currentPlayRequestId) return;
+            if (isProjectingExternal()) {
+                detenerVideoEnPantallaPrincipal(true);
+                return;
+            }
             transitioned = true;
+            nextVid.onloadeddata = null;
+            nextVid.oncanplay = null;
+            nextVid.onplaying = null;
+            nextVid.onerror = null;
 
             document.getElementById('posterOverlay').style.display = 'none';
-            
+            nextVid.playbackRate = currentSpeed;
+            nextVid.muted = isAudioMuted;
+            nextVid.volume = currentVolume;
+            nextVid.onended = () => {
+                if (!isUsingMasterAudio()) handleMediaEnded();
+            };
+
+            if (activeVid && activeVid.src) {
+                activeVid.muted = true;
+                activeVid.classList.add('underneath');
+                activeVid.classList.remove('active');
+            }
             nextVid.classList.add('active');
-            activeVid.classList.remove('active');
-            
-            applyPlaybackSpeed(nextVid);
-            if (autoPlay) {
-                nextVid.play().catch(() => {});
+
+            if (autoPlay && !isUserPaused && nextVid.paused) {
+                nextVid.play().catch((err) => {
+                    if (err && err.name === 'NotAllowedError') {
+                        isUserPaused = true;
+                        document.getElementById('playBtn').innerText = '▶ Repr.';
+                    }
+                });
             }
 
             setTimeout(() => {
-                activeVid.pause();
-            }, 100);
+                if (activeVid) {
+                    activeVid.pause();
+                    activeVid.muted = true;
+                    activeVid.classList.remove('underneath', 'active');
+                    activeVid.onloadeddata = null;
+                    activeVid.oncanplay = null;
+                    activeVid.onplaying = null;
+                    activeVid.onerror = null;
+                    activeVid.onended = null;
+                    activeVid.removeAttribute('src');
+                    delete activeVid.dataset.loadedUrl;
+                    activeVid.load();
+                }
+            }, 250);
 
             swapActiveVideoPointers();
-            syncSecondary();
             updateActiveListItem();
         };
 
-        nextVid.oncanplay = () => { performTransition(); };
-        nextVid.onended = () => { stopHymn(); };
+        nextVid.onloadeddata = performTransition;
+        nextVid.oncanplay = performTransition;
+        nextVid.onplaying = performTransition;
 
-        if (nextVid.readyState >= 3) {
+        nextVid.onerror = () => {
+            nextVid.onloadeddata = null;
+            nextVid.oncanplay = null;
+            nextVid.onplaying = null;
+            nextVid.onerror = null;
+            if (reqId !== currentPlayRequestId || transitioned) return;
+            intentarSiguienteRutaAlternativa(reqId);
+        };
+
+        if (nextVid.readyState >= 2) {
             performTransition();
         }
 
         updateActiveListItem();
     }
 
-    function togglePlay() {
-        if (!currentHimno) { reproducirHimno(himnosList[0], true); return; }
-        
-        if (document.hidden) {
-            applyPlaybackSpeed(bgAudio);
-            if (bgAudio.paused) bgAudio.play();
-            else bgAudio.pause();
-        } else {
-            const mainVideo = getActiveVideo();
-            applyPlaybackSpeed(mainVideo);
-            if (mainVideo.paused) mainVideo.play();
-            else mainVideo.pause();
+    async function intentarSiguienteRutaAlternativa(reqId) {
+        if (reqId !== currentPlayRequestId || !currentHimno) return;
+
+        if (currentCandidateIndex + 1 < currentCandidateUrls.length) {
+            currentCandidateIndex++;
+            const nextCandUrl = currentCandidateUrls[currentCandidateIndex];
+            if (nextCandUrl && nextCandUrl !== currentRemoteStreamUrl) {
+                aplicarFuenteDeReproduccion(nextCandUrl, nextCandUrl, false, !isUserPaused, reqId);
+                return;
+            }
         }
 
-        syncSecondary();
+        const primaryUrl = currentCandidateUrls[0] || currentRemoteStreamUrl;
+        isUserPaused = true;
+        document.getElementById('playBtn').innerText = '▶ Repr.';
+
+        let detalleError = 'El servidor de Cloudflare R2 no responde o rechazó la conexión.';
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(primaryUrl, { method: 'HEAD', signal: controller.signal });
+            clearTimeout(timer);
+            if (res.status === 429) {
+                detalleError = 'Cloudflare R2 limitó el tráfico (HTTP 429).';
+            } else if (res.status === 403 || res.status === 503) {
+                detalleError = `Servidor R2 temporalmente bloqueado (HTTP ${res.status}).`;
+            } else if (res.status === 404) {
+                detalleError = 'Archivo no encontrado en el bucket R2 (HTTP 404).';
+            } else if (!res.ok) {
+                detalleError = `Error HTTP ${res.status} en Cloudflare R2.`;
+            }
+        } catch (e) {}
+
+        if (reqId === currentPlayRequestId) {
+            mostrarToast(`⚠️ ${detalleError}`);
+        }
+    }
+
+    async function reproducirHimno(h, autoPlay = true, keepPlaylistContext = false) {
+        const reqId = ++currentPlayRequestId;
+        isUserPaused = !autoPlay;
+
+        if (keepPlaylistContext && currentViewId !== 'all') {
+            activeQueuePlaylistId = currentViewId;
+        } else if (!keepPlaylistContext && currentViewId === 'all') {
+            activeQueuePlaylistId = null;
+        }
+
+        currentHimno = h;
+        currentIndex = himnosList.findIndex(item => item.num === h.num);
+        currentShortHymnUrl = '';
+
+        const isInstrumental = document.getElementById('instrumentalCheckbox').checked;
+        currentCandidateUrls = getHymnCandidateUrls(h, isInstrumental);
+        currentCandidateIndex = 0;
+
+        document.getElementById('playerCurrentTitle').innerText = `Himno: ${parseInt(h.num, 10)} ${h.title}`;
+        updateMediaSessionMetadata();
+        updateActiveListItem();
+
+        const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
+        if (savedLocalUrl) {
+            const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
+            if (reqId !== currentPlayRequestId) return;
+            if (blobUrl) {
+                aplicarFuenteDeReproduccion(blobUrl, savedLocalUrl, true, autoPlay, reqId);
+                return;
+            }
+        }
+
+        const primaryUrl = currentCandidateUrls[0];
+        aplicarFuenteDeReproduccion(primaryUrl, primaryUrl, false, autoPlay, reqId);
+    }
+
+    function togglePlay() {
+        if (!currentHimno) {
+            playCurrentMedia();
+            return;
+        }
+        const engine = getActiveEngine();
+        if (!engine || engine.paused) {
+            playCurrentMedia();
+        } else {
+            pauseCurrentMedia();
+        }
     }
 
     function stopHymn() {
+        currentPlayRequestId++;
+        isUserPaused = true;
         currentHimno = null;
         currentIndex = -1;
         currentShortHymnUrl = '';
+        currentRemoteStreamUrl = '';
+        currentActivePlayUrl = '';
+        currentCandidateUrls = [];
+        currentCandidateIndex = 0;
         
-        bgAudio.pause();
-        bgAudio.removeAttribute('src');
+        detenerMasterAudio();
 
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
-
-        v1.pause(); v1.removeAttribute('src'); v1.load(); v1.classList.remove('active');
-        v2.pause(); v2.removeAttribute('src'); v2.load(); v2.classList.remove('active');
-
-        v1.classList.add('active');
+        [v1, v2].forEach(v => {
+            if (!v) return;
+            v.onloadeddata = null;
+            v.oncanplay = null;
+            v.onplaying = null;
+            v.onerror = null;
+            v.onended = null;
+            v.pause();
+            v.classList.remove('active', 'underneath');
+            v.removeAttribute('src');
+            delete v.dataset.loadedUrl;
+            v.load();
+            v.muted = true;
+        });
+        if (v1) v1.classList.add('active');
         activeVidId = 'myMedia1';
+
+        const localBadge = document.getElementById('localPlaybackBadge');
+        if (localBadge) localBadge.style.display = 'none';
 
         document.getElementById('posterOverlay').style.display = 'flex';
         document.getElementById('playerCurrentTitle').innerText = 'Seleccione un himno para comenzar';
@@ -1337,51 +3572,66 @@
             navigator.mediaSession.playbackState = 'none';
         }
 
-        syncSecondary();
+        syncSecondary(true);
     }
 
-    function syncSecondary() {
-        const mainVideo = getActiveVideo();
+    function syncSecondary(forceSeek = false) {
+        const engine = getActiveEngine();
         const chk = document.getElementById('secondaryScreenCheckbox');
 
-        if (chk && chk.checked) {
+        if (chk && chk.checked && isProjectingExternal()) {
             syncChannel.postMessage({
                 action: 'sync',
-                videoUrl: mainVideo && mainVideo.src ? mainVideo.src : '',
-                isPaused: mainVideo ? mainVideo.paused : true,
-                currentTime: mainVideo ? mainVideo.currentTime : 0,
-                playbackRate: currentSpeed
+                videoUrl: currentActivePlayUrl || '',
+                fallbackUrl: currentRemoteStreamUrl || '',
+                isPaused: engine ? engine.paused : true,
+                currentTime: engine ? (engine.currentTime || 0) : 0,
+                playbackRate: currentSpeed,
+                forceSeek: forceSeek
             });
         }
     }
 
     function syncPlayerLoop() {
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        if (chk && chk.checked && projectionWindow && projectionWindow.closed) {
+            projectionWindow = null;
+            chk.checked = false;
+            actualizarModoProyeccion();
+        }
+
         if (!currentHimno) return;
-        const activeMedia = document.hidden ? bgAudio : getActiveVideo();
-        const cur = activeMedia.currentTime || 0;
-        const dur = activeMedia.duration || getActiveVideo().duration || 0;
+
+        const engine = getActiveEngine();
+        if (!engine) return;
+
+        const cur = engine.currentTime || 0;
+        const dur = engine.duration || 0;
 
         document.getElementById('timeCurrent').innerText = formatTime(cur);
         document.getElementById('timeTotal').innerText = formatTime(dur);
         if (dur > 0 && !isSeeking) {
             document.getElementById('progressSlider').value = (cur / dur) * 100;
         }
-        document.getElementById('playBtn').innerText = activeMedia.paused ? '▶ Repr.' : '⏸ Pausa';
+        document.getElementById('playBtn').innerText = engine.paused ? '▶ Repr.' : '⏸ Pausa';
 
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = activeMedia.paused ? 'paused' : 'playing';
+            navigator.mediaSession.playbackState = engine.paused ? 'paused' : 'playing';
             if (dur > 0 && ('setPositionState' in navigator.mediaSession)) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: dur,
-                        playbackRate: activeMedia.playbackRate || currentSpeed,
+                        playbackRate: engine.playbackRate || currentSpeed,
                         position: Math.min(cur, dur)
                     });
                 } catch(e) {}
             }
         }
 
-        syncSecondary();
+        syncTickCounter = (syncTickCounter + 1) % 4;
+        if (syncTickCounter === 0) {
+            syncSecondary(false);
+        }
     }
 
     function formatTime(sec) {
@@ -1391,36 +3641,59 @@
     }
 
     function userSeek(val) {
-        const activeMedia = document.hidden ? bgAudio : getActiveVideo();
-        if (activeMedia && activeMedia.duration) {
-            activeMedia.currentTime = (val / 100) * activeMedia.duration;
-            syncSecondary();
+        const engine = getActiveEngine();
+        if (engine && engine.duration > 0) {
+            engine.currentTime = (val / 100) * engine.duration;
+            syncSecondary(true);
         }
     }
 
     function setVolume(val) {
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        const vol = val / 100;
-        v1.volume = vol; v2.volume = vol; bgAudio.volume = vol;
-        v1.muted = (val == 0); v2.muted = (val == 0); bgAudio.muted = (val == 0);
-        document.getElementById('muteBtn').innerText = (val == 0 ? '🔇' : '🔊');
+        currentVolume = val / 100;
+        isAudioMuted = (val == 0);
+        masterAudio.volume = currentVolume;
+        masterAudio.muted = isAudioMuted;
+        if (!isUsingMasterAudio()) {
+            const v = getActiveVideo();
+            if (v) { v.volume = currentVolume; v.muted = isAudioMuted; }
+        }
+        document.getElementById('muteBtn').innerText = isAudioMuted ? '🔇' : '🔊';
     }
 
     function toggleMute() {
-        const v1 = document.getElementById('myMedia1');
-        const v2 = document.getElementById('myMedia2');
-        const isMuted = !v1.muted;
-        v1.muted = isMuted; v2.muted = isMuted; bgAudio.muted = isMuted;
-        document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+        isAudioMuted = !isAudioMuted;
+        masterAudio.muted = isAudioMuted;
+        if (!isUsingMasterAudio()) {
+            const v = getActiveVideo();
+            if (v) v.muted = isAudioMuted;
+        }
+        document.getElementById('muteBtn').innerText = isAudioMuted ? '🔇' : '🔊';
     }
 
     function prevHymn() {
+        if (activeQueuePlaylistId) {
+            const queue = obtenerHimnosDeLista(activeQueuePlaylistId);
+            if (queue.length > 0) {
+                const idx = currentHimno ? queue.findIndex(h => h.num === currentHimno.num) : 0;
+                const prevIdx = (idx <= 0) ? queue.length - 1 : idx - 1;
+                reproducirHimno(queue[prevIdx], true, true);
+                return;
+            }
+        }
         let newIdx = (currentIndex <= 0) ? himnosList.length - 1 : currentIndex - 1;
         reproducirHimno(himnosList[newIdx], true);
     }
 
     function nextHymn() {
+        if (activeQueuePlaylistId) {
+            const queue = obtenerHimnosDeLista(activeQueuePlaylistId);
+            if (queue.length > 0) {
+                const idx = currentHimno ? queue.findIndex(h => h.num === currentHimno.num) : -1;
+                const nextIdx = (idx < 0 || idx >= queue.length - 1) ? 0 : idx + 1;
+                reproducirHimno(queue[nextIdx], true, true);
+                return;
+            }
+        }
         let newIdx = (currentIndex < 0 || currentIndex >= himnosList.length - 1) ? 0 : currentIndex + 1;
         reproducirHimno(himnosList[newIdx], true);
     }
@@ -1428,16 +3701,24 @@
     function cambiarModoAudio() {
         const isInst = document.getElementById('instrumentalCheckbox').checked;
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
+        actualizarSelectorListasUI();
         renderList(getFilteredList());
         updateMediaSessionMetadata();
         currentShortHymnUrl = '';
+
+        if (currentHimno) {
+            const engine = getActiveEngine();
+            const wasPlaying = !isUserPaused && engine && !engine.paused;
+            reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
+        }
     }
 
     function getFilteredList() {
+        const baseList = (currentViewId === 'all') ? himnosList : obtenerHimnosDeLista(currentViewId);
         const rawQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-        if (!rawQuery) return himnosList;
+        if (!rawQuery) return baseList;
         const cleanQuery = removeAccents(rawQuery);
-        return himnosList.filter(h => 
+        return baseList.filter(h => 
             h.num.includes(cleanQuery) || 
             parseInt(h.num, 10).toString().includes(cleanQuery) ||
             removeAccents(h.title.toLowerCase()).includes(cleanQuery)
@@ -1445,7 +3726,12 @@
     }
 
     function filtrarHimnos() { renderList(getFilteredList()); }
-    function manejarTeclaBusqueda(e) { if (e.key === 'Enter') { const l = getFilteredList(); if (l.length > 0) reproducirHimno(l[0], true); } }
+    function manejarTeclaBusqueda(e) {
+        if (e.key === 'Enter') {
+            const l = getFilteredList();
+            if (l.length > 0) reproducirHimno(l[0], true, currentViewId !== 'all');
+        }
+    }
 
     function togglePantallaCompleta() {
         const wrapper = document.getElementById('hymn-player-wrapper');
@@ -1458,16 +3744,32 @@
         return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
     }
 
-    /* --- LÓGICA DE PROYECCIÓN RESTAURADA --- */
-    function actualizarModoProyeccion() {
+    /* --- ESCUCHA DE CONFIRMACIÓN DESDE VENTANA DE PROYECCIÓN --- */
+    syncChannel.onmessage = (e) => {
+        if (e.data && e.data.action === 'ready') {
+            syncSecondary(true);
+        }
+    };
+
+    /* --- LÓGICA DE PROYECCIÓN --- */
+    async function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
-        const targetDisplay = getSelectedDisplay();
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        const wasExternal = isProjectingExternal();
 
-        // Determina si es la pantalla principal o si solo hay un monitor conectado
+        if (chk.checked && !screenDetailsApiGranted && 'getScreenDetails' in window) {
+            await cargarPantallas(true);
+        }
+
+        const targetDisplay = getSelectedDisplay();
         const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
 
         if (!chk.checked) {
+            const curTime = masterAudio.currentTime || 0;
+            const wasPlaying = !masterAudio.paused && !isUserPaused;
+
+            wrapper.classList.remove('projecting-external');
             badge.innerText = 'Pantalla Única';
             badge.style.background = 'rgba(217, 155, 56, 0.2)';
             badge.style.color = '#fff';
@@ -1478,15 +3780,21 @@
             syncChannel.postMessage({ action: 'close' });
             projectionWindow = null;
 
-            // Al desmarcar la casilla en pantalla única, salir de pantalla completa
             if (document.fullscreenElement && isPrimaryScreen) {
                 document.exitFullscreen().catch(() => {});
+            }
+
+            if (wasExternal) {
+                restaurarVideoEnPantallaPrincipal(curTime, wasPlaying);
             }
             return;
         }
 
-        // SI ES LA PANTALLA PRINCIPAL / MONITOR ÚNICO -> ACTIVAR PANTALLA COMPLETA
         if (isPrimaryScreen) {
+            const curTime = masterAudio.currentTime || 0;
+            const wasPlaying = !masterAudio.paused && !isUserPaused;
+
+            wrapper.classList.remove('projecting-external');
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
             }
@@ -1497,15 +3805,27 @@
             badge.style.background = '#2ecc71';
             badge.style.color = '#000';
 
+            if (wasExternal) {
+                restaurarVideoEnPantallaPrincipal(curTime, wasPlaying);
+            }
+
             if (!document.fullscreenElement) {
-                const wrapper = document.getElementById('hymn-player-wrapper');
                 wrapper.requestFullscreen().catch(() => {});
             }
             return;
         }
 
-        // SI ES UN MONITOR SECUNDARIO / PROYECTOR EXTERNO -> ABRIR VENTANA EXTERNA
-        badge.innerText = 'Proyectando (Ventana Externa)';
+        const activeVid = getActiveVideo();
+        const curTime = !wasExternal && activeVid ? (activeVid.currentTime || 0) : (masterAudio.currentTime || 0);
+        const wasPlaying = !wasExternal && activeVid ? (!activeVid.paused && !isUserPaused) : (!masterAudio.paused && !isUserPaused);
+
+        wrapper.classList.add('projecting-external');
+        detenerVideoEnPantallaPrincipal(false);
+        if (!wasExternal && currentHimno && currentActivePlayUrl) {
+            iniciarMasterAudioDesdeTiempo(currentActivePlayUrl, curTime, wasPlaying, currentPlayRequestId);
+        }
+
+        badge.innerText = 'Proyectando (2ª Pantalla)';
         badge.style.background = '#2ecc71';
         badge.style.color = '#000';
 
@@ -1513,26 +3833,31 @@
             document.exitFullscreen().catch(() => {});
         }
 
-        if (!projectionWindow || projectionWindow.closed) {
-            const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
-            const top = targetDisplay ? (targetDisplay.top || 0) : 0;
-            const width = targetDisplay ? (targetDisplay.width || 1280) : 1280;
-            const height = targetDisplay ? (targetDisplay.height || 720) : 720;
+        const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
+        const top = targetDisplay ? (targetDisplay.top || 0) : 0;
+        const width = targetDisplay ? (targetDisplay.width || 1280) : 1280;
+        const height = targetDisplay ? (targetDisplay.height || 720) : 720;
 
+        if (!projectionWindow || projectionWindow.closed) {
             const windowFeatures = `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
             projectionWindow = window.open('', 'HimnarioProyeccion', windowFeatures);
 
             if (projectionWindow) {
+                const baseHref = window.location.href;
+                projectionWindow.document.open();
                 projectionWindow.document.write(`
                     <!DOCTYPE html>
                     <html lang="es">
                     <head>
                         <meta charset="UTF-8">
+                        <base href="${baseHref}">
                         <title>Proyección - Himnario Adventista</title>
                         <style>
                             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; }
-                            video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
+                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; cursor: pointer; }
+                            .proj-video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; background: transparent; opacity: 0.001; z-index: 1; pointer-events: none; }
+                            .proj-video.underneath { opacity: 1; z-index: 2; }
+                            .proj-video.active { opacity: 1; z-index: 3; transition: opacity 0.2s ease-in-out; }
                             .poster-overlay { 
                                 position: absolute; 
                                 inset: 0; 
@@ -1565,16 +3890,23 @@
                             }
                         </style>
                     </head>
-                    <body>
+                    <body ondblclick="if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(()=>{});}else{document.exitFullscreen().catch(()=>{});}" title="Doble clic para pantalla completa">
                         <div id="projPoster" class="poster-overlay">
                             <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                             <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                         </div>
-                        <video id="projVideo" autoplay crossorigin="anonymous"></video>
+                        <video id="projVideo1" class="proj-video active" muted playsinline preload="auto"></video>
+                        <video id="projVideo2" class="proj-video" muted playsinline preload="auto"></video>
                         <script>
                             const bc = new BroadcastChannel('hymn_projection_sync');
-                            const v = document.getElementById('projVideo');
                             const poster = document.getElementById('projPoster');
+                            let activeProjId = 'projVideo1';
+                            let currentLoadedUrl = '';
+                            let loadSeq = 0;
+
+                            function getActiveProj() { return document.getElementById(activeProjId); }
+                            function getInactiveProj() { return document.getElementById(activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
+                            function swapProj() { activeProjId = (activeProjId === 'projVideo1' ? 'projVideo2' : 'projVideo1'); }
                             
                             bc.onmessage = (e) => {
                                 const data = e.data;
@@ -1582,41 +3914,135 @@
                                     window.close();
                                     return;
                                 }
+                                if (data.action !== 'sync') return;
+
                                 if (!data.videoUrl) {
-                                    v.pause();
-                                    v.removeAttribute('src');
-                                    v.load();
+                                    loadSeq++;
+                                    currentLoadedUrl = '';
+                                    ['projVideo1', 'projVideo2'].forEach(id => {
+                                        const v = document.getElementById(id);
+                                        v.pause();
+                                        v.classList.remove('active', 'underneath');
+                                        v.removeAttribute('src');
+                                        v.load();
+                                    });
+                                    document.getElementById('projVideo1').classList.add('active');
+                                    activeProjId = 'projVideo1';
                                     poster.style.display = 'flex';
+                                    return;
+                                }
+
+                                if (currentLoadedUrl !== data.videoUrl) {
+                                    currentLoadedUrl = data.videoUrl;
+                                    const seq = ++loadSeq;
+                                    const curV = getActiveProj();
+                                    const nextV = getInactiveProj();
+                                    const fallbackUrl = data.fallbackUrl || '';
+
+                                    nextV.classList.remove('active', 'underneath');
+                                    nextV.src = data.videoUrl;
+                                    nextV.load();
+                                    if (!data.isPaused) nextV.play().catch(() => {});
+
+                                    nextV.onerror = () => {
+                                        if (seq !== loadSeq) return;
+                                        if (fallbackUrl && nextV.src !== fallbackUrl) {
+                                            nextV.src = fallbackUrl;
+                                            nextV.load();
+                                            if (!data.isPaused) nextV.play().catch(() => {});
+                                        }
+                                    };
+
+                                    let transitioned = false;
+                                    const performTransition = () => {
+                                        if (transitioned || seq !== loadSeq) return;
+                                        transitioned = true;
+                                        nextV.onloadeddata = null;
+                                        nextV.oncanplay = null;
+                                        nextV.onplaying = null;
+
+                                        if (data.currentTime > 0.3 && isFinite(nextV.duration)) {
+                                            nextV.currentTime = Math.min(data.currentTime, nextV.duration);
+                                        }
+                                        if (data.playbackRate) nextV.playbackRate = data.playbackRate;
+
+                                        poster.style.display = 'none';
+                                        if (curV && curV.src) {
+                                            curV.classList.add('underneath');
+                                            curV.classList.remove('active');
+                                        }
+                                        nextV.classList.add('active');
+
+                                        if (!data.isPaused) {
+                                            nextV.play().catch(() => {});
+                                        }
+
+                                        setTimeout(() => {
+                                            if (curV) {
+                                                curV.pause();
+                                                curV.classList.remove('underneath', 'active');
+                                                curV.removeAttribute('src');
+                                                curV.load();
+                                            }
+                                        }, 250);
+                                        swapProj();
+                                    };
+
+                                    nextV.onloadeddata = performTransition;
+                                    nextV.oncanplay = performTransition;
+                                    nextV.onplaying = performTransition;
+                                    if (nextV.readyState >= 2) {
+                                        performTransition();
+                                    }
                                 } else {
-                                    poster.style.display = 'none';
-                                    if (v.src !== data.videoUrl) {
-                                        v.src = data.videoUrl;
+                                    const v = getActiveProj();
+                                    if (v && v.readyState >= 1) {
+                                        const drift = Math.abs(v.currentTime - data.currentTime);
+                                        if (data.forceSeek ? drift > 0.25 : drift > 1.5) {
+                                            v.currentTime = data.currentTime;
+                                        }
                                     }
-                                    if (Math.abs(v.currentTime - data.currentTime) > 0.4) {
-                                        v.currentTime = data.currentTime;
-                                    }
-                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) {
+                                    if (v && data.playbackRate && v.playbackRate !== data.playbackRate) {
                                         v.playbackRate = data.playbackRate;
                                     }
-                                    if (data.isPaused && !v.paused) v.pause();
-                                    if (!data.isPaused && v.paused) v.play().catch(()=>{});
+                                    if (v && data.isPaused && !v.paused) v.pause();
+                                    if (v && !data.isPaused && v.paused && v.readyState >= 2) v.play().catch(()=>{});
                                 }
                             };
+
+                            bc.postMessage({ action: 'ready' });
                         <\/script>
                     </body>
                     </html>
                 `);
+                projectionWindow.document.close();
+            } else {
+                wrapper.classList.remove('projecting-external');
+                chk.checked = false;
+                badge.innerText = 'Pantalla Única';
+                badge.style.background = 'rgba(217, 155, 56, 0.2)';
+                badge.style.color = '#fff';
+                restaurarVideoEnPantallaPrincipal(curTime, wasPlaying);
+                mostrarToast('⚠️ Permite las ventanas emergentes para proyectar en segunda pantalla.');
+                return;
             }
+        } else {
+            try {
+                projectionWindow.moveTo(left, top);
+                projectionWindow.resizeTo(width, height);
+            } catch (e) {}
         }
 
-        syncSecondary();
+        syncSecondary(true);
     }
 
-    function alSeleccionarPantalla() {
+    async function alSeleccionarPantalla() {
+        if (!screenDetailsApiGranted && 'getScreenDetails' in window) {
+            await cargarPantallas(true);
+        }
         actualizarModoProyeccion();
     }
 
-    /* DETECTAR SALIDA DE PANTALLA COMPLETA CON TECLA ESC */
     document.addEventListener('fullscreenchange', () => {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const targetDisplay = getSelectedDisplay();
@@ -1628,33 +4054,52 @@
         }
     });
 
+    document.addEventListener('keydown', (e) => {
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (document.querySelector('.modal-overlay.active')) return;
+
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlay();
+        }
+    });
+
     let touchStartY = 0;
+    let canPullToRefresh = false;
     let isPullingToRefresh = false;
 
     window.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
             touchStartY = e.touches[0].pageY;
             isPullingToRefresh = false;
+            const anyModalOpen = Boolean(document.querySelector('.modal-overlay.active'));
+            const isSlider = e.target && e.target.tagName === 'INPUT';
+            const playlist = document.getElementById('playlist');
+            const startedAtTop = !playlist || !playlist.contains(e.target) || playlist.scrollTop === 0;
+            canPullToRefresh = !anyModalOpen && !isSlider && startedAtTop;
         }
     }, { passive: true });
 
     window.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 1) {
+        if (e.touches.length === 1 && canPullToRefresh) {
             const touchCurrentY = e.touches[0].pageY;
             const pullDistance = touchCurrentY - touchStartY;
             const playlist = document.getElementById('playlist');
             const isAtTop = !playlist || playlist.scrollTop === 0 || !playlist.contains(e.target);
 
-            if (pullDistance > 110 && isAtTop) {
+            if (pullDistance > 130 && isAtTop) {
                 isPullingToRefresh = true;
             }
         }
     }, { passive: true });
 
     window.addEventListener('touchend', () => {
-        if (isPullingToRefresh) {
+        if (isPullingToRefresh && canPullToRefresh) {
             window.location.reload();
         }
+        canPullToRefresh = false;
+        isPullingToRefresh = false;
     });
 
     window.addEventListener('beforeunload', () => {
@@ -1662,13 +4107,24 @@
         if (projectionWindow && !projectionWindow.closed) {
             projectionWindow.close();
         }
+        activeBlobUrls.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     });
 
-    window.onload = async () => {
+    let appInitialized = false;
+    function iniciarAplicacion() {
+        if (appInitialized) return;
+        appInitialized = true;
         setupMediaSession();
-        await cargarCalculoLocal();
+        cargarCalculoLocal();
         setInterval(syncPlayerLoop, 250);
-    };
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciarAplicacion);
+    } else {
+        iniciarAplicacion();
+    }
+    window.addEventListener('load', iniciarAplicacion);
 </script>
 </body>
 </html>
