@@ -857,7 +857,6 @@
             </select>
 
             <div style="display:flex; align-items:center; gap:6px; margin-left: auto;">
-                <button id="altAudioTrackBtn" class="btn-mini-pl" style="display:none;" onclick="alternarPistaAudioArchivo()" title="Este archivo contiene 2 pistas de audio internas. Toca para cambiar entre Pista 1 y Pista 2.">🎙️ Pista 1</button>
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                     <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
                     <span>Instrumental</span>
@@ -1132,7 +1131,6 @@
     const WINDOWS_DRIVE_URL = ""; 
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const ALT_TRACK_PREF_KEY = "himnario_adventista_alt_tracks_v3";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1158,64 +1156,12 @@
     let currentAudioOnlyBlobUrl = '';
     let currentCandidateUrls = [];
     let currentCandidateIndex = 0;
-    let currentActiveTrackIndex = 0;
-    let currentSoundTracksLabels = [];
     let useVideoAudioFallback = false;
 
     let currentShareType = 'main';
     let currentShortMainUrl = '';
     let currentShortHymnUrl = '';
     let currentShortPlaylistUrl = '';
-
-    /* =========================================================================
-       PREFERENCIA DE PISTA INTERNA POR ARCHIVO (SOLO SI EL MP4 TIENE 2+ PISTAS)
-       ========================================================================= */
-    let altTrackPrefs = {};
-    try {
-        altTrackPrefs = JSON.parse(localStorage.getItem(ALT_TRACK_PREF_KEY) || '{}') || {};
-    } catch (e) {
-        altTrackPrefs = {};
-    }
-
-    function guardarAltTrackPrefs() {
-        try {
-            localStorage.setItem(ALT_TRACK_PREF_KEY, JSON.stringify(altTrackPrefs));
-        } catch (e) {}
-    }
-
-    function getAltTrackKey(h, isInst) {
-        return `${h.num}_${isInst ? 'I' : 'C'}`;
-    }
-
-    function actualizarBotonPistaInterna(soundTracksCount, activeTrackIndex, trackLabels = []) {
-        const btn = document.getElementById('altAudioTrackBtn');
-        if (!btn) return;
-        currentActiveTrackIndex = activeTrackIndex || 0;
-        currentSoundTracksLabels = Array.isArray(trackLabels) ? trackLabels : [];
-        if (soundTracksCount >= 2) {
-            btn.style.display = 'inline-flex';
-            const isSecond = (activeTrackIndex === 1);
-            const rawLbl = currentSoundTracksLabels[activeTrackIndex] || '';
-            const shortLbl = rawLbl ? ` (${rawLbl.slice(0, 12)})` : '';
-            btn.textContent = (isSecond ? '🎙️ Pista 2' : '🎙️ Pista 1') + shortLbl;
-            btn.classList.toggle('active-toggle', isSecond);
-        } else {
-            btn.style.display = 'none';
-            btn.classList.remove('active-toggle');
-        }
-    }
-
-    function alternarPistaAudioArchivo() {
-        if (!currentHimno) return;
-        const isInst = document.getElementById('instrumentalCheckbox').checked;
-        const key = getAltTrackKey(currentHimno, isInst);
-        const nextTrack = (currentActiveTrackIndex === 1) ? '1' : '2';
-        altTrackPrefs[key] = nextTrack;
-        guardarAltTrackPrefs();
-        const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
-        reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
-        mostrarToast(`🎙️ Cambiado a Pista ${nextTrack} del archivo`);
-    }
 
     /* =========================================================================
        LECTOR DE ENCABEZADO MP4 Y EXTRACTOR DE PISTA VOCAL / CANTADA
@@ -1325,7 +1271,6 @@
 
         const cleanHdlr = (hdlrName && !/^soundhandler$/i.test(hdlrName)) ? hdlrName : '';
         const rawParts = [cleanHdlr, ...udtaNames].filter(Boolean);
-        const displayLabel = rawParts[0] || '';
         const searchableText = normalizeHeaderLabel([...rawParts, lang, extLang].join(' '));
 
         return {
@@ -1337,40 +1282,31 @@
             alternateGroup,
             lang,
             extLang,
-            displayLabel,
             searchableText
         };
     }
 
-    function seleccionarIndicePistaAudio(soundTracks, isInstrumental, trackChoice) {
-        if (!soundTracks || soundTracks.length === 0) return 0;
-        if (soundTracks.length === 1) return 0;
-
-        if (trackChoice === '2') return 1;
-        if (trackChoice === '1') return 0;
+    function seleccionarIndicePistaAudio(soundTracks, isInstrumental) {
+        if (!soundTracks || soundTracks.length <= 1) return 0;
 
         const reCantado = /\b(cantad[oa]s?|vocal(es)?|voz|voces|canto|letra|con\s*voz)\b/;
         const reInstrumental = /\b(instrumental(es)?|pista(s)?|karaoke|acompanamiento|sin\s*voz|musica\s*sola)\b/;
 
         if (!isInstrumental) {
-            // 1. Buscar pista cuyo encabezado indique explícitamente que es cantada
             const idxCantado = soundTracks.findIndex(t =>
                 reCantado.test(t.searchableText) && !reInstrumental.test(t.searchableText)
             );
             if (idxCantado !== -1) return idxCantado;
 
-            // 2. Si una pista dice "instrumental/pista" y otra no, elegir la que NO es instrumental
             const idxNotInst = soundTracks.findIndex(t => !reInstrumental.test(t.searchableText));
             const hasExplicitInst = soundTracks.some(t => reInstrumental.test(t.searchableText));
             if (hasExplicitInst && idxNotInst !== -1) return idxNotInst;
 
-            // 3. Revisar bandera Track_enabled en tkhd (como hace Windows Media Player)
             const enabledTracks = soundTracks
                 .map((t, idx) => ({ t, idx }))
                 .filter(item => item.t.isEnabled);
             if (enabledTracks.length === 1) return enabledTracks[0].idx;
 
-            // 4. Revisar idioma español en mdhd / elng
             const idxSpa = soundTracks.findIndex(t =>
                 t.lang === 'spa' || t.lang === 'esl' || /^es\b/.test(normalizeHeaderLabel(t.extLang))
             );
@@ -1378,7 +1314,6 @@
 
             return 0;
         } else {
-            // Modo Instrumental
             const idxInst = soundTracks.findIndex(t => reInstrumental.test(t.searchableText));
             if (idxInst !== -1) return idxInst;
 
@@ -1390,15 +1325,12 @@
         }
     }
 
-    function stripVideoTrackFromMp4(arrayBuffer, isInstrumental = false, trackChoice = 'auto') {
+    function stripVideoTrackFromMp4(arrayBuffer, isInstrumental = false) {
         try {
             const bytes = new Uint8Array(arrayBuffer);
             const view = new DataView(arrayBuffer);
             const len = bytes.length;
             let offset = 0;
-            let soundTracksCount = 0;
-            let activeTrackIndex = 0;
-            let trackLabels = [];
 
             while (offset + 8 <= len) {
                 let boxSize = view.getUint32(offset, false);
@@ -1438,9 +1370,7 @@
                         sub += subSize;
                     }
 
-                    soundTracksCount = soundTracks.length;
-                    trackLabels = soundTracks.map(t => t.displayLabel || '');
-                    activeTrackIndex = seleccionarIndicePistaAudio(soundTracks, isInstrumental, trackChoice);
+                    const activeTrackIndex = seleccionarIndicePistaAudio(soundTracks, isInstrumental);
 
                     for (let i = 0; i < soundTracks.length; i++) {
                         const st = soundTracks[i];
@@ -1470,39 +1400,28 @@
                 }
                 offset += boxSize;
             }
-            return {
-                blob: new Blob([bytes], { type: 'audio/mp4' }),
-                soundTracksCount,
-                activeTrackIndex,
-                trackLabels
-            };
+            return new Blob([bytes], { type: 'audio/mp4' });
         } catch (e) {
             return null;
         }
     }
 
-    async function obtenerUrlAudioPuro(sourceUrl, isInstrumental = false, trackChoice = 'auto') {
-        const cacheKey = `${sourceUrl}|inst:${isInstrumental ? 1 : 0}|choice:${trackChoice}`;
+    async function obtenerUrlAudioPuro(sourceUrl, isInstrumental = false) {
+        const cacheKey = `${sourceUrl}|inst:${isInstrumental ? 1 : 0}`;
         if (audioOnlyBlobCache.has(cacheKey)) {
             return audioOnlyBlobCache.get(cacheKey);
         }
         try {
             const resp = await fetch(sourceUrl);
-            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status, soundTracksCount: 0, activeTrackIndex: 0, trackLabels: [] };
+            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status };
             const buf = await resp.arrayBuffer();
-            const parsed = stripVideoTrackFromMp4(buf, isInstrumental, trackChoice);
-            if (!parsed || !parsed.blob) {
-                return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0, trackLabels: [] };
+            const parsedBlob = stripVideoTrackFromMp4(buf, isInstrumental);
+            if (!parsedBlob) {
+                return { url: sourceUrl, ok: true };
             }
 
-            const blobUrl = URL.createObjectURL(parsed.blob);
-            const resultObj = {
-                url: blobUrl,
-                ok: true,
-                soundTracksCount: parsed.soundTracksCount,
-                activeTrackIndex: parsed.activeTrackIndex,
-                trackLabels: parsed.trackLabels || []
-            };
+            const blobUrl = URL.createObjectURL(parsedBlob);
+            const resultObj = { url: blobUrl, ok: true };
             audioOnlyBlobCache.set(cacheKey, resultObj);
             audioOnlyOrder.push(cacheKey);
             if (audioOnlyOrder.length > 15) {
@@ -1513,7 +1432,7 @@
             }
             return resultObj;
         } catch (e) {
-            return { url: sourceUrl, ok: true, soundTracksCount: 1, activeTrackIndex: 0, trackLabels: [] };
+            return { url: sourceUrl, ok: true };
         }
     }
 
@@ -3256,8 +3175,7 @@
             }
         }
 
-        const trackChoice = altTrackPrefs[getAltTrackKey(h, isInstrumental)] || 'auto';
-        let audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental, trackChoice);
+        let audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
         if (reqId !== currentPlayRequestId) return;
 
         while (!audioRes.ok && !isLocal && currentCandidateIndex + 1 < currentCandidateUrls.length) {
@@ -3265,7 +3183,7 @@
             remoteVideoUrl = currentCandidateUrls[currentCandidateIndex];
             currentRemoteStreamUrl = remoteVideoUrl;
             playUrl = remoteVideoUrl;
-            audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental, trackChoice);
+            audioRes = await obtenerUrlAudioPuro(playUrl, isInstrumental);
             if (reqId !== currentPlayRequestId) return;
         }
 
@@ -3274,16 +3192,9 @@
             masterAudio.removeAttribute('src');
             masterAudio.load();
             isUserPaused = true;
-            actualizarBotonPistaInterna(0, 0, []);
             mostrarToast(`⚠️ El Himno ${parseInt(h.num, 10)} no existe en modo ${isInstrumental ? 'Instrumental' : 'Cantado'} en el servidor.`);
             return;
         }
-
-        actualizarBotonPistaInterna(
-            audioRes.soundTracksCount || 1,
-            audioRes.activeTrackIndex || 0,
-            audioRes.trackLabels || []
-        );
 
         currentActivePlayUrl = playUrl;
         currentAudioOnlyBlobUrl = audioRes.url;
@@ -3391,7 +3302,6 @@
         currentAudioOnlyBlobUrl = '';
         currentCandidateUrls = [];
         currentCandidateIndex = 0;
-        actualizarBotonPistaInterna(0, 0, []);
         
         masterAudio.pause();
         masterAudio.removeAttribute('src');
