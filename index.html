@@ -1009,7 +1009,7 @@
                     <div class="help-feature-icon">🎤</div>
                     <div class="help-feature-content">
                         <div class="help-feature-title">Modo Cantado e Instrumental</div>
-                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar al instante entre la versión con voces y la pista musical de acompañamiento.</div>
+                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar la lista entre la versión con voces y la pista musical de acompañamiento manteniendo en reproducción el himno actual.</div>
                     </div>
                 </div>
 
@@ -3402,8 +3402,7 @@
             return;
         }
 
-        const expectedPrimaryUrl = getHymnVideoUrl(currentHimno);
-        if (!currentCandidateUrls.includes(expectedPrimaryUrl) || !currentActivePlayUrl) {
+        if (!currentActivePlayUrl) {
             reproducirHimno(currentHimno, true, activeQueuePlaylistId !== null);
             return;
         }
@@ -4109,13 +4108,7 @@
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
         actualizarSelectorListasUI();
         renderList(getFilteredList());
-        updateMediaSessionMetadata();
         currentShortHymnUrl = '';
-
-        if (currentHimno) {
-            const wasPlaying = !isUserPaused && !getPrimaryAudioEngine().paused;
-            reproducirHimno(currentHimno, wasPlaying, activeQueuePlaylistId !== null);
-        }
     }
 
     function getFilteredList() {
