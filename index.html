@@ -23,11 +23,38 @@
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #0d0601; color: #f7dfb8; display: flex; justify-content: center; align-items: stretch; height: 100vh; width: 100vw; overflow: hidden; overscroll-behavior-y: contain; }
+        html, body { overscroll-behavior-y: auto; }
+        body { background-color: #0d0601; color: #f7dfb8; display: flex; justify-content: center; align-items: stretch; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; }
         
+        /* INDICADOR VISUAL DE ACTUALIZAR AL ARRASTRAR HACIA ABAJO */
+        #pullToRefreshIndicator {
+            position: fixed;
+            top: -54px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #7a420f;
+            color: #fcecd2;
+            border: 1px solid rgba(242, 203, 148, 0.45);
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 3000;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.75);
+            pointer-events: none;
+            transition: top 0.15s ease-out, background-color 0.2s;
+            white-space: nowrap;
+        }
+        #pullToRefreshIndicator.ready {
+            background: #266b3a;
+            border-color: #5cd681;
+            color: #ffffff;
+        }
+
         #hymn-player-wrapper { 
             width: 100%; 
             height: 100vh; 
+            height: 100dvh;
             max-width: 950px; 
             margin: 0 auto; 
             background: linear-gradient(180deg, #59350f 0%, #2f1906 35%, #180c02 100%); 
@@ -175,14 +202,52 @@
 
         #playlist::-webkit-scrollbar { width: 6px; }
         #playlist::-webkit-scrollbar-thumb { background: #7a420f; border-radius: 3px; }
-        .playlist-item { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; height: 36px; box-sizing: border-box; border-bottom: 1px solid rgba(217, 155, 56, 0.08); font-size: clamp(0.78rem, 1.8vw, 0.88rem); cursor: pointer; transition: background 0.15s; color: #ebd1a7; }
+        .playlist-item { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 8px; height: 42px; box-sizing: border-box; border-bottom: 1px solid rgba(217, 155, 56, 0.08); font-size: clamp(0.8rem, 1.8vw, 0.9rem); cursor: pointer; transition: background 0.15s; color: #ebd1a7; }
         .playlist-item:hover { background: rgba(217, 155, 56, 0.15); }
         .playlist-item.active { background: rgba(158, 86, 20, 0.65); font-weight: 600; color: #ffffff; }
-        .play-bullet { width: 16px; height: 16px; background-color: #7a420f; border: 1px solid rgba(242, 203, 148, 0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
-        .play-bullet::after { content: ''; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid #ffffff; margin-left: 1px; }
+        
+        /* BOTÓN DE PLAY GRANDE EN CADA HIMNO (1 TOQUE/CLIC REPRODUCE) */
+        .play-bullet { 
+            width: 28px; 
+            height: 28px; 
+            background-color: #8c4b11; 
+            border: 1px solid rgba(242, 203, 148, 0.45); 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            flex-shrink: 0; 
+            cursor: pointer; 
+            touch-action: manipulation;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+            transition: transform 0.12s, background-color 0.15s, border-color 0.15s;
+        }
+        .play-bullet:hover { 
+            background-color: #b86214; 
+            border-color: #fcecd2; 
+            transform: scale(1.07); 
+        }
+        .play-bullet:active { 
+            transform: scale(0.95); 
+            background-color: #d9822b; 
+        }
+        .playlist-item.active .play-bullet {
+            background-color: #266b3a;
+            border-color: #7dff9e;
+        }
+        .play-bullet::after { 
+            content: ''; 
+            width: 0; 
+            height: 0; 
+            border-top: 6px solid transparent; 
+            border-bottom: 6px solid transparent; 
+            border-left: 9px solid #ffffff; 
+            margin-left: 2px; 
+        }
+
         .hymn-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .hymn-item-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-        .btn-item-icon { background: rgba(59, 29, 5, 0.7); border: 1px solid rgba(217, 155, 56, 0.2); color: #d1ba98; border-radius: 4px; width: 24px; height: 24px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
+        .btn-item-icon { background: rgba(59, 29, 5, 0.7); border: 1px solid rgba(217, 155, 56, 0.2); color: #d1ba98; border-radius: 4px; width: 25px; height: 25px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
         .btn-item-icon:hover { background: #8c4b11; color: #fff; border-color: rgba(242, 203, 148, 0.5); }
         .btn-item-icon.fav-active { color: #ffd24c; border-color: rgba(255, 210, 76, 0.45); background: rgba(122, 66, 15, 0.85); }
         .btn-item-icon.saved-local { color: #7dff9e; border-color: rgba(76, 217, 114, 0.45); background: rgba(25, 87, 45, 0.85); font-weight: bold; }
@@ -647,8 +712,8 @@
                 padding: 2px 4px;
             }
             .btn-item-icon {
-                width: 22px;
-                height: 22px;
+                width: 23px;
+                height: 23px;
                 font-size: 0.72rem;
             }
             .hymn-item-actions {
@@ -661,6 +726,7 @@
             #hymn-player-wrapper {
                 padding: 4px 6px;
                 height: 100vh;
+                height: 100dvh;
                 overflow: hidden;
             }
 
@@ -786,13 +852,20 @@
             }
 
             .playlist-item {
-                height: 25px;
+                height: 30px;
                 font-size: 0.68rem;
                 padding: 0 5px;
+                gap: 6px;
             }
 
-            .play-bullet { width: 12px; height: 12px; }
-            .btn-item-icon { width: 18px; height: 18px; font-size: 0.65rem; }
+            .play-bullet { width: 22px; height: 22px; }
+            .play-bullet::after {
+                border-top: 4.5px solid transparent;
+                border-bottom: 4.5px solid transparent;
+                border-left: 7px solid #ffffff;
+                margin-left: 1.5px;
+            }
+            .btn-item-icon { width: 19px; height: 19px; font-size: 0.65rem; }
 
             .poster-logo {
                 max-width: min(50px, 20cqw);
@@ -808,6 +881,8 @@
 </head>
 <body>
 
+<div id="pullToRefreshIndicator">↓ Desliza para actualizar</div>
+
 <!-- AUDIO MAESTRO (CON PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
 <audio id="masterAudio" preload="auto" playsinline></audio>
 
@@ -820,8 +895,8 @@
                     <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
                     <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
                 </div>
-                <video id="myMedia1" class="video-element active" muted preload="auto" crossorigin="anonymous" playsinline></video>
-                <video id="myMedia2" class="video-element" muted preload="auto" crossorigin="anonymous" playsinline></video>
+                <video id="myMedia1" class="video-element active" muted preload="auto" crossorigin="anonymous" playsinline disableRemotePlayback></video>
+                <video id="myMedia2" class="video-element" muted preload="auto" crossorigin="anonymous" playsinline disableRemotePlayback></video>
             </div>
         </div>
 
@@ -925,7 +1000,7 @@
                     <div class="help-feature-icon">📖</div>
                     <div class="help-feature-content">
                         <div class="help-feature-title">Colección Completa de 613 Himnos</div>
-                        <div class="help-feature-desc">Accede a los 613 himnos con letra sincronizada en video. Haz doble clic (o toca el botón circular de reproducción) para iniciar cualquier himno.</div>
+                        <div class="help-feature-desc">Accede a los 613 himnos con letra sincronizada en video. Haz un toque/clic en el botón circular de reproducción para iniciar al instante, o haz clic en el título para seleccionarlo y doble clic para reproducirlo.</div>
                     </div>
                 </div>
 
@@ -1243,11 +1318,110 @@
     let currentCandidateUrls = [];
     let currentCandidateIndex = 0;
     let useVideoAudioFallback = false;
+    let videoSyncCooldownUntil = 0;
+    let visibilityResumeTimer = null;
 
     let currentShareType = 'main';
     let currentShortMainUrl = '';
     let currentShortHymnUrl = '';
     let currentShortPlaylistUrl = '';
+
+    /* =========================================================================
+       ACTUALIZAR PÁGINA AL ARRASTRAR HACIA ABAJO (PULL-TO-REFRESH EN MÓVIL)
+       ========================================================================= */
+    (function setupPullToRefresh() {
+        const indicator = document.getElementById('pullToRefreshIndicator');
+        const playlistEl = document.getElementById('playlist');
+        let startY = 0;
+        let isPulling = false;
+        let canPull = false;
+        const THRESHOLD = 95;
+
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length !== 1) return;
+            if (document.querySelector('.modal-overlay.active')) {
+                canPull = false;
+                return;
+            }
+            const tag = e.target && e.target.tagName;
+            if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+                canPull = false;
+                return;
+            }
+
+            const insidePlaylist = playlistEl && playlistEl.contains(e.target);
+            if (insidePlaylist && playlistEl.scrollTop > 0) {
+                canPull = false;
+                return;
+            }
+
+            startY = e.touches[0].clientY;
+            canPull = true;
+            isPulling = false;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!canPull || e.touches.length !== 1) return;
+            const currentY = e.touches[0].clientY;
+            const deltaY = currentY - startY;
+
+            if (deltaY <= 0) {
+                if (isPulling) {
+                    isPulling = false;
+                    indicator.style.top = '-54px';
+                    indicator.classList.remove('ready');
+                }
+                return;
+            }
+
+            if (playlistEl && playlistEl.scrollTop > 0) {
+                canPull = false;
+                indicator.style.top = '-54px';
+                return;
+            }
+
+            if (deltaY > 14) {
+                isPulling = true;
+                const progress = Math.min(deltaY, THRESHOLD + 35);
+                const topPos = Math.min(22, -46 + progress * 0.65);
+                indicator.style.top = `${topPos}px`;
+
+                if (deltaY >= THRESHOLD) {
+                    indicator.textContent = '↻ Suelta para actualizar';
+                    indicator.classList.add('ready');
+                } else {
+                    indicator.textContent = '↓ Desliza para actualizar';
+                    indicator.classList.remove('ready');
+                }
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            if (!canPull) return;
+            const endY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : startY;
+            const deltaY = endY - startY;
+            canPull = false;
+
+            if (isPulling && deltaY >= THRESHOLD) {
+                indicator.style.top = '18px';
+                indicator.textContent = '↻ Actualizando...';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 120);
+            } else {
+                indicator.style.top = '-54px';
+                indicator.classList.remove('ready');
+            }
+            isPulling = false;
+        }, { passive: true });
+
+        document.addEventListener('touchcancel', () => {
+            canPull = false;
+            isPulling = false;
+            indicator.style.top = '-54px';
+            indicator.classList.remove('ready');
+        }, { passive: true });
+    })();
 
     /* =========================================================================
        LECTOR DE ENCABEZADO MP4 Y EXTRACTOR DE PISTA VOCAL / CANTADA
@@ -1544,6 +1718,7 @@
                 if (!isUserPaused) masterAudio.play().catch(() => {});
                 const activeVid = getActiveVideo();
                 if (activeVid && !document.hidden) {
+                    configurarVideoSilencioso(activeVid);
                     activeVid.dataset.loadedUrl = altUrl;
                     activeVid.src = altUrl;
                     activeVid.load();
@@ -1559,6 +1734,14 @@
 
     function getPrimaryAudioEngine() {
         return useVideoAudioFallback ? getActiveVideo() : masterAudio;
+    }
+
+    function configurarVideoSilencioso(vid) {
+        if (!vid) return;
+        vid.muted = true;
+        vid.defaultMuted = true;
+        vid.volume = 0;
+        vid.disableRemotePlayback = true;
     }
 
     /* =========================================================================
@@ -1697,7 +1880,6 @@
             }
         }
 
-        // Rutas numéricas estándar (con y sin carpeta Himnos/)
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
@@ -1705,7 +1887,6 @@
             candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
         }
 
-        // Preparar variantes de título forzando ñ -> %C3%B1 y cubriendo ausencia de tildes/signos
         const baseTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
         const titleWithEnie = normalizarEnieTitulo(baseTitle);
         const hasEnie = tieneEnie(baseTitle);
@@ -1739,7 +1920,6 @@
             upperExceptEnie
         ].filter(Boolean))];
 
-        // Separadores priorizando "{num} {título}" y "{num} - {título}"
         const primarySeparators = [
             (t) => `${numInt} ${t}.mp4`,
             (t) => `${h.num} ${t}.mp4`,
@@ -1752,7 +1932,6 @@
             (t) => `${t}.mp4`
         ];
 
-        // Prefijos de carpeta en R2: tanto /{carpeta}/ como /Himnos/{carpeta}/
         const folderPrefixes = [
             `${CLOUDFLARE_R2_URL}/${carpeta}`,
             `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}`
@@ -1767,11 +1946,9 @@
                     candidates.push(`${baseFolder}/${encodedC3B1}`);
 
                     if (hasEnie && /%C3%B1/i.test(encodedC3B1)) {
-                        // Si el objeto en R2 literalmente contiene "%C3%B1" en su clave
                         const literalC3B1 = encodedC3B1.replace(/%C3%B1/gi, '%25C3%25B1');
                         candidates.push(`${baseFolder}/${literalC3B1}`);
 
-                        // Si el objeto en R2 tiene tanto %20 como %C3%B1 literales
                         const literalAll = literalC3B1.replace(/%20/g, '%2520');
                         candidates.push(`${baseFolder}/${literalAll}`);
                     }
@@ -1779,7 +1956,6 @@
             });
         });
 
-        // Variantes adicionales de número, mayúsculas, NFD, Latin-1 y sin tilde
         folderPrefixes.forEach(baseFolder => {
             candidates.push(`${baseFolder}/${h.num}.MP4`);
             if (String(numInt) !== h.num) {
@@ -1804,7 +1980,6 @@
                 });
             });
 
-            // Respaldo Mojibake (Ã± -> %C3%83%C2%B1) y Latin-1 (%F1)
             const baseEncoded = encodeURIComponent(`${numInt} ${noVowelAccentsAndNoPunct}.mp4`).replace(/%C3%91/gi, '%C3%B1');
             folderPrefixes.forEach(baseFolder => {
                 candidates.push(`${baseFolder}/${baseEncoded.replace(/%C3%B1/gi, '%C3%83%C2%B1')}`);
@@ -1812,7 +1987,6 @@
             });
         }
 
-        // Otras extensiones posibles de video/audio en R2
         ['.m4v', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
             folderPrefixes.forEach(baseFolder => {
                 candidates.push(`${baseFolder}/${h.num}${ext}`);
@@ -1822,7 +1996,6 @@
             });
         });
 
-        // Carpeta en minúsculas
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${numInt}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpetaLower}/${h.num}.mp4`);
@@ -1844,7 +2017,6 @@
             if (e && e.name === 'AbortError') throw e;
         }
 
-        // Respaldo con GET simple abortando apenas llegan los encabezados (evita bloqueo CORS con Range)
         const ctrl = new AbortController();
         const onParentAbort = () => ctrl.abort();
         if (signal) {
@@ -1902,18 +2074,15 @@
         const numInt = parseInt(h.num, 10);
         const candidates = getHymnCandidateUrls(h, isInst);
 
-        // Si ya está guardado en IndexedDB con alguna de las URLs candidatas, devolverla al instante
         for (const cand of candidates) {
             if (savedUrlsSet.has(cand)) return cand;
         }
 
-        // Probar primero el candidato principal
         const primaryUrl = candidates[0];
         if (await urlExisteEnServidor(primaryUrl, signal)) {
             return primaryUrl;
         }
 
-        // Buscar en paralelo entre todas las variantes posibles (Himnos/, %C3%B1, sin tilde, etc.)
         const remaining = candidates.slice(1);
         const BATCH = 14;
         for (let i = 0; i < remaining.length; i += BATCH) {
@@ -1930,7 +2099,6 @@
             }
         }
 
-        // Último intento: consultar listado XML de R2 si el bucket lo permite
         const xmlFound = await buscarPorPrefijoXmlR2(carpeta, h.num, numInt, signal);
         if (xmlFound) {
             resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = xmlFound;
@@ -3162,31 +3330,65 @@
         stopHymn();
     }
 
+    /* =========================================================================
+       SINCRONIZACIÓN SUAVE AL VOLVER A LA PANTALLA EN MÓVIL (SIN CORTE DE AUDIO)
+       ========================================================================= */
+    function reanudarVideoVisualSinCorte(mainVideo) {
+        if (!mainVideo || document.hidden || !currentHimno || !currentActivePlayUrl) return;
+        configurarVideoSilencioso(mainVideo);
+        mainVideo.playbackRate = currentSpeed;
+
+        if (masterAudio.paused) return;
+
+        const drift = Math.abs(mainVideo.currentTime - masterAudio.currentTime);
+        if (drift > 0.35 && mainVideo.readyState >= 1) {
+            const onSeeked = () => {
+                if (!document.hidden && !masterAudio.paused) {
+                    mainVideo.play().catch(() => {});
+                }
+            };
+            mainVideo.addEventListener('seeked', onSeeked, { once: true });
+            try {
+                mainVideo.currentTime = masterAudio.currentTime;
+            } catch (e) {
+                mainVideo.removeEventListener('seeked', onSeeked);
+                mainVideo.play().catch(() => {});
+            }
+        } else if (mainVideo.paused) {
+            mainVideo.play().catch(() => {});
+        }
+    }
+
     document.addEventListener('visibilitychange', () => {
+        if (visibilityResumeTimer) {
+            clearTimeout(visibilityResumeTimer);
+            visibilityResumeTimer = null;
+        }
+
         if (!document.hidden && currentHimno && currentActivePlayUrl) {
             const mainVideo = getActiveVideo();
             if (!mainVideo) return;
             document.getElementById('posterOverlay').style.display = 'none';
+            configurarVideoSilencioso(mainVideo);
 
-            if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
-                mainVideo.muted = !useVideoAudioFallback;
-                mainVideo.dataset.loadedUrl = currentActivePlayUrl;
-                mainVideo.src = currentActivePlayUrl;
-                mainVideo.load();
-                mainVideo.oncanplay = () => {
-                    mainVideo.currentTime = masterAudio.currentTime || 0;
-                    mainVideo.playbackRate = currentSpeed;
-                    if (!masterAudio.paused) mainVideo.play().catch(() => {});
-                };
-            } else {
-                if (Math.abs(mainVideo.currentTime - masterAudio.currentTime) > 0.25) {
-                    mainVideo.currentTime = masterAudio.currentTime;
+            // Evitar que syncPlayerLoop compita con la reactivación del decodificador
+            videoSyncCooldownUntil = Date.now() + 900;
+
+            visibilityResumeTimer = setTimeout(() => {
+                visibilityResumeTimer = null;
+                if (document.hidden || !currentHimno || !currentActivePlayUrl) return;
+
+                if (mainVideo.dataset.loadedUrl !== currentActivePlayUrl) {
+                    mainVideo.dataset.loadedUrl = currentActivePlayUrl;
+                    mainVideo.src = currentActivePlayUrl;
+                    mainVideo.load();
+                    mainVideo.onloadedmetadata = () => {
+                        reanudarVideoVisualSinCorte(mainVideo);
+                    };
+                } else {
+                    reanudarVideoVisualSinCorte(mainVideo);
                 }
-                mainVideo.playbackRate = currentSpeed;
-                if (!masterAudio.paused) {
-                    mainVideo.play().catch(() => {});
-                }
-            }
+            }, 350);
         }
     });
 
@@ -3212,6 +3414,7 @@
         engine.play().catch(() => {});
         isUserPaused = false;
         if (mainVideo && mainVideo !== engine && mainVideo.src && !document.hidden) {
+            configurarVideoSilencioso(mainVideo);
             if (Math.abs(mainVideo.currentTime - engine.currentTime) > 0.25) {
                 mainVideo.currentTime = engine.currentTime;
             }
@@ -3438,11 +3641,21 @@
             li.dataset.num = h.num;
             li.onclick = () => handleHymnClick(h);
 
-            const playBullet = document.createElement('div');
+            const playBullet = document.createElement('button');
+            playBullet.type = 'button';
             playBullet.className = 'play-bullet';
+            playBullet.title = `Reproducir Himno ${parseInt(h.num, 10)}`;
+            playBullet.setAttribute('aria-label', `Reproducir Himno ${parseInt(h.num, 10)}`);
             playBullet.onclick = (e) => {
                 e.stopPropagation();
+                if (clickTimer !== null) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                }
                 reproducirHimno(h, true, isPlaylistView);
+            };
+            playBullet.ondblclick = (e) => {
+                e.stopPropagation();
             };
 
             const textDiv = document.createElement('div');
@@ -3579,7 +3792,6 @@
         let playUrl = null;
         let isLocal = false;
 
-        // 1. Verificar si alguna de las rutas candidatas ya está en almacenamiento local
         const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInstrumental);
         if (savedLocalUrl) {
             const blobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
@@ -3591,7 +3803,6 @@
             }
         }
 
-        // 2. Si no está en local, resolver la URL exacta válida en R2
         if (!playUrl) {
             const resolvedRemoteUrl = await resolverUrlHimnoValida(h, isInstrumental);
             if (reqId !== currentPlayRequestId) return;
@@ -3659,8 +3870,8 @@
             return;
         }
 
-        // 3. Si la pantalla está visible, cargar pista visual silenciada en segundo buffer
-        nextVid.muted = true;
+        // 3. Si la pantalla está visible, cargar pista visual estrictamente silenciada en segundo buffer
+        configurarVideoSilencioso(nextVid);
         nextVid.dataset.loadedUrl = playUrl;
         nextVid.src = playUrl;
         nextVid.load();
@@ -3675,6 +3886,7 @@
             nextVid.classList.add('active');
             activeVid.classList.remove('active');
             
+            configurarVideoSilencioso(nextVid);
             nextVid.playbackRate = currentSpeed;
             if (Math.abs(nextVid.currentTime - masterAudio.currentTime) > 0.15) {
                 nextVid.currentTime = masterAudio.currentTime;
@@ -3737,8 +3949,8 @@
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
 
-        v1.pause(); v1.removeAttribute('src'); delete v1.dataset.loadedUrl; v1.load(); v1.classList.remove('active'); v1.muted = true;
-        v2.pause(); v2.removeAttribute('src'); delete v2.dataset.loadedUrl; v2.load(); v2.classList.remove('active'); v2.muted = true;
+        v1.pause(); v1.removeAttribute('src'); delete v1.dataset.loadedUrl; v1.load(); v1.classList.remove('active'); configurarVideoSilencioso(v1);
+        v2.pause(); v2.removeAttribute('src'); delete v2.dataset.loadedUrl; v2.load(); v2.classList.remove('active'); configurarVideoSilencioso(v2);
 
         v1.classList.add('active');
         activeVidId = 'myMedia1';
@@ -3794,12 +4006,15 @@
         }
         document.getElementById('playBtn').innerText = engine.paused ? '▶ Repr.' : '⏸ Pausa';
 
-        if (!document.hidden && !engine.paused && mainVideo && mainVideo !== engine && mainVideo.src) {
-            if (mainVideo.paused && mainVideo.readyState >= 2) {
-                mainVideo.play().catch(() => {});
-            }
-            if (Math.abs(mainVideo.currentTime - cur) > 0.4) {
-                mainVideo.currentTime = cur;
+        if (!document.hidden && Date.now() > videoSyncCooldownUntil && !engine.paused && mainVideo && mainVideo !== engine && mainVideo.src) {
+            configurarVideoSilencioso(mainVideo);
+            if (!mainVideo.seeking) {
+                if (mainVideo.paused && mainVideo.readyState >= 2) {
+                    mainVideo.play().catch(() => {});
+                }
+                if (Math.abs(mainVideo.currentTime - cur) > 0.85) {
+                    mainVideo.currentTime = cur;
+                }
             }
         }
 
@@ -4135,6 +4350,8 @@
     });
 
     window.onload = () => {
+        configurarVideoSilencioso(document.getElementById('myMedia1'));
+        configurarVideoSilencioso(document.getElementById('myMedia2'));
         setupMediaSession();
         cargarCalculoLocal();
         setInterval(syncPlayerLoop, 250);
