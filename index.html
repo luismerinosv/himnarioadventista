@@ -1202,7 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v3";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v4";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1602,8 +1602,23 @@
         return `${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`;
     }
 
+    function normalizarEnieTitulo(str) {
+        return String(str || '')
+            .replace(/N\u0303/g, 'ñ')
+            .replace(/n\u0303/g, 'ñ')
+            .normalize('NFC')
+            .replace(/Ñ/g, 'ñ');
+    }
+
     function forzarEnieMinusculaUrl(url) {
-        return String(url || '').replace(/%C3%91/gi, '%C3%B1');
+        return String(url || '')
+            .replace(/%C3%91/gi, '%C3%B1')
+            .replace(/N%CC%83/gi, '%C3%B1')
+            .replace(/n%CC%83/gi, '%C3%B1');
+    }
+
+    function tieneEnie(str) {
+        return /[ñÑ]|n\u0303|N\u0303/.test(String(str || ''));
     }
 
     function getHymnCandidateUrls(h, isInstrumental = null) {
@@ -1644,105 +1659,103 @@
             }
             if (rawEntry.archivo) {
                 const suffix = isInst ? '_pista.mp4' : '.mp4';
-                const arch1 = encodeURIComponent(rawEntry.archivo.normalize('NFC').replace(/Ñ/g, 'ñ') + suffix).replace(/%C3%91/gi, '%C3%B1');
-                const arch2 = encodeURIComponent(rawEntry.archivo.normalize('NFC').replace(/Ñ/g, 'ñ') + '.mp4').replace(/%C3%91/gi, '%C3%B1');
+                const arch1 = encodeURIComponent(normalizarEnieTitulo(rawEntry.archivo) + suffix).replace(/%C3%91/gi, '%C3%B1');
+                const arch2 = encodeURIComponent(normalizarEnieTitulo(rawEntry.archivo) + '.mp4').replace(/%C3%91/gi, '%C3%B1');
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch1}`);
                 candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${arch1}`);
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch2}`);
             }
         }
 
-        // Rutas numéricas estándar (001.mp4, 1.mp4, 001.MP4, 1.MP4, 0001.mp4)
+        // Rutas numéricas estándar primero
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
+
+        // Preparar variantes de título forzando ñ -> %C3%B1
+        const baseTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
+        const titleWithEnie = normalizarEnieTitulo(baseTitle);
+        const hasEnie = tieneEnie(baseTitle);
+
+        const lowerFull = titleWithEnie.toLowerCase();
+        const sentenceCase = lowerFull ? lowerFull.charAt(0).toUpperCase() + lowerFull.slice(1) : '';
+        const titleCase = lowerFull.replace(/(^|[\s¡¿("'-])([a-záéíóúüñ])/g, (_, sep, ch) => sep + ch.toUpperCase());
+        const upperExceptEnie = titleWithEnie.toUpperCase().replace(/Ñ/g, 'ñ');
+        const noAccentsKeepEnie = titleWithEnie
+            .normalize('NFD')
+            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
+            .normalize('NFC')
+            .replace(/Ñ/g, 'ñ');
+        const noPunctKeepEnie = titleWithEnie.replace(/[¡!¿?,.;()']/g, '').replace(/\s+/g, ' ').trim();
+
+        const primaryTitleVariants = [...new Set([
+            titleWithEnie,
+            sentenceCase,
+            titleCase,
+            lowerFull,
+            upperExceptEnie,
+            noAccentsKeepEnie,
+            noPunctKeepEnie
+        ].filter(Boolean))];
+
+        const primarySeparators = [
+            (t) => `${h.num} - ${t}.mp4`,
+            (t) => `${numInt} - ${t}.mp4`,
+            (t) => `${h.num}-${t}.mp4`,
+            (t) => `${numInt}-${t}.mp4`,
+            (t) => `${h.num} ${t}.mp4`,
+            (t) => `${numInt} ${t}.mp4`,
+            (t) => `${h.num}. ${t}.mp4`,
+            (t) => `${numInt}. ${t}.mp4`,
+            (t) => `${t}.mp4`
+        ];
+
+        // Generar con máxima prioridad tanto %C3%B1 (UTF-8) como %25C3%25B1 (literal "%C3%B1" en el nombre del archivo en R2)
+        primaryTitleVariants.forEach(t => {
+            primarySeparators.forEach(buildName => {
+                const fileName = buildName(t);
+                const encodedC3B1 = encodeURIComponent(fileName).replace(/%C3%91/gi, '%C3%B1');
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedC3B1}`);
+
+                if (hasEnie && /%C3%B1/i.test(encodedC3B1)) {
+                    // Si el objeto en R2 literalmente contiene "%C3%B1" en su clave
+                    const literalC3B1 = encodedC3B1.replace(/%C3%B1/gi, '%25C3%25B1');
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${literalC3B1}`);
+
+                    // Si el objeto en R2 tiene tanto %20 como %C3%B1 literales
+                    const literalAll = literalC3B1.replace(/%20/g, '%2520');
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${literalAll}`);
+                }
+            });
+        });
+
+        // Variantes adicionales de número, mayúsculas, NFD, Latin-1 y sin tilde
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
         }
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
-
-        // Variantes con espacio accidental antes de .mp4 (ej. "186 .mp4", "84 .mp4")
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
 
-        // Normalización de título: convertir toda Ñ (NFC o NFD) a ñ minúscula para que se codifique como %C3%B1
-        const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
-        const nfcTitle = rawTitle.normalize('NFC');
-        const lowerEnieTitle = nfcTitle.replace(/Ñ/g, 'ñ');
-        const lowerFullTitle = lowerEnieTitle.toLowerCase();
-        const sentenceCaseTitle = lowerFullTitle
-            ? lowerFullTitle.charAt(0).toUpperCase() + lowerFullTitle.slice(1)
-            : '';
-        const titleCaseTitle = lowerFullTitle.replace(/\b\w/g, c => c.toUpperCase());
-        const noAccentsKeepEnie = lowerEnieTitle
-            .normalize('NFD')
-            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
-            .normalize('NFC');
-        const nfdTitle = rawTitle.normalize('NFD');
-        const asciiTitle = removeAccents(rawTitle);
-        const strippedEnieTitle = rawTitle.replace(/[ñÑ]/g, '');
-        const underscoreEnieTitle = rawTitle.replace(/[ñÑ]/g, '_');
-        const strippedEnieAscii = removeAccents(strippedEnieTitle);
+        if (hasEnie) {
+            const nfdVariant = baseTitle.normalize('NFD');
+            const asciiVariant = removeAccents(baseTitle);
+            const strippedEnie = baseTitle.replace(/[ñÑ]/g, '');
+            const underscoreEnie = baseTitle.replace(/[ñÑ]/g, '_');
 
-        const titleVariants = [...new Set([
-            lowerEnieTitle,
-            nfcTitle,
-            sentenceCaseTitle,
-            titleCaseTitle,
-            lowerFullTitle,
-            noAccentsKeepEnie,
-            nfdTitle,
-            asciiTitle,
-            strippedEnieTitle,
-            underscoreEnieTitle,
-            strippedEnieAscii
-        ].filter(Boolean))];
-
-        titleVariants.forEach(t => {
-            const namePatterns = [
-                `${h.num} - ${t}.mp4`,
-                `${numInt} - ${t}.mp4`,
-                `${h.num}-${t}.mp4`,
-                `${numInt}-${t}.mp4`,
-                `${h.num} ${t}.mp4`,
-                `${numInt} ${t}.mp4`,
-                `${h.num}. ${t}.mp4`,
-                `${numInt}. ${t}.mp4`,
-                `${h.num}.${t}.mp4`,
-                `${numInt}.${t}.mp4`,
-                `${h.num}_${t.replace(/\s+/g, '_')}.mp4`,
-                `${numInt}_${t.replace(/\s+/g, '_')}.mp4`,
-                `Himno ${numInt} - ${t}.mp4`,
-                `Himno ${h.num} - ${t}.mp4`,
-                `Himno ${numInt} ${t}.mp4`,
-                `${t}.mp4`
-            ];
-            if (isInst) {
-                namePatterns.push(
-                    `${h.num} - ${t} (Instrumental).mp4`,
-                    `${numInt} - ${t} (Instrumental).mp4`,
-                    `${h.num} - ${t} - Pista.mp4`,
-                    `${numInt} - ${t} - Pista.mp4`,
-                    `${h.num}_pista.mp4`,
-                    `${numInt}_pista.mp4`
-                );
-            }
-            namePatterns.forEach(fileName => {
-                const encoded = encodeURIComponent(fileName);
-                const encodedLowerEnie = encoded.replace(/%C3%91/gi, '%C3%B1');
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedLowerEnie}`);
-                if (encoded !== encodedLowerEnie) {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encoded}`);
-                }
-                // Respaldo si el archivo en R2 tiene "%C3%B1" literal en su nombre de objeto
-                if (/%C3%B1/i.test(encodedLowerEnie)) {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedLowerEnie.replace(/%C3%B1/gi, '%25C3%25B1')}`);
-                }
+            [nfdVariant, asciiVariant, strippedEnie, underscoreEnie].filter(Boolean).forEach(t => {
+                [`${h.num} - ${t}.mp4`, `${numInt} - ${t}.mp4`, `${t}.mp4`].forEach(fn => {
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
+                });
             });
-        });
+
+            // Respaldo Mojibake (Ã± -> %C3%83%C2%B1) y Latin-1 (%F1)
+            const baseEncoded = encodeURIComponent(`${h.num} - ${titleWithEnie}.mp4`).replace(/%C3%91/gi, '%C3%B1');
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${baseEncoded.replace(/%C3%B1/gi, '%C3%83%C2%B1')}`);
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${baseEncoded.replace(/%C3%B1/gi, '%F1')}`);
+        }
 
         // Otras extensiones posibles de video/audio en R2
         ['.m4v', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
@@ -1774,17 +1787,26 @@
             if (e && e.name === 'AbortError') throw e;
         }
 
-        // Respaldo con GET parcial en caso de que CORS en R2 no permita HEAD
+        // Respaldo con GET simple abortando apenas llegan los encabezados (evita bloqueo CORS con Range)
+        const ctrl = new AbortController();
+        const onParentAbort = () => ctrl.abort();
+        if (signal) {
+            if (signal.aborted) return false;
+            signal.addEventListener('abort', onParentAbort, { once: true });
+        }
         try {
-            const rangeRes = await fetch(url, {
+            const getRes = await fetch(url, {
                 method: 'GET',
-                headers: { 'Range': 'bytes=0-1' },
-                signal
+                signal: ctrl.signal
             });
-            return rangeRes.ok || rangeRes.status === 206;
+            const ok = getRes.ok;
+            ctrl.abort();
+            return ok;
         } catch (e) {
-            if (e && e.name === 'AbortError') throw e;
+            if (signal && signal.aborted) throw e;
             return false;
+        } finally {
+            if (signal) signal.removeEventListener('abort', onParentAbort);
         }
     }
 
@@ -1829,9 +1851,9 @@
             return primaryUrl;
         }
 
-        // Buscar en paralelo entre todas las variantes posibles (%C3%B1, NFC, NFD, sin ñ, separadores, etc.)
+        // Buscar en paralelo entre todas las variantes posibles (%C3%B1, %25C3%25B1, etc.)
         const remaining = candidates.slice(1);
-        const BATCH = 10;
+        const BATCH = 12;
         for (let i = 0; i < remaining.length; i += BATCH) {
             if (signal && signal.aborted) return null;
             const slice = remaining.slice(i, i + BATCH);
@@ -2308,21 +2330,7 @@
                     etag: headRes.headers.get('etag') || ''
                 };
             }
-            const getRes = await fetch(validUrl, {
-                method: 'GET',
-                headers: { 'Range': 'bytes=0-1' }
-            });
-            if (getRes.ok || getRes.status === 206) {
-                const cr = getRes.headers.get('content-range');
-                const totalSize = cr ? cr.split('/')[1] : (getRes.headers.get('content-length') || '');
-                return {
-                    ok: true,
-                    url: validUrl,
-                    size: totalSize,
-                    etag: getRes.headers.get('etag') || ''
-                };
-            }
-            return { ok: false, status: getRes.status };
+            return { ok: true, url: validUrl, size: '', etag: '' };
         } catch (e) {
             return { ok: true, url: validUrl, size: '', etag: '' };
         }
@@ -3999,88 +4007,75 @@
                                     lastFallback = data.fallbackUrl || '';
                                     if (v.src !== data.videoUrl) {
                                         v.src = data.videoUrl;
-                                    }
-                                    const drift = Math.abs(v.currentTime - data.currentTime);
-                                    if (data.forceSeek ? drift > 0.15 : drift > 1.2) {
-                                        v.currentTime = data.currentTime;
+                                        v.load();
                                     }
                                     if (data.playbackRate && v.playbackRate !== data.playbackRate) {
                                         v.playbackRate = data.playbackRate;
                                     }
-                                    if (data.isPaused && !v.paused) v.pause();
-                                    if (!data.isPaused && v.paused) v.play().catch(()=>{});
+                                    if (data.forceSeek || Math.abs(v.currentTime - data.currentTime) > 0.35) {
+                                        v.currentTime = data.currentTime;
+                                    }
+                                    if (data.isPaused) {
+                                        v.pause();
+                                    } else if (v.paused) {
+                                        v.play().catch(()=>{});
+                                    }
                                 }
                             };
                         <\/script>
                     </body>
                     </html>
                 `);
+                projectionWindow.document.close();
+
+                setTimeout(() => {
+                    syncSecondary(true);
+                }, 400);
+            } else {
+                alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para proyectar.");
+                chk.checked = false;
+                badge.innerText = 'Pantalla Única';
+                badge.style.background = 'rgba(217, 155, 56, 0.2)';
+                badge.style.color = '#fff';
             }
         }
-
-        syncSecondary(true);
     }
 
     function alSeleccionarPantalla() {
-        actualizarModoProyeccion();
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        if (chk && chk.checked) {
+            if (projectionWindow && !projectionWindow.closed) {
+                projectionWindow.close();
+                projectionWindow = null;
+            }
+            actualizarModoProyeccion();
+        }
     }
 
     document.addEventListener('fullscreenchange', () => {
         const chk = document.getElementById('secondaryScreenCheckbox');
+        const badge = document.getElementById('projectionStatusBadge');
         const targetDisplay = getSelectedDisplay();
         const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
 
         if (!document.fullscreenElement && chk && chk.checked && isPrimaryScreen) {
             chk.checked = false;
-            actualizarModoProyeccion();
-        }
-    });
-
-    let touchStartY = 0;
-    let isPullingToRefresh = false;
-
-    window.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) {
-            touchStartY = e.touches[0].pageY;
-            isPullingToRefresh = false;
-        }
-    }, { passive: true });
-
-    window.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 1) {
-            const touchCurrentY = e.touches[0].pageY;
-            const pullDistance = touchCurrentY - touchStartY;
-            const playlist = document.getElementById('playlist');
-            const isAtTop = !playlist || playlist.scrollTop === 0 || !playlist.contains(e.target);
-
-            if (pullDistance > 110 && isAtTop) {
-                isPullingToRefresh = true;
-            }
-        }
-    }, { passive: true });
-
-    window.addEventListener('touchend', () => {
-        if (isPullingToRefresh) {
-            window.location.reload();
+            badge.innerText = 'Pantalla Única';
+            badge.style.background = 'rgba(217, 155, 56, 0.2)';
+            badge.style.color = '#fff';
         }
     });
 
     window.addEventListener('beforeunload', () => {
-        syncChannel.postMessage({ action: 'close' });
-        if (projectionWindow && !projectionWindow.closed) {
-            projectionWindow.close();
-        }
-        activeBlobUrls.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
-        audioOnlyBlobCache.forEach(entry => {
-            if (entry && entry.url) URL.revokeObjectURL(entry.url);
-        });
+        if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
     });
 
-    window.onload = async () => {
+    window.onload = () => {
         setupMediaSession();
-        await cargarCalculoLocal();
+        cargarCalculoLocal();
         setInterval(syncPlayerLoop, 250);
     };
 </script>
+
 </body>
 </html>
