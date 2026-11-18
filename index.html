@@ -415,6 +415,11 @@
             margin-left: auto;
         }
 
+        /* CONTENEDOR DE BÚSQUEDA Y OPCIONES (EN MÓVIL SE COMPONE COMO ELEMENTOS SEPARADOS) */
+        .search-options-row {
+            display: contents;
+        }
+
         /* BUSCADOR */
         .search-wrap {
             position: relative;
@@ -1181,17 +1186,22 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
 
-        /* --- ESCRITORIO / PC: CONTROLES MÁS AMPLIOS HORIZONTALMENTE Y REPRODUCTOR IGUAL --- */
+        /* --- ESCRITORIO / PC: CONTROLES MÁS AMPLIOS, BÚSQUEDA + OPCIONES EN UNA SOLA FILA Y REPRODUCTOR MÁS GRANDE --- */
         @media (min-width: 769px) and (min-height: 601px) {
             #hymn-player-wrapper {
                 width: 96%;
                 max-width: 1480px;
-                padding: 12px 26px;
+                padding: 10px 26px;
+            }
+
+            .video-container {
+                width: min(100%, calc(43vh * 16 / 9));
+                max-width: 780px;
             }
 
             #playerControls {
-                padding: 10px 16px;
-                gap: 8px;
+                padding: 9px 16px;
+                gap: 7px;
             }
 
             .controls-buttons {
@@ -1220,24 +1230,44 @@
                 width: 120px;
             }
 
-            .search-input {
-                padding: 8px 14px 8px 34px;
-                font-size: 0.9rem;
+            .search-options-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 100%;
+                flex-shrink: 0;
             }
 
-            .checkbox-container {
-                padding: 7px 14px;
-                font-size: 0.84rem;
+            .search-options-row .search-wrap {
+                flex: 1 1 220px;
+                min-width: 180px;
+                width: auto;
+            }
+
+            .search-input {
+                height: 36px;
+                padding: 7px 14px 7px 34px;
+                font-size: 0.88rem;
+            }
+
+            .search-options-row .checkbox-container {
+                flex: 0 1 auto;
+                flex-wrap: nowrap;
+                height: 36px;
+                padding: 0 14px;
+                gap: 14px;
+                font-size: 0.83rem;
             }
 
             .checkbox-right-group {
-                gap: 20px;
+                gap: 16px;
+                margin-left: 4px;
             }
 
             .select-pantalla {
-                max-width: 340px;
+                max-width: clamp(160px, 21vw, 310px);
                 padding: 4px 10px;
-                font-size: 0.82rem;
+                font-size: 0.81rem;
             }
 
             .playlist-select {
@@ -1764,6 +1794,7 @@
 
         #hymn-player-wrapper:fullscreen .controls-header,
         #hymn-player-wrapper:fullscreen .timeline-container,
+        #hymn-player-wrapper:fullscreen .search-options-row,
         #hymn-player-wrapper:fullscreen .search-wrap,
         #hymn-player-wrapper:fullscreen .checkbox-container,
         #hymn-player-wrapper:fullscreen .playlist-header,
@@ -1914,32 +1945,34 @@
             </div>
         </div>
 
-        <!-- BÚSQUEDA Y OPCIONES -->
-        <div class="search-wrap">
-            <svg class="ico search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="searchInput" class="search-input" placeholder="Buscar himno por número o título..." oninput="filtrarHimnos()" onkeydown="manejarTeclaBusqueda(event)">
-        </div>
+        <!-- BÚSQUEDA Y OPCIONES (UNA SOLA FILA EN PC) -->
+        <div class="search-options-row">
+            <div class="search-wrap">
+                <svg class="ico search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="searchInput" class="search-input" placeholder="Buscar himno por número o título..." oninput="filtrarHimnos()" onkeydown="manejarTeclaBusqueda(event)">
+            </div>
 
-        <div class="checkbox-container">
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                <input type="checkbox" id="secondaryScreenCheckbox" onchange="actualizarModoProyeccion()">
-                <span style="font-weight: 500; color: var(--text-primary);">Proyectar en:</span>
-            </label>
-
-            <select id="screenSelect" class="select-pantalla" onchange="alSeleccionarPantalla()">
-                <option value="-1">Cargando pantallas...</option>
-            </select>
-
-            <div class="checkbox-right-group">
-                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;" title="Avanzar automáticamente a lo largo de todo el himnario (desactivado por defecto para uso en cultos)">
-                    <input type="checkbox" id="autoPlayAllCheckbox" autocomplete="off" onchange="cambiarModoContinuo()">
-                    <span>Continuo</span>
+            <div class="checkbox-container">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="secondaryScreenCheckbox" onchange="actualizarModoProyeccion()">
+                    <span style="font-weight: 500; color: var(--text-primary);">Proyectar en:</span>
                 </label>
 
-                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
-                    <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
-                    <span>Instrumental</span>
-                </label>
+                <select id="screenSelect" class="select-pantalla" onchange="alSeleccionarPantalla()">
+                    <option value="-1">Cargando pantallas...</option>
+                </select>
+
+                <div class="checkbox-right-group">
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;" title="Avanzar automáticamente a lo largo de todo el himnario (desactivado por defecto para uso en cultos)">
+                        <input type="checkbox" id="autoPlayAllCheckbox" autocomplete="off" onchange="cambiarModoContinuo()">
+                        <span>Continuo</span>
+                    </label>
+
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
+                        <span>Instrumental</span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -1997,7 +2030,7 @@
                     </div>
                     <div class="help-feature-content">
                         <div class="help-feature-title">Modo Cantado, Instrumental y Reproducción Continua</div>
-                        <div class="help-feature-desc">Activa <strong>Instrumental</strong> para alternar entre voces y pista musical. Por defecto cada himno se detiene al concluir; marca <strong>Continuo</strong> si deseas reproducir todo el himnario seguido sin pausas.</div>
+                        <div class="help-feature-desc">Activa <strong>Instrumental</strong> para alternar entre voces y pista musical. Por defecto cada himno se detiene al concluir (modo culto); marca <strong>Continuo</strong> si deseas reproducir todo el himnario seguido sin pausas.</div>
                     </div>
                 </div>
 
@@ -4420,6 +4453,31 @@
         }
     }
 
+    function salirPantallaCompletaSiActiva() {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        const badge = document.getElementById('projectionStatusBadge');
+        const targetDisplay = getSelectedDisplay();
+        const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
+
+        if (chk && chk.checked && isPrimaryScreen) {
+            chk.checked = false;
+            if (badge) {
+                badge.innerText = 'Pantalla única';
+                badge.style.background = 'var(--bg-elevated)';
+                badge.style.color = 'var(--text-secondary)';
+                badge.style.borderColor = 'var(--border-subtle)';
+            }
+        }
+    }
+
     function handleMediaEnded() {
         if (activeQueuePlaylistId) {
             const queue = obtenerHimnosDeLista(activeQueuePlaylistId);
@@ -4432,8 +4490,11 @@
                     reproducirHimno(queue[0], true, true);
                     return;
                 } else {
+                    const endedListName = obtenerNombreLista(activeQueuePlaylistId);
+                    activeQueuePlaylistId = null;
                     stopHymn();
-                    mostrarToast(`Fin de la lista: ${obtenerNombreLista(activeQueuePlaylistId)}`);
+                    salirPantallaCompletaSiActiva();
+                    mostrarToast(`Fin de la lista: ${endedListName}`);
                     return;
                 }
             }
@@ -4449,12 +4510,14 @@
                 return;
             } else if (idx === himnosList.length - 1) {
                 stopHymn();
+                salirPantallaCompletaSiActiva();
                 mostrarToast('Fin del himnario (Himno 613)');
                 return;
             }
         }
 
         stopHymn();
+        salirPantallaCompletaSiActiva();
     }
 
     /* =========================================================================
@@ -5260,7 +5323,7 @@
         }
         mostrarToast(isContinuous
             ? 'Reproducción continua activada (avanzará todo el himnario)'
-            : 'Modo único: se detendrá al finalizar cada himno');
+            : 'Modo culto: se detendrá al finalizar cada himno');
     }
 
     function cambiarModoAudio() {
@@ -5310,18 +5373,82 @@
 
     function getSelectedDisplay() {
         const select = document.getElementById('screenSelect');
-        return displaysList.find(d => String(d.id) === String(select.value)) || displaysList[0];
+        const val = select.value;
+        return displaysList.find(d => String(d.id) === String(val)) || displaysList[0];
     }
 
-    /* --- LÓGICA DE PROYECCIÓN --- */
+    function alSeleccionarPantalla() {
+        const chk = document.getElementById('secondaryScreenCheckbox');
+        if (chk.checked) {
+            actualizarModoProyeccion();
+        }
+    }
+
     function actualizarModoProyeccion() {
         const chk = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
         const targetDisplay = getSelectedDisplay();
-
         const isPrimaryScreen = !targetDisplay || targetDisplay.isPrimary || targetDisplay.id === 'primary' || displaysList.length <= 1;
 
-        if (!chk.checked) {
+        if (chk.checked) {
+            if (isPrimaryScreen) {
+                if (projectionWindow && !projectionWindow.closed) {
+                    projectionWindow.close();
+                    projectionWindow = null;
+                }
+
+                badge.innerText = 'Full Principal';
+                badge.style.background = 'var(--accent-gold)';
+                badge.style.color = '#160d05';
+                badge.style.borderColor = '#f0c285';
+
+                const wrapper = document.getElementById('hymn-player-wrapper');
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (wrapper.requestFullscreen) {
+                        wrapper.requestFullscreen().catch(() => {});
+                    } else if (wrapper.webkitRequestFullscreen) {
+                        wrapper.webkitRequestFullscreen();
+                    }
+                }
+            } else {
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                }
+
+                badge.innerText = 'Proyectando';
+                badge.style.background = 'var(--accent-gold)';
+                badge.style.color = '#160d05';
+                badge.style.borderColor = '#f0c285';
+
+                if (!projectionWindow || projectionWindow.closed) {
+                    const left = targetDisplay.left !== undefined ? targetDisplay.left : window.screen.width;
+                    const top = targetDisplay.top !== undefined ? targetDisplay.top : 0;
+                    const width = targetDisplay.width || 1280;
+                    const height = targetDisplay.height || 720;
+
+                    const features = `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
+                    projectionWindow = window.open('proyeccion.html', 'HymnProjectionWindow', features);
+
+                    if (!projectionWindow) {
+                        alert('El navegador bloqueó la ventana de proyección. Por favor permite las ventanas emergentes (Pop-ups) en el icono de la barra de direcciones.');
+                        chk.checked = false;
+                        badge.innerText = 'Pantalla única';
+                        badge.style.background = 'var(--bg-elevated)';
+                        badge.style.color = 'var(--text-secondary)';
+                        badge.style.borderColor = 'var(--border-subtle)';
+                        return;
+                    }
+                } else {
+                    try {
+                        projectionWindow.moveTo(targetDisplay.left || window.screen.width, targetDisplay.top || 0);
+                        projectionWindow.resizeTo(targetDisplay.width || 1280, targetDisplay.height || 720);
+                        projectionWindow.focus();
+                    } catch (e) {}
+                }
+
+                setTimeout(() => { syncSecondary(true); }, 350);
+            }
+        } else {
             badge.innerText = 'Pantalla única';
             badge.style.background = 'var(--bg-elevated)';
             badge.style.color = 'var(--text-secondary)';
@@ -5329,174 +5456,31 @@
 
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
+                projectionWindow = null;
             }
-            syncChannel.postMessage({ action: 'close' });
-            projectionWindow = null;
-
-            if (document.fullscreenElement && isPrimaryScreen) {
-                document.exitFullscreen().catch(() => {});
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
             }
-            return;
         }
+    }
 
-        if (isPrimaryScreen) {
-            if (projectionWindow && !projectionWindow.closed) {
-                projectionWindow.close();
-            }
-            syncChannel.postMessage({ action: 'close' });
-            projectionWindow = null;
-
-            badge.innerText = 'Proyectando';
-            badge.style.background = 'var(--accent-gold-soft)';
-            badge.style.color = '#e8b36d';
-            badge.style.borderColor = 'rgba(216, 144, 62, 0.35)';
-
-            if (!document.fullscreenElement) {
-                const wrapper = document.getElementById('hymn-player-wrapper');
-                wrapper.requestFullscreen().catch(() => {});
-            }
-            return;
-        }
-
-        badge.innerText = 'Proyectando (Externa)';
-        badge.style.background = 'var(--accent-gold-soft)';
-        badge.style.color = '#e8b36d';
-        badge.style.borderColor = 'rgba(216, 144, 62, 0.35)';
-
-        if (document.fullscreenElement) {
-            document.exitFullscreen().catch(() => {});
-        }
-
-        if (!projectionWindow || projectionWindow.closed) {
-            const left = targetDisplay ? (targetDisplay.left || window.screen.width) : window.screen.width;
-            const top = targetDisplay ? (targetDisplay.top || 0) : 0;
-            const width = targetDisplay ? (targetDisplay.width || 1280) : 1280;
-            const height = targetDisplay ? (targetDisplay.height || 720) : 720;
-
-            const windowFeatures = `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
-            projectionWindow = window.open('', 'HimnarioProyeccion', windowFeatures);
-
-            if (projectionWindow) {
-                projectionWindow.document.write(`
-                    <!DOCTYPE html>
-                    <html lang="es">
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Proyección - Himnario Adventista</title>
-                        <style>
-                            * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-                            body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; position: relative; }
-                            video { width: 100vw; height: 100vh; object-fit: contain; position: absolute; inset: 0; z-index: 1; }
-                            .poster-overlay {
-                                position: absolute;
-                                inset: 0;
-                                background: radial-gradient(circle at 50% 42%, #4e2d12 0%, #261508 65%, #120903 100%);
-                                display: flex;
-                                flex-direction: column;
-                                justify-content: center;
-                                align-items: center;
-                                text-align: center;
-                                z-index: 10;
-                                padding: 10px;
-                                user-select: none;
-                            }
-                            .poster-logo {
-                                max-width: 170px;
-                                max-height: 170px;
-                                margin-bottom: 16px;
-                                object-fit: contain;
-                                filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.6));
-                            }
-                            .poster-title-main {
-                                font-size: clamp(1.8rem, 4vw, 2.8rem);
-                                font-weight: 700;
-                                letter-spacing: 3.5px;
-                                color: #f4ece1;
-                                text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
-                                line-height: 1.15;
-                                white-space: nowrap;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div id="projPoster" class="poster-overlay">
-                            <img src="logo-adventista.webp" alt="Logo Adventista" class="poster-logo">
-                            <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
-                        </div>
-                        <video id="projVideo" muted autoplay preload="auto" crossorigin="anonymous"></video>
-                        <script>
-                            const bc = new BroadcastChannel('hymn_projection_sync');
-                            const v = document.getElementById('projVideo');
-                            const poster = document.getElementById('projPoster');
-                            let lastFallback = '';
-
-                            v.onerror = () => {
-                                if (lastFallback && v.src !== lastFallback) {
-                                    v.src = lastFallback;
-                                }
-                            };
-
-                            bc.onmessage = (e) => {
-                                const data = e.data;
-                                if (data.action === 'close') {
-                                    window.close();
-                                    return;
-                                }
-                                if (!data.videoUrl) {
-                                    v.pause();
-                                    v.removeAttribute('src');
-                                    v.load();
-                                    poster.style.display = 'flex';
-                                } else {
-                                    poster.style.display = 'none';
-                                    lastFallback = data.fallbackUrl || '';
-                                    if (v.src !== data.videoUrl) {
-                                        v.src = data.videoUrl;
-                                        v.load();
-                                    }
-                                    if (data.playbackRate && v.playbackRate !== data.playbackRate) {
-                                        v.playbackRate = data.playbackRate;
-                                    }
-                                    if (data.forceSeek || Math.abs(v.currentTime - data.currentTime) > 0.35) {
-                                        v.currentTime = data.currentTime;
-                                    }
-                                    if (data.isPaused) {
-                                        v.pause();
-                                    } else if (v.paused) {
-                                        v.play().catch(()=>{});
-                                    }
-                                }
-                            };
-                        <\/script>
-                    </body>
-                    </html>
-                `);
-                projectionWindow.document.close();
-
-                setTimeout(() => {
-                    syncSecondary(true);
-                }, 400);
-            } else {
-                alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para proyectar.");
-                chk.checked = false;
+    syncChannel.onmessage = (e) => {
+        if (!e.data) return;
+        if (e.data.action === 'requestSync') {
+            syncSecondary(true);
+        } else if (e.data.action === 'projectionClosed') {
+            const chk = document.getElementById('secondaryScreenCheckbox');
+            const badge = document.getElementById('projectionStatusBadge');
+            if (chk) chk.checked = false;
+            if (badge) {
                 badge.innerText = 'Pantalla única';
                 badge.style.background = 'var(--bg-elevated)';
                 badge.style.color = 'var(--text-secondary)';
                 badge.style.borderColor = 'var(--border-subtle)';
             }
+            projectionWindow = null;
         }
-    }
-
-    function alSeleccionarPantalla() {
-        const chk = document.getElementById('secondaryScreenCheckbox');
-        if (chk && chk.checked) {
-            if (projectionWindow && !projectionWindow.closed) {
-                projectionWindow.close();
-                projectionWindow = null;
-            }
-            actualizarModoProyeccion();
-        }
-    }
+    };
 
     document.addEventListener('fullscreenchange', () => {
         const chk = document.getElementById('secondaryScreenCheckbox');
@@ -5514,19 +5498,18 @@
     });
 
     window.addEventListener('beforeunload', () => {
-        if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
+        if (projectionWindow && !projectionWindow.closed) {
+            projectionWindow.close();
+        }
     });
 
-    window.onload = () => {
-        const autoPlayAllChk = document.getElementById('autoPlayAllCheckbox');
-        if (autoPlayAllChk) autoPlayAllChk.checked = false;
-        configurarVideoSilencioso(document.getElementById('myMedia1'));
-        configurarVideoSilencioso(document.getElementById('myMedia2'));
+    setInterval(syncPlayerLoop, 250);
+    window.addEventListener('DOMContentLoaded', () => {
+        const autoChk = document.getElementById('autoPlayAllCheckbox');
+        if (autoChk) autoChk.checked = false;
         setupMediaSession();
         cargarCalculoLocal();
-        setInterval(syncPlayerLoop, 250);
-    };
+    });
 </script>
-
 </body>
 </html>
