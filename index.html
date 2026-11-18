@@ -1181,6 +1181,85 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
 
+        /* --- ESCRITORIO / PC: CONTROLES MÁS AMPLIOS HORIZONTALMENTE Y REPRODUCTOR IGUAL --- */
+        @media (min-width: 769px) and (min-height: 601px) {
+            #hymn-player-wrapper {
+                width: 96%;
+                max-width: 1480px;
+                padding: 12px 26px;
+            }
+
+            #playerControls {
+                padding: 10px 16px;
+                gap: 8px;
+            }
+
+            .controls-buttons {
+                gap: 10px;
+                flex-wrap: nowrap;
+            }
+
+            .controls-buttons > .btn-ctrl {
+                flex: 1 1 auto;
+                max-width: 155px;
+                padding: 6px 14px;
+                font-size: 0.85rem;
+            }
+
+            #helpBtn {
+                flex: 0 0 36px;
+                max-width: 36px;
+                padding: 6px 0;
+            }
+
+            .volume-container {
+                gap: 10px;
+            }
+
+            input[type="range"].volume-slider {
+                width: 120px;
+            }
+
+            .search-input {
+                padding: 8px 14px 8px 34px;
+                font-size: 0.9rem;
+            }
+
+            .checkbox-container {
+                padding: 7px 14px;
+                font-size: 0.84rem;
+            }
+
+            .checkbox-right-group {
+                gap: 20px;
+            }
+
+            .select-pantalla {
+                max-width: 340px;
+                padding: 4px 10px;
+                font-size: 0.82rem;
+            }
+
+            .playlist-select {
+                max-width: 320px;
+                padding: 5px 10px;
+                font-size: 0.82rem;
+            }
+
+            .btn-mini-pl {
+                padding: 5px 11px;
+                font-size: 0.78rem;
+            }
+
+            .playlist-item {
+                padding: 0 14px;
+            }
+
+            .playlist-item.active {
+                padding-left: 11px;
+            }
+        }
+
         /* --- MÓVIL EN VERTICAL --- */
         @media (max-width: 600px) {
             #hymn-player-wrapper {
@@ -1918,7 +1997,7 @@
                     </div>
                     <div class="help-feature-content">
                         <div class="help-feature-title">Modo Cantado, Instrumental y Reproducción Continua</div>
-                        <div class="help-feature-desc">Activa <strong>Instrumental</strong> para alternar entre voces y pista musical. Por defecto cada himno se detiene al concluir; marca <strong>Continuo</strong> si deseas reproducir todo el himnario seguido sin pausas.</div>
+                        <div class="help-feature-desc">Activa <strong>Instrumental</strong> para alternar entre voces y pista musical. Por defecto cada himno se detiene al concluir (modo culto); marca <strong>Continuo</strong> si deseas reproducir todo el himnario seguido sin pausas.</div>
                     </div>
                 </div>
 
@@ -5181,7 +5260,7 @@
         }
         mostrarToast(isContinuous
             ? 'Reproducción continua activada (avanzará todo el himnario)'
-            : 'Modo único: se detendrá al finalizar cada himno');
+            : 'Modo culto: se detendrá al finalizar cada himno');
     }
 
     function cambiarModoAudio() {
