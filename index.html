@@ -1202,7 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v2";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v3";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1602,6 +1602,10 @@
         return `${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`;
     }
 
+    function forzarEnieMinusculaUrl(url) {
+        return String(url || '').replace(/%C3%91/gi, '%C3%B1');
+    }
+
     function getHymnCandidateUrls(h, isInstrumental = null) {
         const isInst = (isInstrumental !== null)
             ? isInstrumental
@@ -1614,24 +1618,37 @@
 
         const resolvedKey = getResolvedCacheKey(h, isInst);
         if (resolvedUrlsCache[resolvedKey]) {
+            candidates.push(forzarEnieMinusculaUrl(resolvedUrlsCache[resolvedKey]));
             candidates.push(resolvedUrlsCache[resolvedKey]);
         }
 
         const localTargetMap = isInst ? instrumentalFilesMap : cantadoFilesMap;
         if (localTargetMap && localTargetMap[h.num]) {
+            candidates.push(forzarEnieMinusculaUrl(localTargetMap[h.num]));
             candidates.push(localTargetMap[h.num]);
         }
 
         const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num] || titulosDiccionario[String(h.num)];
         if (rawEntry && typeof rawEntry === 'object') {
-            if (isInst && rawEntry.instrumental) candidates.push(rawEntry.instrumental);
-            if (!isInst && rawEntry.cantado) candidates.push(rawEntry.cantado);
-            if (rawEntry.url) candidates.push(rawEntry.url);
+            if (isInst && rawEntry.instrumental) {
+                candidates.push(forzarEnieMinusculaUrl(rawEntry.instrumental));
+                candidates.push(rawEntry.instrumental);
+            }
+            if (!isInst && rawEntry.cantado) {
+                candidates.push(forzarEnieMinusculaUrl(rawEntry.cantado));
+                candidates.push(rawEntry.cantado);
+            }
+            if (rawEntry.url) {
+                candidates.push(forzarEnieMinusculaUrl(rawEntry.url));
+                candidates.push(rawEntry.url);
+            }
             if (rawEntry.archivo) {
                 const suffix = isInst ? '_pista.mp4' : '.mp4';
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
-                candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${encodeURIComponent(rawEntry.archivo + suffix)}`);
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(rawEntry.archivo + '.mp4')}`);
+                const arch1 = encodeURIComponent(rawEntry.archivo.normalize('NFC').replace(/Ñ/g, 'ñ') + suffix).replace(/%C3%91/gi, '%C3%B1');
+                const arch2 = encodeURIComponent(rawEntry.archivo.normalize('NFC').replace(/Ñ/g, 'ñ') + '.mp4').replace(/%C3%91/gi, '%C3%B1');
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch1}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${arch1}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch2}`);
             }
         }
 
@@ -1651,9 +1668,19 @@
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .MP4')}`);
 
-        // Variantes de título (NFC, NFD de macOS/iOS, sin tildes, sin ñ, con _ en lugar de ñ)
+        // Normalización de título: convertir toda Ñ (NFC o NFD) a ñ minúscula para que se codifique como %C3%B1
         const rawTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
         const nfcTitle = rawTitle.normalize('NFC');
+        const lowerEnieTitle = nfcTitle.replace(/Ñ/g, 'ñ');
+        const lowerFullTitle = lowerEnieTitle.toLowerCase();
+        const sentenceCaseTitle = lowerFullTitle
+            ? lowerFullTitle.charAt(0).toUpperCase() + lowerFullTitle.slice(1)
+            : '';
+        const titleCaseTitle = lowerFullTitle.replace(/\b\w/g, c => c.toUpperCase());
+        const noAccentsKeepEnie = lowerEnieTitle
+            .normalize('NFD')
+            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
+            .normalize('NFC');
         const nfdTitle = rawTitle.normalize('NFD');
         const asciiTitle = removeAccents(rawTitle);
         const strippedEnieTitle = rawTitle.replace(/[ñÑ]/g, '');
@@ -1661,7 +1688,12 @@
         const strippedEnieAscii = removeAccents(strippedEnieTitle);
 
         const titleVariants = [...new Set([
+            lowerEnieTitle,
             nfcTitle,
+            sentenceCaseTitle,
+            titleCaseTitle,
+            lowerFullTitle,
+            noAccentsKeepEnie,
             nfdTitle,
             asciiTitle,
             strippedEnieTitle,
@@ -1685,7 +1717,8 @@
                 `${numInt}_${t.replace(/\s+/g, '_')}.mp4`,
                 `Himno ${numInt} - ${t}.mp4`,
                 `Himno ${h.num} - ${t}.mp4`,
-                `Himno ${numInt} ${t}.mp4`
+                `Himno ${numInt} ${t}.mp4`,
+                `${t}.mp4`
             ];
             if (isInst) {
                 namePatterns.push(
@@ -1698,7 +1731,16 @@
                 );
             }
             namePatterns.forEach(fileName => {
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fileName)}`);
+                const encoded = encodeURIComponent(fileName);
+                const encodedLowerEnie = encoded.replace(/%C3%91/gi, '%C3%B1');
+                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedLowerEnie}`);
+                if (encoded !== encodedLowerEnie) {
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encoded}`);
+                }
+                // Respaldo si el archivo en R2 tiene "%C3%B1" literal en su nombre de objeto
+                if (/%C3%B1/i.test(encodedLowerEnie)) {
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedLowerEnie.replace(/%C3%B1/gi, '%25C3%25B1')}`);
+                }
             });
         });
 
@@ -1787,7 +1829,7 @@
             return primaryUrl;
         }
 
-        // Buscar en paralelo entre todas las variantes posibles (NFC, NFD, sin ñ, separadores, etc.)
+        // Buscar en paralelo entre todas las variantes posibles (%C3%B1, NFC, NFD, sin ñ, separadores, etc.)
         const remaining = candidates.slice(1);
         const BATCH = 10;
         for (let i = 0; i < remaining.length; i += BATCH) {
