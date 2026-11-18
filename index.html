@@ -1011,6 +1011,13 @@
         }
         .btn-share-native:hover { background: var(--accent-gold-hover); }
 
+        .share-note {
+            font-size: 0.73rem;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.4;
+        }
+
         /* --- GESTIÓN DE LISTAS Y ALMACENAMIENTO LOCAL --- */
         .pl-modal-list {
             display: flex;
@@ -2187,6 +2194,7 @@
             <button class="btn-share-native" onclick="compartirNativo()">
                 Compartir enlace
             </button>
+            <div class="share-note">Al compartir, el título y <strong>#adventistassv</strong> también se copian por si deseas pegarlos en Facebook.</div>
         </div>
     </div>
 </div>
@@ -4097,7 +4105,7 @@
         if (type === 'main') {
             tabMain.classList.add('active');
             previewTitle.innerText = 'Himnario Adventista en Línea';
-            previewSubtitle.innerText = 'Accede a la colección completa de himnos';
+            previewSubtitle.innerText = 'Accede a la colección completa de himnos · #adventistassv';
             input.value = 'Generando enlace...';
 
             actualizarMetaTags(
@@ -4164,43 +4172,70 @@
         }
     }
 
-    function copiarEnlaceCompartir() {
+    function buildSharePayload() {
         const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione') || input.value.startsWith('Agrega')) return;
+        const url = input ? input.value : '';
+        if (!url || url.startsWith('Generando') || url.startsWith('Seleccione') || url.startsWith('Agrega')) {
+            return null;
+        }
 
-        let textToCopy = input.value;
         if (currentShareType === 'hymn' && currentHimno) {
             const isInst = document.getElementById('instrumentalCheckbox').checked;
             const numInt = parseInt(currentHimno.num, 10);
-            textToCopy = `Himno ${numInt}: ${currentHimno.title} (${isInst ? 'Instrumental' : 'Cantado'}) #adventistassv\n${input.value}`;
+            const title = `Himno ${numInt}: ${currentHimno.title}`;
+            const text = `${title} (${isInst ? 'Instrumental' : 'Cantado'}) #adventistassv`;
+            return {
+                title,
+                text,
+                url,
+                fullText: `${text}\n${url}`
+            };
         }
 
-        navigator.clipboard.writeText(textToCopy);
-        mostrarToast(currentShareType === 'hymn' && currentHimno ? 'Himno y enlace copiados al portapapeles' : 'Enlace copiado al portapapeles');
+        if (currentShareType === 'playlist') {
+            const targetListId = (currentViewId !== 'all' && currentViewId !== 'offline_saved')
+                ? currentViewId
+                : (activeQueuePlaylistId || 'favorites');
+            const listName = obtenerNombreLista(targetListId);
+            const title = `Lista de Himnos: ${listName}`;
+            const text = `${title} #adventistassv`;
+            return {
+                title,
+                text,
+                url,
+                fullText: `${text}\n${url}`
+            };
+        }
+
+        const title = 'Himnario Adventista en Línea';
+        const text = `${title} #adventistassv`;
+        return {
+            title,
+            text,
+            url,
+            fullText: `${text}\n${url}`
+        };
+    }
+
+    function copiarEnlaceCompartir() {
+        const payload = buildSharePayload();
+        if (!payload) return;
+        navigator.clipboard.writeText(payload.fullText);
+        mostrarToast('Texto y enlace copiados al portapapeles');
     }
 
     function compartirNativo() {
-        const input = document.getElementById('shareUrlInput');
-        if (!input.value || input.value.startsWith('Generando') || input.value.startsWith('Seleccione') || input.value.startsWith('Agrega')) return;
+        const payload = buildSharePayload();
+        if (!payload) return;
 
-        let title = 'Himnario Adventista en Línea';
-        let text = 'Te comparto el Himnario Adventista en Línea';
-
-        if (currentShareType === 'hymn' && currentHimno) {
-            const isInst = document.getElementById('instrumentalCheckbox').checked;
-            const numInt = parseInt(currentHimno.num, 10);
-            title = `Himno ${numInt}: ${currentHimno.title}`;
-            text = `Himno ${numInt}: ${currentHimno.title} (${isInst ? 'Instrumental' : 'Cantado'}) #adventistassv`;
-        } else if (currentShareType === 'playlist') {
-            const targetListId = (currentViewId !== 'all' && currentViewId !== 'offline_saved') ? currentViewId : (activeQueuePlaylistId || 'favorites');
-            title = `Lista de Himnos: ${obtenerNombreLista(targetListId)}`;
-            text = `Te comparto la lista de reproducción "${obtenerNombreLista(targetListId)}" del Himnario Adventista`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(payload.fullText).catch(() => {});
         }
 
         if (navigator.share) {
-            navigator.share({ title: title, text: text, url: input.value }).catch(e => console.log('Error compartiendo:', e));
+            navigator.share({ text: payload.fullText }).catch(e => console.log('Error compartiendo:', e));
         } else {
-            copiarEnlaceCompartir();
+            mostrarToast('Texto y enlace copiados al portapapeles');
         }
     }
 
