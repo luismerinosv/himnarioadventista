@@ -46,9 +46,9 @@
             white-space: nowrap;
         }
         #pullToRefreshIndicator.ready {
-            background: #266b3a;
-            border-color: #5cd681;
-            color: #ffffff;
+            background: #b86214;
+            border-color: #ffd24c;
+            color: #fcecd2;
         }
 
         #hymn-player-wrapper { 
@@ -153,7 +153,7 @@
         #playerControls { background: #231203; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(217, 155, 56, 0.25); display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
         .controls-header { display: flex; justify-content: space-between; align-items: center; font-size: clamp(0.75rem, 1.8vw, 0.85rem); color: #ebd1a7; gap: 8px; }
         .header-badges-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-        .local-play-badge { display: none; font-size: 0.7rem; background: #1e6b38; color: #d8ffdf; border: 1px solid rgba(92, 214, 129, 0.45); padding: 2px 6px; border-radius: 3px; font-weight: 700; }
+        .local-play-badge { display: none; font-size: 0.7rem; background: #8c4b11; color: #fcecd2; border: 1px solid rgba(255, 210, 76, 0.5); padding: 2px 6px; border-radius: 3px; font-weight: 700; }
         .timeline-container { display: flex; align-items: center; gap: 10px; width: 100%; }
         .time-text { font-size: 0.78rem; color: #d1ba98; font-family: monospace; min-width: 40px; }
         .progress-slider { flex: 1; accent-color: #d9822b; cursor: pointer; height: 5px; }
@@ -179,14 +179,14 @@
         .playlist-select { background: #3b1d05; color: #fcecd2; border: 1px solid #9e5614; padding: 3px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 700; outline: none; cursor: pointer; max-width: 210px; text-overflow: ellipsis; }
         .btn-mini-pl { background: #59300b; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.25); padding: 3px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.2s; display: inline-flex; align-items: center; gap: 3px; }
         .btn-mini-pl:hover { background: #8c4b11; }
-        .btn-mini-pl.play-all { background: #266b3a; border-color: #3ca35a; color: #fff; }
-        .btn-mini-pl.play-all:hover { background: #2f8548; }
-        .btn-mini-pl.offline-btn { background: #2c4c6e; border-color: #4b82bd; color: #e6f2ff; }
-        .btn-mini-pl.offline-btn:hover { background: #38618c; }
+        .btn-mini-pl.play-all { background: #b86214; border-color: #f2cb94; color: #fff; }
+        .btn-mini-pl.play-all:hover { background: #d9822b; }
+        .btn-mini-pl.offline-btn { background: #4a2c0e; border-color: #b87c3e; color: #fcecd2; }
+        .btn-mini-pl.offline-btn:hover { background: #6b4015; }
         .btn-mini-pl.active-toggle { background: #d9822b; color: #180c02; border-color: #fcecd2; }
         .playlist-right-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
         .mode-badge { font-size: 0.7rem; background: #7a420f; padding: 2px 7px; border-radius: 4px; font-weight: 600; color: #f7dfb8; border: 1px solid rgba(242, 203, 148, 0.2); white-space: nowrap; }
-        .queue-badge { font-size: 0.7rem; background: #1e5c31; padding: 2px 7px; border-radius: 4px; font-weight: 700; color: #d8ffdf; border: 1px solid rgba(92, 214, 129, 0.4); white-space: nowrap; display: none; }
+        .queue-badge { font-size: 0.7rem; background: #9e5614; padding: 2px 7px; border-radius: 4px; font-weight: 700; color: #fcecd2; border: 1px solid rgba(255, 210, 76, 0.45); white-space: nowrap; display: none; }
         
         #playlist { 
             list-style: none; 
@@ -232,8 +232,9 @@
             background-color: #d9822b; 
         }
         .playlist-item.active .play-bullet {
-            background-color: #266b3a;
-            border-color: #7dff9e;
+            background-color: #d9822b;
+            border-color: #fcecd2;
+            box-shadow: 0 0 8px rgba(255, 210, 76, 0.55);
         }
         .play-bullet::after { 
             content: ''; 
@@ -250,8 +251,8 @@
         .btn-item-icon { background: rgba(59, 29, 5, 0.7); border: 1px solid rgba(217, 155, 56, 0.2); color: #d1ba98; border-radius: 4px; width: 25px; height: 25px; font-size: 0.78rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
         .btn-item-icon:hover { background: #8c4b11; color: #fff; border-color: rgba(242, 203, 148, 0.5); }
         .btn-item-icon.fav-active { color: #ffd24c; border-color: rgba(255, 210, 76, 0.45); background: rgba(122, 66, 15, 0.85); }
-        .btn-item-icon.saved-local { color: #7dff9e; border-color: rgba(76, 217, 114, 0.45); background: rgba(25, 87, 45, 0.85); font-weight: bold; }
-        .btn-item-icon.downloading-local { color: #80c4ff; border-color: rgba(91, 168, 255, 0.5); background: rgba(31, 65, 102, 0.85); animation: pulseDown 1s infinite; }
+        .btn-item-icon.saved-local { color: #ffd24c; border-color: rgba(255, 210, 76, 0.5); background: rgba(140, 75, 17, 0.85); font-weight: bold; }
+        .btn-item-icon.downloading-local { color: #fcecd2; border-color: rgba(242, 203, 148, 0.55); background: rgba(158, 86, 20, 0.85); animation: pulseDown 1s infinite; }
         .btn-item-icon.danger:hover { background: #8f241e; border-color: #e05a52; }
 
         @keyframes pulseDown {
@@ -535,7 +536,7 @@
 
         .offline-stats-box {
             background: #120902;
-            border: 1px solid rgba(75, 130, 189, 0.4);
+            border: 1px solid rgba(217, 155, 56, 0.35);
             border-radius: 8px;
             padding: 12px 14px;
             display: flex;
@@ -552,8 +553,8 @@
             display: none;
             flex-direction: column;
             gap: 6px;
-            background: rgba(31, 65, 102, 0.35);
-            border: 1px solid rgba(91, 168, 255, 0.4);
+            background: rgba(89, 48, 11, 0.45);
+            border: 1px solid rgba(217, 155, 56, 0.45);
             padding: 10px 12px;
             border-radius: 8px;
         }
@@ -567,7 +568,7 @@
         .offline-progress-bar-fill {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, #3a82d6, #5fd687);
+            background: linear-gradient(90deg, #9e5614, #ffd24c);
             transition: width 0.25s ease;
         }
         .offline-action-grid {
@@ -1087,7 +1088,7 @@
             <div class="offline-stats-box">
                 <div class="offline-stats-row">
                     <span style="color:#cbb290;">Archivos guardados:</span>
-                    <strong id="offlineCountText" style="color:#7dff9e;">0 archivos</strong>
+                    <strong id="offlineCountText" style="color:#ffd24c;">0 archivos</strong>
                 </div>
                 <div class="offline-stats-row">
                     <span style="color:#cbb290;">Espacio utilizado:</span>
@@ -1107,7 +1108,7 @@
             <div id="offlineProgressWrap" class="offline-progress-wrap">
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem;">
                     <strong id="offlineProgressTitle" style="color:#fff;">Descargando...</strong>
-                    <span id="offlineProgressCounter" style="color:#80c4ff; font-family:monospace;">0 / 0</span>
+                    <span id="offlineProgressCounter" style="color:#ffd24c; font-family:monospace;">0 / 0</span>
                 </div>
                 <div class="offline-progress-bar-bg">
                     <div id="offlineProgressFill" class="offline-progress-bar-fill"></div>
@@ -1167,7 +1168,7 @@
             <div id="auditProgressWrap" class="offline-progress-wrap">
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem;">
                     <strong style="color:#fff;">Escaneando servidor R2...</strong>
-                    <span id="auditCounter" style="color:#80c4ff; font-family:monospace;">0 / 613</span>
+                    <span id="auditCounter" style="color:#ffd24c; font-family:monospace;">0 / 613</span>
                 </div>
                 <div class="offline-progress-bar-bg">
                     <div id="auditProgressFill" class="offline-progress-bar-fill"></div>
@@ -3371,7 +3372,6 @@
             document.getElementById('posterOverlay').style.display = 'none';
             configurarVideoSilencioso(mainVideo);
 
-            // Evitar que syncPlayerLoop compita con la reactivación del decodificador
             videoSyncCooldownUntil = Date.now() + 900;
 
             visibilityResumeTimer = setTimeout(() => {
@@ -4182,8 +4182,8 @@
             projectionWindow = null;
 
             badge.innerText = 'Proyectando (Pantalla Completa)';
-            badge.style.background = '#2ecc71';
-            badge.style.color = '#000';
+            badge.style.background = '#d9822b';
+            badge.style.color = '#fcecd2';
 
             if (!document.fullscreenElement) {
                 const wrapper = document.getElementById('hymn-player-wrapper');
@@ -4193,8 +4193,8 @@
         }
 
         badge.innerText = 'Proyectando (Ventana Externa)';
-        badge.style.background = '#2ecc71';
-        badge.style.color = '#000';
+        badge.style.background = '#d9822b';
+        badge.style.color = '#fcecd2';
 
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
