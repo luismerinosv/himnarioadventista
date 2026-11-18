@@ -1870,6 +1870,65 @@
                 height: 3px !important;
             }
         }
+                    /* Modal de confirmación al presionar Atrás en móvil */
+            #exitConfirmModal {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 99999;
+                background: rgba(0, 0, 0, 0.78);
+                backdrop-filter: blur(4px);
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            #exitConfirmModal.active {
+                display: flex;
+            }
+            .exit-modal-card {
+                background: #18110b;
+                border: 1px solid rgba(212, 147, 59, 0.35);
+                border-radius: 16px;
+                max-width: 340px;
+                width: 100%;
+                padding: 22px 20px;
+                text-align: center;
+                color: #f3ead8;
+                box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+            }
+            .exit-modal-card h3 {
+                margin: 0 0 8px;
+                font-size: 1.15rem;
+                color: #f5c16c;
+            }
+            .exit-modal-card p {
+                margin: 0 0 18px;
+                font-size: 0.9rem;
+                line-height: 1.45;
+                color: #cbbba0;
+            }
+            .exit-modal-actions {
+                display: flex;
+                gap: 10px;
+            }
+            .exit-modal-actions button {
+                flex: 1;
+                padding: 11px 12px;
+                border-radius: 10px;
+                font-size: 0.92rem;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+            }
+            .btn-exit-stay {
+                background: #d4933b;
+                color: #140d06;
+            }
+            .btn-exit-close {
+                background: #271d14;
+                color: #f3ead8;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            }
     </style>
 </head>
 <body>
@@ -2322,6 +2381,17 @@
     </div>
 </div>
 
+<div id="exitConfirmModal" role="dialog" aria-modal="true" aria-labelledby="exitModalTitle">
+    <div class="exit-modal-card">
+        <h3 id="exitModalTitle">¿Deseas salir del Himnario?</h3>
+        <p>Si deseas mantenerlo en segundo plano mientras escuchas, presiona el botón <strong>Inicio (○)</strong> de tu teléfono.</p>
+        <div class="exit-modal-actions">
+            <button type="button" class="btn-exit-stay" onclick="cancelarSalidaApp()">Seguir aquí</button>
+            <button type="button" class="btn-exit-close" onclick="confirmarSalidaApp()">Cerrar app</button>
+        </div>
+    </div>
+</div>
+    
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
@@ -5570,6 +5640,60 @@
         if (installBtn) installBtn.style.display = 'none';
         mostrarToast('Himnario instalado en tus aplicaciones');
     });
+    let exitGuardArmed = false;
+    let isExitingApp = false;
+
+    function armExitGuard() {
+        if (isExitingApp || exitGuardArmed) return;
+        history.pushState({ pwaExitGuard: true }, '', window.location.href);
+        exitGuardArmed = true;
+    }
+
+    // Activar protección al cargar y tras el primer toque (requisito de Chrome en Android)
+    window.addEventListener('load', armExitGuard);
+    ['pointerdown', 'keydown'].forEach((evt) => {
+        window.addEventListener(evt, () => {
+            if (!history.state || !history.state.pwaExitGuard) {
+                exitGuardArmed = false;
+                armExitGuard();
+            }
+        }, { passive: true });
+    });
+
+    window.addEventListener('popstate', () => {
+        if (isExitingApp) return;
+        exitGuardArmed = false;
+
+        const exitModal = document.getElementById('exitConfirmModal');
+        if (exitModal && exitModal.classList.contains('active')) {
+            cancelarSalidaApp();
+            return;
+        }
+
+        if (exitModal) {
+            exitModal.classList.add('active');
+        }
+    });
+
+        function cancelarSalidaApp() {
+            const exitModal = document.getElementById('exitConfirmModal');
+            if (exitModal) exitModal.classList.remove('active');
+            armExitGuard();
+        }
+    
+        function confirmarSalidaApp() {
+            isExitingApp = true;
+            const exitModal = document.getElementById('exitConfirmModal');
+            if (exitModal) exitModal.classList.remove('active');
+    
+            // Detener reproducción antes de salir
+            document.querySelectorAll('video, audio').forEach((media) => {
+                try { media.pause(); } catch (e) {}
+            });
+    
+            history.back();
+            setTimeout(() => { window.close(); }, 150);
+        }
 </script>
 </body>
 </html>
