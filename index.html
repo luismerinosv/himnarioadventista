@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Himnario Adventista en Línea</title>
     <link rel="icon" type="image/png" href="https://luismerinosv.github.io/himnarioadventista/favicon.png?v=2">
+    <meta name="theme-color" content="#0c0805">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Himnario">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <!-- ETIQUETAS OPEN GRAPH PARA VISTA PREVIA EN REDES SOCIALES (WHATSAPP, FACEBOOK, TWITTER) -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Himnario Adventista">
@@ -1926,6 +1933,10 @@
                 <button class="btn-ctrl" id="shareBtn" onclick="compartirApp()" title="Compartir enlace">
                     <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                     <span>Compartir</span>
+                </button>
+                <button class="btn-ctrl" id="installAppBtn" style="display:none;" onclick="instalarAppPwa()" title="Instalar aplicación en el dispositivo">
+                <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Instalar</span>
                 </button>
                 <button class="btn-ctrl" id="helpBtn" onclick="abrirModalAyuda()" title="Características y guía de uso" aria-label="Características y guía de uso">?</button>
                 <span class="esc-notice">(Presiona ESC para salir)</span>
@@ -5509,6 +5520,55 @@
         if (autoChk) autoChk.checked = false;
         setupMediaSession();
         cargarCalculoLocal();
+    });
+    let deferredInstallPrompt = null;
+
+    const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    const isInStandaloneMode = ('standalone' in window.navigator && window.navigator.standalone) ||
+                               window.matchMedia('(display-mode: standalone)').matches;
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch((err) => {
+                console.warn('Error registrando Service Worker:', err);
+            });
+        });
+    }
+
+    // Mostrar botón en iOS si aún no está instalada en la pantalla de inicio
+    if (isIos && !isInStandaloneMode) {
+        const installBtn = document.getElementById('installAppBtn');
+        if (installBtn) installBtn.style.display = 'inline-flex';
+    }
+
+    // Capturar instalación automática en Android / Chrome / Edge
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        const installBtn = document.getElementById('installAppBtn');
+        if (installBtn) installBtn.style.display = 'inline-flex';
+    });
+
+    async function instalarAppPwa() {
+        if (isIos && !isInStandaloneMode) {
+            alert('Para instalar en iPhone o iPad:\n\n1. Toca el botón Compartir (cuadro con flecha) en la barra inferior de Safari.\n2. Desliza hacia abajo y selecciona "Agregar a inicio".');
+            return;
+        }
+
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+            const installBtn = document.getElementById('installAppBtn');
+            if (installBtn) installBtn.style.display = 'none';
+        }
+        deferredInstallPrompt = null;
+    }
+
+    window.addEventListener('appinstalled', () => {
+        const installBtn = document.getElementById('installAppBtn');
+        if (installBtn) installBtn.style.display = 'none';
+        mostrarToast('Himnario instalado en tus aplicaciones');
     });
 </script>
 </body>
