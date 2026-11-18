@@ -1202,7 +1202,7 @@
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v4";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v5";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -1610,6 +1610,35 @@
             .replace(/Ñ/g, 'ñ');
     }
 
+    function quitarTildesVocalesManteniendoEnie(str) {
+        return normalizarEnieTitulo(str)
+            .normalize('NFD')
+            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
+            .normalize('NFC')
+            .replace(/Ñ/g, 'ñ');
+    }
+
+    function quitarSignosPuntuacion(str) {
+        return String(str || '')
+            .replace(/[¡!¿?,.;:()'"«»“”]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function toSpanishTitleCase(str) {
+        const minorWords = new Set([
+            'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+            'de', 'del', 'al', 'a', 'en', 'y', 'e', 'o', 'u',
+            'con', 'por', 'para', 'sin', 'sobre', 'mi', 'tu', 'su',
+            'me', 'te', 'se', 'nos', 'que'
+        ]);
+        const words = normalizarEnieTitulo(str).toLowerCase().split(/\s+/).filter(Boolean);
+        return words.map((w, idx) => {
+            if (idx > 0 && minorWords.has(w)) return w;
+            return w.charAt(0).toUpperCase() + w.slice(1);
+        }).join(' ');
+    }
+
     function forzarEnieMinusculaUrl(url) {
         return String(url || '')
             .replace(/%C3%91/gi, '%C3%B1')
@@ -1664,80 +1693,102 @@
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch1}`);
                 candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${arch1}`);
                 candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${arch2}`);
+                candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${arch2}`);
             }
         }
 
-        // Rutas numéricas estándar primero
+        // Rutas numéricas estándar (con y sin carpeta Himnos/)
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
         if (String(numInt) !== h.num) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
+            candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
         }
 
-        // Preparar variantes de título forzando ñ -> %C3%B1
+        // Preparar variantes de título forzando ñ -> %C3%B1 y cubriendo ausencia de tildes/signos
         const baseTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
         const titleWithEnie = normalizarEnieTitulo(baseTitle);
         const hasEnie = tieneEnie(baseTitle);
 
+        const noVowelAccents = quitarTildesVocalesManteniendoEnie(titleWithEnie);
+        const noPunct = quitarSignosPuntuacion(titleWithEnie);
+        const noVowelAccentsAndNoPunct = quitarSignosPuntuacion(noVowelAccents);
+
+        const spanishTitle = toSpanishTitleCase(titleWithEnie);
+        const spanishTitleNoAccents = toSpanishTitleCase(noVowelAccentsAndNoPunct);
+
         const lowerFull = titleWithEnie.toLowerCase();
         const sentenceCase = lowerFull ? lowerFull.charAt(0).toUpperCase() + lowerFull.slice(1) : '';
+        const sentenceCaseNoAccents = noVowelAccentsAndNoPunct
+            ? noVowelAccentsAndNoPunct.toLowerCase().charAt(0).toUpperCase() + noVowelAccentsAndNoPunct.toLowerCase().slice(1)
+            : '';
         const titleCase = lowerFull.replace(/(^|[\s¡¿("'-])([a-záéíóúüñ])/g, (_, sep, ch) => sep + ch.toUpperCase());
         const upperExceptEnie = titleWithEnie.toUpperCase().replace(/Ñ/g, 'ñ');
-        const noAccentsKeepEnie = titleWithEnie
-            .normalize('NFD')
-            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
-            .normalize('NFC')
-            .replace(/Ñ/g, 'ñ');
-        const noPunctKeepEnie = titleWithEnie.replace(/[¡!¿?,.;()']/g, '').replace(/\s+/g, ' ').trim();
 
         const primaryTitleVariants = [...new Set([
             titleWithEnie,
+            noVowelAccents,
+            noVowelAccentsAndNoPunct,
+            spanishTitle,
+            spanishTitleNoAccents,
+            noPunct,
             sentenceCase,
+            sentenceCaseNoAccents,
             titleCase,
             lowerFull,
-            upperExceptEnie,
-            noAccentsKeepEnie,
-            noPunctKeepEnie
+            upperExceptEnie
         ].filter(Boolean))];
 
+        // Separadores priorizando "{num} {título}" y "{num} - {título}"
         const primarySeparators = [
-            (t) => `${h.num} - ${t}.mp4`,
-            (t) => `${numInt} - ${t}.mp4`,
-            (t) => `${h.num}-${t}.mp4`,
-            (t) => `${numInt}-${t}.mp4`,
-            (t) => `${h.num} ${t}.mp4`,
             (t) => `${numInt} ${t}.mp4`,
-            (t) => `${h.num}. ${t}.mp4`,
+            (t) => `${h.num} ${t}.mp4`,
+            (t) => `${numInt} - ${t}.mp4`,
+            (t) => `${h.num} - ${t}.mp4`,
+            (t) => `${numInt}-${t}.mp4`,
+            (t) => `${h.num}-${t}.mp4`,
             (t) => `${numInt}. ${t}.mp4`,
+            (t) => `${h.num}. ${t}.mp4`,
             (t) => `${t}.mp4`
         ];
 
-        // Generar con máxima prioridad tanto %C3%B1 (UTF-8) como %25C3%25B1 (literal "%C3%B1" en el nombre del archivo en R2)
+        // Prefijos de carpeta en R2: tanto /{carpeta}/ como /Himnos/{carpeta}/
+        const folderPrefixes = [
+            `${CLOUDFLARE_R2_URL}/${carpeta}`,
+            `${CLOUDFLARE_R2_URL}/Himnos/${carpeta}`
+        ];
+
         primaryTitleVariants.forEach(t => {
             primarySeparators.forEach(buildName => {
                 const fileName = buildName(t);
                 const encodedC3B1 = encodeURIComponent(fileName).replace(/%C3%91/gi, '%C3%B1');
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodedC3B1}`);
 
-                if (hasEnie && /%C3%B1/i.test(encodedC3B1)) {
-                    // Si el objeto en R2 literalmente contiene "%C3%B1" en su clave
-                    const literalC3B1 = encodedC3B1.replace(/%C3%B1/gi, '%25C3%25B1');
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${literalC3B1}`);
+                folderPrefixes.forEach(baseFolder => {
+                    candidates.push(`${baseFolder}/${encodedC3B1}`);
 
-                    // Si el objeto en R2 tiene tanto %20 como %C3%B1 literales
-                    const literalAll = literalC3B1.replace(/%20/g, '%2520');
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${literalAll}`);
-                }
+                    if (hasEnie && /%C3%B1/i.test(encodedC3B1)) {
+                        // Si el objeto en R2 literalmente contiene "%C3%B1" en su clave
+                        const literalC3B1 = encodedC3B1.replace(/%C3%B1/gi, '%25C3%25B1');
+                        candidates.push(`${baseFolder}/${literalC3B1}`);
+
+                        // Si el objeto en R2 tiene tanto %20 como %C3%B1 literales
+                        const literalAll = literalC3B1.replace(/%20/g, '%2520');
+                        candidates.push(`${baseFolder}/${literalAll}`);
+                    }
+                });
             });
         });
 
         // Variantes adicionales de número, mayúsculas, NFD, Latin-1 y sin tilde
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.MP4`);
-        if (String(numInt) !== h.num) {
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.MP4`);
-        }
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numPad4}.mp4`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(h.num + ' .mp4')}`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(numInt + ' .mp4')}`);
+        folderPrefixes.forEach(baseFolder => {
+            candidates.push(`${baseFolder}/${h.num}.MP4`);
+            if (String(numInt) !== h.num) {
+                candidates.push(`${baseFolder}/${numInt}.MP4`);
+            }
+            candidates.push(`${baseFolder}/${numPad4}.mp4`);
+            candidates.push(`${baseFolder}/${encodeURIComponent(h.num + ' .mp4')}`);
+            candidates.push(`${baseFolder}/${encodeURIComponent(numInt + ' .mp4')}`);
+        });
 
         if (hasEnie) {
             const nfdVariant = baseTitle.normalize('NFD');
@@ -1746,30 +1797,36 @@
             const underscoreEnie = baseTitle.replace(/[ñÑ]/g, '_');
 
             [nfdVariant, asciiVariant, strippedEnie, underscoreEnie].filter(Boolean).forEach(t => {
-                [`${h.num} - ${t}.mp4`, `${numInt} - ${t}.mp4`, `${t}.mp4`].forEach(fn => {
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
+                [`${numInt} ${t}.mp4`, `${h.num} - ${t}.mp4`, `${numInt} - ${t}.mp4`, `${t}.mp4`].forEach(fn => {
+                    const enc = encodeURIComponent(fn);
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${enc}`);
+                    candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${enc}`);
                 });
             });
 
             // Respaldo Mojibake (Ã± -> %C3%83%C2%B1) y Latin-1 (%F1)
-            const baseEncoded = encodeURIComponent(`${h.num} - ${titleWithEnie}.mp4`).replace(/%C3%91/gi, '%C3%B1');
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${baseEncoded.replace(/%C3%B1/gi, '%C3%83%C2%B1')}`);
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${baseEncoded.replace(/%C3%B1/gi, '%F1')}`);
+            const baseEncoded = encodeURIComponent(`${numInt} ${noVowelAccentsAndNoPunct}.mp4`).replace(/%C3%91/gi, '%C3%B1');
+            folderPrefixes.forEach(baseFolder => {
+                candidates.push(`${baseFolder}/${baseEncoded.replace(/%C3%B1/gi, '%C3%83%C2%B1')}`);
+                candidates.push(`${baseFolder}/${baseEncoded.replace(/%C3%B1/gi, '%F1')}`);
+            });
         }
 
         // Otras extensiones posibles de video/audio en R2
         ['.m4v', '.webm', '.mov', '.mkv', '.mp3', '.m4a'].forEach(ext => {
-            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}${ext}`);
-            if (String(numInt) !== h.num) {
-                candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}${ext}`);
-            }
+            folderPrefixes.forEach(baseFolder => {
+                candidates.push(`${baseFolder}/${h.num}${ext}`);
+                if (String(numInt) !== h.num) {
+                    candidates.push(`${baseFolder}/${numInt}${ext}`);
+                }
+            });
         });
 
-        // Subcarpeta Himnos/ o carpeta en minúsculas
-        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${h.num}.mp4`);
-        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpeta}/${numInt}.mp4`);
+        // Carpeta en minúsculas
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${h.num}.mp4`);
         candidates.push(`${CLOUDFLARE_R2_URL}/${carpetaLower}/${numInt}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpetaLower}/${h.num}.mp4`);
+        candidates.push(`${CLOUDFLARE_R2_URL}/Himnos/${carpetaLower}/${numInt}.mp4`);
 
         return [...new Set(candidates)];
     }
@@ -1811,7 +1868,12 @@
     }
 
     async function buscarPorPrefijoXmlR2(carpeta, numStr, numInt, signal = null) {
-        const prefixes = [`${carpeta}/${numStr}`, `${carpeta}/${numInt}`];
+        const prefixes = [
+            `${carpeta}/${numStr}`,
+            `${carpeta}/${numInt}`,
+            `Himnos/${carpeta}/${numStr}`,
+            `Himnos/${carpeta}/${numInt}`
+        ];
         for (const prefix of prefixes) {
             try {
                 const listUrl = `${CLOUDFLARE_R2_URL}/?list-type=2&prefix=${encodeURIComponent(prefix)}`;
@@ -1819,7 +1881,7 @@
                 if (!res.ok) continue;
                 const xmlText = await res.text();
                 const keyMatches = [...xmlText.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m => m[1]);
-                const exactRegex = new RegExp(`^${carpeta}/0*${numInt}(?:[^0-9].*)?\\.(mp4|m4v|webm|mov|mkv|mp3|m4a)$`, 'i');
+                const exactRegex = new RegExp(`^(?:Himnos/)?${carpeta}/0*${numInt}(?:[^0-9].*)?\\.(mp4|m4v|webm|mov|mkv|mp3|m4a)$`, 'i');
                 const matchedKey = keyMatches.find(k => exactRegex.test(k));
                 if (matchedKey) {
                     const encodedPath = matchedKey.split('/').map(seg => encodeURIComponent(seg)).join('/');
@@ -1851,9 +1913,9 @@
             return primaryUrl;
         }
 
-        // Buscar en paralelo entre todas las variantes posibles (%C3%B1, %25C3%25B1, etc.)
+        // Buscar en paralelo entre todas las variantes posibles (Himnos/, %C3%B1, sin tilde, etc.)
         const remaining = candidates.slice(1);
-        const BATCH = 12;
+        const BATCH = 14;
         for (let i = 0; i < remaining.length; i += BATCH) {
             if (signal && signal.aborted) return null;
             const slice = remaining.slice(i, i + BATCH);
@@ -2374,13 +2436,15 @@
                 if (!resC.ok) {
                     missingCantado.push(`#${h.num} (${h.title}) -> ${resC.status}`);
                 } else if (!resC.url.endsWith(`/Cantado/${h.num}.mp4`)) {
-                    altNamesFound.push(`#${h.num} Cantado -> ${decodeURIComponent(resC.url.split('/').pop())}`);
+                    const relPath = decodeURIComponent(resC.url.replace(CLOUDFLARE_R2_URL + '/', ''));
+                    altNamesFound.push(`#${h.num} Cantado -> ${relPath}`);
                 }
 
                 if (!resI.ok) {
                     missingInstrumental.push(`#${h.num} (${h.title}) -> ${resI.status}`);
                 } else if (!resI.url.endsWith(`/Instrumental/${h.num}.mp4`)) {
-                    altNamesFound.push(`#${h.num} Instrumental -> ${decodeURIComponent(resI.url.split('/').pop())}`);
+                    const relPath = decodeURIComponent(resI.url.replace(CLOUDFLARE_R2_URL + '/', ''));
+                    altNamesFound.push(`#${h.num} Instrumental -> ${relPath}`);
                 }
 
                 if (resC.ok && resI.ok) {
@@ -2405,7 +2469,7 @@
         lines.push(`=== REPORTE DE AUDITORÍA R2 (${himnosList.length} HIMNOS) ===\n`);
 
         if (altNamesFound.length > 0) {
-            lines.push(`✅ ENCONTRADOS CON NOMBRE ALTERNATIVO (${altNamesFound.length}):`);
+            lines.push(`✅ ENCONTRADOS CON NOMBRE/RUTA ALTERNATIVA (${altNamesFound.length}):`);
             altNamesFound.forEach(item => lines.push(`   - ${item}`));
             lines.push('');
         }
