@@ -768,14 +768,6 @@
             margin-left: 6px;
         }
 
-        #hymn-player-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; padding: 0 !important; margin: 0 !important; background: #000 !important; }
-        #hymn-player-wrapper:fullscreen .video-section { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; }
-        #hymn-player-wrapper:fullscreen .video-container { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; aspect-ratio: unset !important; border: none !important; border-radius: 0 !important; }
-        #hymn-player-wrapper:fullscreen #playerControls { position: absolute !important; bottom: 14px !important; left: 0 !important; width: 100vw !important; z-index: 100 !important; background: rgba(15, 10, 6, 0.78) !important; backdrop-filter: blur(8px); border-radius: 0 !important; display: flex !important; flex-direction: row !important; justify-content: center !important; }
-        #hymn-player-wrapper:fullscreen .esc-notice { display: inline-block !important; }
-        #hymn-player-wrapper:fullscreen .controls-header, #hymn-player-wrapper:fullscreen .timeline-container, #hymn-player-wrapper:fullscreen .search-wrap, #hymn-player-wrapper:fullscreen .checkbox-container, #hymn-player-wrapper:fullscreen .playlist-header, #hymn-player-wrapper:fullscreen #playlist { display: none !important; }
-        #hymn-player-wrapper:fullscreen #shareBtn, #hymn-player-wrapper:fullscreen #helpBtn { display: none !important; }
-
         /* --- MODALES --- */
         .modal-overlay {
             position: fixed;
@@ -1577,6 +1569,181 @@
             .poster-title-main {
                 font-size: clamp(0.72rem, 4.4cqw, 1.15rem);
                 letter-spacing: 2px;
+            }
+        }
+
+        /* --- MODO PANTALLA COMPLETA (SIN BARRA DE FONDO Y EN EL BORDE INFERIOR) --- */
+        #hymn-player-wrapper:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            max-width: 100vw !important;
+            border-radius: 0 !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #000 !important;
+        }
+
+        #hymn-player-wrapper:fullscreen #playerContainer {
+            display: block !important;
+            width: 100% !important;
+            height: 100% !important;
+            position: relative !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .video-section {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .video-container {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            aspect-ratio: unset !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        #hymn-player-wrapper:fullscreen #playerControls {
+            position: absolute !important;
+            bottom: max(8px, env(safe-area-inset-bottom)) !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            z-index: 100 !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            padding: 0 10px !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: center !important;
+            pointer-events: none !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .controls-buttons {
+            pointer-events: auto !important;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            width: auto !important;
+            max-width: 100% !important;
+            background: transparent !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .controls-buttons > .btn-ctrl {
+            flex: 0 0 auto !important;
+            background: rgba(15, 10, 6, 0.45) !important;
+            border: 1px solid rgba(255, 255, 255, 0.16) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55) !important;
+        }
+
+        #hymn-player-wrapper:fullscreen #playBtn {
+            background: rgba(198, 128, 50, 0.85) !important;
+            border-color: rgba(243, 198, 134, 0.45) !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .speed-container {
+            background: rgba(15, 10, 6, 0.45) !important;
+            border: 1px solid rgba(255, 255, 255, 0.16) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55) !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .volume-container {
+            width: auto !important;
+            margin-left: 0 !important;
+            margin-top: 0 !important;
+            flex: 0 0 auto !important;
+        }
+
+        #hymn-player-wrapper:fullscreen .esc-notice {
+            display: inline-block !important;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+        }
+
+        #hymn-player-wrapper:fullscreen .controls-header,
+        #hymn-player-wrapper:fullscreen .timeline-container,
+        #hymn-player-wrapper:fullscreen .search-wrap,
+        #hymn-player-wrapper:fullscreen .checkbox-container,
+        #hymn-player-wrapper:fullscreen .playlist-header,
+        #hymn-player-wrapper:fullscreen #playlist,
+        #hymn-player-wrapper:fullscreen #shareBtn,
+        #hymn-player-wrapper:fullscreen #helpBtn {
+            display: none !important;
+        }
+
+        @media (max-width: 900px) {
+            #hymn-player-wrapper:fullscreen #playerControls {
+                bottom: max(4px, env(safe-area-inset-bottom)) !important;
+                padding: 0 4px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .controls-buttons {
+                gap: 4px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .controls-buttons > .btn-ctrl {
+                padding: 4px 6px !important;
+                height: 26px !important;
+                min-width: 26px !important;
+                border-radius: 6px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .controls-buttons > .btn-ctrl span,
+            #hymn-player-wrapper:fullscreen .esc-notice {
+                display: none !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .controls-buttons svg.ico {
+                width: 13px !important;
+                height: 13px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .volume-container {
+                gap: 4px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .speed-container {
+                height: 24px !important;
+                padding: 0 2px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .btn-speed {
+                width: 16px !important;
+                height: 16px !important;
+                font-size: 0.72rem !important;
+            }
+
+            #hymn-player-wrapper:fullscreen .speed-display {
+                font-size: 0.64rem !important;
+                min-width: 30px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen #muteBtn {
+                padding: 3px 5px !important;
+                height: 24px !important;
+            }
+
+            #hymn-player-wrapper:fullscreen input[type="range"].volume-slider {
+                width: 48px !important;
+                min-width: 48px !important;
+                flex: 0 0 48px !important;
+                height: 3px !important;
             }
         }
     </style>
@@ -5003,8 +5170,19 @@
 
     function togglePantallaCompleta() {
         const wrapper = document.getElementById('hymn-player-wrapper');
-        if (!document.fullscreenElement) wrapper.requestFullscreen().catch(() => {});
-        else if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (wrapper.requestFullscreen) {
+                wrapper.requestFullscreen().catch(() => {});
+            } else if (wrapper.webkitRequestFullscreen) {
+                wrapper.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
     }
 
     function getSelectedDisplay() {
