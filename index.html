@@ -171,6 +171,7 @@
         .volume-slider { width: 75px; accent-color: #d9822b; cursor: pointer; }
         .search-input { width: 100%; padding: 6px 10px; font-size: clamp(0.8rem, 1.8vw, 0.9rem); border: 1px solid #b89363; border-radius: 5px; background-color: #f8ebd5; color: #2d1704; outline: none; flex-shrink: 0; font-weight: 600; }
         .checkbox-container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 5px 10px; background: rgba(18, 9, 2, 0.45); border: 1px solid rgba(217, 155, 56, 0.2); border-radius: 6px; font-size: clamp(0.75rem, 1.8vw, 0.85rem); flex-shrink: 0; }
+        .checkbox-right-group { display: flex; align-items: center; gap: 12px; margin-left: auto; }
         .select-pantalla { background: #3b1d05; color: #f7dfb8; border: 1px solid #7a420f; padding: 3px 6px; border-radius: 5px; font-size: clamp(0.72rem, 1.6vw, 0.82rem); outline: none; cursor: pointer; max-width: 240px; font-weight: 500; }
         
         /* --- ENCABEZADO DE LISTA Y CONTROLES DE PLAYLIST / LOCAL --- */
@@ -642,17 +643,21 @@
                 flex-wrap: nowrap !important;
                 white-space: nowrap;
                 gap: 4px;
-                padding: 4px 6px;
-                font-size: 0.75rem;
+                padding: 4px 5px;
+                font-size: 0.71rem;
+            }
+
+            .checkbox-right-group {
+                gap: 5px;
             }
 
             .select-pantalla {
-                max-width: 105px !important;
+                max-width: 80px !important;
                 text-overflow: ellipsis;
                 white-space: nowrap;
                 overflow: hidden;
-                padding: 2px 4px;
-                font-size: 0.72rem;
+                padding: 2px 3px;
+                font-size: 0.69rem;
             }
 
             .controls-buttons {
@@ -822,17 +827,21 @@
 
             .checkbox-container {
                 grid-area: checkboxes;
-                padding: 2px 5px;
-                font-size: 0.6rem;
+                padding: 2px 4px;
+                font-size: 0.58rem;
                 white-space: nowrap;
-                gap: 4px;
+                gap: 3px;
                 flex-wrap: nowrap !important;
             }
 
+            .checkbox-right-group {
+                gap: 4px;
+            }
+
             .select-pantalla {
-                padding: 1px 3px;
-                font-size: 0.58rem;
-                max-width: 90px;
+                padding: 1px 2px;
+                font-size: 0.56rem;
+                max-width: 72px;
             }
 
             .playlist-header {
@@ -944,7 +953,7 @@
         <input type="text" id="searchInput" class="search-input" placeholder="Buscar himno por nombre o número..." oninput="filtrarHimnos()" onkeydown="manejarTeclaBusqueda(event)">
         
         <div class="checkbox-container">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                 <input type="checkbox" id="secondaryScreenCheckbox" onchange="actualizarModoProyeccion()">
                 <span style="font-weight: 600; color: #ebd1a7;">Proyectar en:</span>
             </label>
@@ -953,8 +962,13 @@
                 <option value="-1">Cargando pantallas...</option>
             </select>
 
-            <div style="display:flex; align-items:center; gap:6px; margin-left: auto;">
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <div class="checkbox-right-group">
+                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;" title="Reproducir automáticamente todo el himnario de forma continua (desactivado por defecto para uso en cultos)">
+                    <input type="checkbox" id="autoPlayAllCheckbox" autocomplete="off" onchange="cambiarModoContinuo()">
+                    <span>Continuo</span>
+                </label>
+
+                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
                     <input type="checkbox" id="instrumentalCheckbox" onchange="cambiarModoAudio()">
                     <span>Instrumental</span>
                 </label>
@@ -1008,8 +1022,8 @@
                 <div class="help-feature-card">
                     <div class="help-feature-icon">🎤</div>
                     <div class="help-feature-content">
-                        <div class="help-feature-title">Modo Cantado e Instrumental</div>
-                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar la lista entre la versión con voces y la pista musical de acompañamiento manteniendo en reproducción el himno actual.</div>
+                        <div class="help-feature-title">Modo Cantado, Instrumental y Continuo</div>
+                        <div class="help-feature-desc">Activa o desactiva la casilla <strong>Instrumental</strong> para alternar la lista entre voces y pista manteniendo en reproducción el himno actual. Por defecto cada himno se detiene al finalizar (ideal para cultos); si deseas escuchar todo el himnario seguido, activa la casilla <strong>Continuo</strong>.</div>
                     </div>
                 </div>
 
@@ -3328,6 +3342,19 @@
                 }
             }
         }
+
+        const autoPlayAll = document.getElementById('autoPlayAllCheckbox')?.checked;
+        if (autoPlayAll && himnosList.length > 0) {
+            if (currentIndex >= 0 && currentIndex < himnosList.length - 1) {
+                reproducirHimno(himnosList[currentIndex + 1], true);
+                return;
+            } else if (currentIndex === himnosList.length - 1) {
+                stopHymn();
+                mostrarToast('Fin del himnario (Himno 613)');
+                return;
+            }
+        }
+
         stopHymn();
     }
 
@@ -4103,6 +4130,13 @@
         reproducirHimno(himnosList[newIdx], true);
     }
 
+    function cambiarModoContinuo() {
+        const isContinuous = document.getElementById('autoPlayAllCheckbox').checked;
+        mostrarToast(isContinuous
+            ? '🔁 Reproducción continua activada (avanzará todo el himnario)'
+            : '⏹ Modo culto: se detendrá al finalizar cada himno');
+    }
+
     function cambiarModoAudio() {
         const isInst = document.getElementById('instrumentalCheckbox').checked;
         document.getElementById('modeBadge').innerText = isInst ? 'MODO: INSTRUMENTAL' : 'MODO: CANTADO';
@@ -4343,6 +4377,8 @@
     });
 
     window.onload = () => {
+        const autoPlayAllChk = document.getElementById('autoPlayAllCheckbox');
+        if (autoPlayAllChk) autoPlayAllChk.checked = false;
         configurarVideoSilencioso(document.getElementById('myMedia1'));
         configurarVideoSilencioso(document.getElementById('myMedia2'));
         setupMediaSession();
