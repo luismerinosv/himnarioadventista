@@ -2150,6 +2150,296 @@
                 background: #d4933b;
                 transition: width 0.15s ease;
             }
+                    /* =========================================================================
+               ESTILOS: DESCARGA MP4 POR FILA, CARPETA EN PC Y CONFIRMACIÓN DE BORRADO
+               ========================================================================= */
+            
+            /* Botón MP4 en cada fila de la lista de himnos */
+            .btn-row-mp4 {
+                background: transparent;
+                border: 1px solid rgba(212, 147, 59, 0.35);
+                color: #d4933b;
+                border-radius: 6px;
+                padding: 3px 6px;
+                font-size: 0.68rem;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 3px;
+                flex-shrink: 0;
+                transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            }
+            .btn-row-mp4:hover,
+            .btn-row-mp4:active {
+                background: #d4933b;
+                color: #140d06;
+                border-color: #f5c16c;
+            }
+            .btn-row-mp4 svg {
+                width: 13px;
+                height: 13px;
+            }
+            
+            /* Barra flotante de progreso de descarga MP4 */
+            #mp4DownloadBanner {
+                display: none;
+                position: fixed;
+                bottom: 18px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 99997;
+                background: #18110b;
+                border: 1px solid rgba(212, 147, 59, 0.55);
+                border-radius: 12px;
+                padding: 11px 16px;
+                min-width: 260px;
+                max-width: 90vw;
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75);
+                color: #f3ead8;
+                font-size: 0.85rem;
+            }
+            #mp4DownloadBanner.active {
+                display: block;
+            }
+            .mp4-progress-track {
+                width: 100%;
+                height: 6px;
+                background: rgba(255, 255, 255, 0.12);
+                border-radius: 999px;
+                overflow: hidden;
+                margin-top: 7px;
+            }
+            .mp4-progress-fill {
+                height: 100%;
+                width: 0%;
+                background: #d4933b;
+                transition: width 0.15s ease;
+            }
+            
+            /* Modal de configuración de carpeta en PC */
+            #folderManagerModal {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 99999;
+                background: rgba(0, 0, 0, 0.78);
+                backdrop-filter: blur(4px);
+                align-items: center;
+                justify-content: center;
+                padding: 18px;
+            }
+            #folderManagerModal.active {
+                display: flex;
+            }
+            .folder-modal-card {
+                background: #18110b;
+                border: 1px solid rgba(212, 147, 59, 0.38);
+                border-radius: 16px;
+                max-width: 430px;
+                width: 100%;
+                padding: 20px;
+                color: #f3ead8;
+                box-shadow: 0 18px 40px rgba(0, 0, 0, 0.78);
+            }
+            .folder-modal-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 12px;
+            }
+            .folder-modal-header h3 {
+                margin: 0;
+                font-size: 1.1rem;
+                color: #f5c16c;
+            }
+            .folder-close-x {
+                background: transparent;
+                border: none;
+                color: #cbbba0;
+                font-size: 1.3rem;
+                cursor: pointer;
+                padding: 2px 6px;
+            }
+            .folder-status-box {
+                background: #100b07;
+                border: 1px solid rgba(255, 255, 255, 0.09);
+                border-radius: 10px;
+                padding: 12px;
+                margin-bottom: 14px;
+                font-size: 0.88rem;
+                color: #cbbba0;
+            }
+            .folder-status-box strong {
+                color: #f3ead8;
+                display: block;
+                margin-top: 4px;
+                word-break: break-word;
+            }
+            .folder-modal-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 9px;
+            }
+            .folder-modal-actions button {
+                width: 100%;
+                padding: 11px 14px;
+                border-radius: 10px;
+                font-size: 0.9rem;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+            }
+            .btn-folder-primary {
+                background: #d4933b;
+                color: #140d06;
+            }
+            .btn-folder-secondary {
+                background: #271d14;
+                color: #f3ead8;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            }
+            .btn-folder-danger {
+                background: transparent;
+                color: #e07a6c;
+                border: 1px solid rgba(224, 122, 108, 0.3) !important;
+                font-size: 0.83rem !important;
+                padding: 8px 12px !important;
+            }
+            .folder-files-list {
+                margin-top: 14px;
+                max-height: 185px;
+                overflow-y: auto;
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
+                padding-top: 10px;
+                display: none;
+            }
+            .folder-files-list.has-items {
+                display: block;
+            }
+            .folder-files-title {
+                font-size: 0.8rem;
+                color: #cbbba0;
+                margin-bottom: 6px;
+            }
+            .folder-file-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 7px 9px;
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.04);
+                margin-bottom: 5px;
+                font-size: 0.82rem;
+            }
+            .folder-file-item span {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .folder-file-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            .folder-file-item button {
+                background: #d4933b;
+                color: #140d06;
+                border: none;
+                border-radius: 6px;
+                padding: 4px 9px;
+                font-size: 0.78rem;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            .folder-file-item button.btn-file-del {
+                background: rgba(224, 122, 108, 0.16);
+                color: #f08c7e;
+                border: 1px solid rgba(224, 122, 108, 0.35);
+            }
+            .folder-file-item button.btn-file-del:hover {
+                background: #d9534f;
+                color: #ffffff;
+            }
+            
+            /* Modal de confirmación para eliminar archivo físico en la PC */
+            #deletePcFileModal {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 100000;
+                background: rgba(0, 0, 0, 0.8);
+                backdrop-filter: blur(4px);
+                align-items: center;
+                justify-content: center;
+                padding: 18px;
+            }
+            #deletePcFileModal.active {
+                display: flex;
+            }
+            .delete-pc-card {
+                background: #18110b;
+                border: 1px solid rgba(212, 147, 59, 0.4);
+                border-radius: 16px;
+                max-width: 390px;
+                width: 100%;
+                padding: 22px 20px;
+                text-align: center;
+                color: #f3ead8;
+                box-shadow: 0 18px 40px rgba(0, 0, 0, 0.8);
+            }
+            .delete-pc-card h3 {
+                margin: 0 0 8px;
+                font-size: 1.1rem;
+                color: #f5c16c;
+            }
+            .delete-pc-card p {
+                margin: 0 0 12px;
+                font-size: 0.88rem;
+                line-height: 1.45;
+                color: #cbbba0;
+            }
+            .delete-pc-filename {
+                background: #100b07;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 9px 10px;
+                margin-bottom: 16px;
+                font-size: 0.83rem;
+                color: #f3ead8;
+                word-break: break-word;
+                white-space: pre-line;
+            }
+            .delete-pc-actions {
+                display: flex;
+                gap: 10px;
+            }
+            .delete-pc-actions button {
+                flex: 1;
+                padding: 10px 12px;
+                border-radius: 10px;
+                font-size: 0.88rem;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+            }
+            .btn-pc-keep {
+                background: #271d14;
+                color: #f3ead8;
+                border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            }
+            .btn-pc-delete {
+                background: #c94a44;
+                color: #ffffff;
+            }
     </style>
 </head>
 <body>
@@ -2622,7 +2912,55 @@
         </div>
     </div>
 </div>
-    
+ <div id="mp4DownloadBanner" role="status" aria-live="polite">
+    <div id="mp4DownloadText">Preparando descarga...</div>
+    <div class="mp4-progress-track">
+        <div class="mp4-progress-fill" id="mp4ProgressFill"></div>
+    </div>
+</div>
+
+<div id="folderManagerModal" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
+    <div class="folder-modal-card">
+        <div class="folder-modal-header">
+            <h3 id="folderModalTitle">Carpeta de descargas (PC)</h3>
+            <button type="button" class="folder-close-x" onclick="cerrarModalCarpetaPC()" aria-label="Cerrar">&times;</button>
+        </div>
+
+        <div class="folder-status-box">
+            Carpeta configurada actualmente:
+            <strong id="selectedFolderName">Ninguna (usa la carpeta Descargas del navegador)</strong>
+        </div>
+
+        <div class="folder-modal-actions">
+            <button type="button" class="btn-folder-primary" onclick="descargarHimnoActualDesdeModalPC()">
+                Descargar himno actual en esta carpeta
+            </button>
+            <button type="button" class="btn-folder-secondary" onclick="seleccionarCarpetaPC()">
+                Elegir carpeta en otra unidad / partición
+            </button>
+            <button type="button" class="btn-folder-danger" id="btnRemoveFolderPC" style="display:none;" onclick="quitarCarpetaPC()">
+                Quitar carpeta personalizada
+            </button>
+        </div>
+
+        <div class="folder-files-list" id="folderFilesList">
+            <div class="folder-files-title">Himnos guardados en esta carpeta:</div>
+            <div id="folderFilesContainer"></div>
+        </div>
+    </div>
+</div>
+
+<div id="deletePcFileModal" role="dialog" aria-modal="true" aria-labelledby="deletePcModalTitle">
+    <div class="delete-pc-card">
+        <h3 id="deletePcModalTitle">¿Eliminar también de la PC?</h3>
+        <p id="deletePcModalDesc">Este himno también está guardado en tu carpeta personalizada:</p>
+        <div class="delete-pc-filename" id="deletePcFileNameLabel"></div>
+        <div class="delete-pc-actions">
+            <button type="button" class="btn-pc-keep" onclick="cerrarModalEliminarPC()">Conservar en PC</button>
+            <button type="button" class="btn-pc-delete" onclick="confirmarEliminarArchivoPC()">Eliminar de la PC</button>
+        </div>
+    </div>
+</div>   
 <script>
     const CLOUDFLARE_R2_URL = "https://pub-3fdb4c8b681d428ea3e99f3e7a7f626b.r2.dev";
     const WORKER_URL = "https://himnario-link.luismerinosv.workers.dev";
@@ -6520,6 +6858,727 @@
             descargaEnCurso = false;
         }
     }
+            // =========================================================================
+            // SISTEMA COMPLETO: MP4 POR FILA, CARPETA EN PC Y BORRADO SINCRONIZADO
+            // =========================================================================
+            const FOLDER_DB_NAME = 'HimnarioCustomFolderDB';
+            const FOLDER_STORE_NAME = 'config';
+            const FOLDER_KEY = 'pcDirectoryHandle';
+            const soportaSelectorCarpetasPC = ('showDirectoryPicker' in window) && !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+        
+            let pcDirHandle = null;
+            let descargaEnCurso = false;
+            let r2ConfigCache = null;
+            let archivosPendientesEliminarPC = [];
+            let refrescarModalCarpetaTrasBorrar = false;
+        
+            function notificarUsuario(msg) {
+                if (typeof mostrarToast === 'function') {
+                    mostrarToast(msg);
+                } else {
+                    alert(msg);
+                }
+            }
+        
+            function abrirFolderDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(FOLDER_DB_NAME, 1);
+                    req.onupgradeneeded = () => {
+                        req.result.createObjectStore(FOLDER_STORE_NAME);
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        
+            async function guardarHandleCarpetaDB(handle) {
+                const db = await abrirFolderDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
+                    tx.objectStore(FOLDER_STORE_NAME).put(handle, FOLDER_KEY);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+        
+            async function leerHandleCarpetaDB() {
+                const db = await abrirFolderDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(FOLDER_STORE_NAME, 'readonly');
+                    const req = tx.objectStore(FOLDER_STORE_NAME).get(FOLDER_KEY);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        
+            async function borrarHandleCarpetaDB() {
+                const db = await abrirFolderDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
+                    tx.objectStore(FOLDER_STORE_NAME).delete(FOLDER_KEY);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+        
+            function limpiarNombreArchivo(texto) {
+                return texto
+                    .replace(/:/g, ' -')
+                    .replace(/[\\/*?"<>|]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+        
+            function esModoInstrumentalActivo() {
+                const chk = document.querySelector('#instrumentalToggle, input[type="checkbox"][id*="instrum" i]');
+                if (chk) return Boolean(chk.checked);
+        
+                const toggleBtn = Array.from(document.querySelectorAll('button, span, div')).find(el => {
+                    const t = el.textContent.trim();
+                    return el.children.length === 0 && (t === 'Instrumental' || t === 'Cantado');
+                });
+                return toggleBtn ? toggleBtn.textContent.trim() === 'Instrumental' : false;
+            }
+        
+            function detectarPatronR2() {
+                if (r2ConfigCache) return r2ConfigCache;
+        
+                const videos = Array.from(document.querySelectorAll('video'));
+                for (const v of videos) {
+                    const src = v.currentSrc || v.src || (v.querySelector('source') && v.querySelector('source').src) || '';
+                    if (/^https?:\/\/.+\.mp4/i.test(src)) {
+                        r2ConfigCache = { sampleUrl: src };
+                        return r2ConfigCache;
+                    }
+                }
+        
+                const scriptsText = Array.from(document.querySelectorAll('script:not([src])'))
+                    .map(s => s.textContent)
+                    .join('\n');
+        
+                const r2DomainMatch = scriptsText.match(/https:\/\/[a-zA-Z0-9.-]+\.r2\.dev[^\s"'`)]*/i);
+                if (r2DomainMatch) {
+                    const base = r2DomainMatch[0].replace(/\/+$/, '');
+                    const usaSubcarpetaCantado = /\/cantado\//i.test(scriptsText);
+                    const usaSubcarpetaInstrum = /\/instrumental\//i.test(scriptsText);
+                    r2ConfigCache = {
+                        baseUrl: base,
+                        usaSubcarpetaCantado,
+                        usaSubcarpetaInstrum
+                    };
+                    return r2ConfigCache;
+                }
+        
+                return null;
+            }
+        
+            function construirCandidatosUrl(numInt, esInstrumental) {
+                const num3 = String(numInt).padStart(3, '0');
+                const numRaw = String(numInt);
+                const candidatos = [];
+        
+                const posiblesListas = [
+                    typeof himnos !== 'undefined' ? himnos : null,
+                    typeof hymns !== 'undefined' ? hymns : null,
+                    typeof listaHimnos !== 'undefined' ? listaHimnos : null,
+                    typeof allHymns !== 'undefined' ? allHymns : null,
+                    typeof HIMNOS !== 'undefined' ? HIMNOS : null
+                ].filter(Array.isArray);
+        
+                for (const lista of posiblesListas) {
+                    const item = lista.find(h => Number(h.numero ?? h.num ?? h.id) === numInt);
+                    if (item) {
+                        const urlDirecta = esInstrumental
+                            ? (item.instrumental || item.urlInstrumental || item.inst || item.url_inst)
+                            : (item.cantado || item.urlCantado || item.url || item.src || item.mp4 || item.video);
+                        if (urlDirecta && /^https?:\/\//i.test(urlDirecta)) {
+                            candidatos.push(urlDirecta);
+                        }
+                    }
+                }
+        
+                const patron = detectarPatronR2();
+                if (patron && patron.sampleUrl) {
+                    let u = patron.sampleUrl;
+                    if (esInstrumental) {
+                        u = u.replace(/\/cantado\//i, '/instrumental/');
+                    } else {
+                        u = u.replace(/\/instrumental\//i, '/cantado/');
+                    }
+                    candidatos.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${num3}$1`));
+                    candidatos.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${numRaw}$1`));
+                } else if (patron && patron.baseUrl) {
+                    let base = patron.baseUrl.replace(/\/(cantado|instrumental)$/i, '');
+                    if (esInstrumental) {
+                        if (patron.usaSubcarpetaInstrum) {
+                            candidatos.push(`${base}/instrumental/${num3}.mp4`);
+                            candidatos.push(`${base}/instrumental/${numRaw}.mp4`);
+                        }
+                        candidatos.push(`${base}/${num3}-instrumental.mp4`);
+                        candidatos.push(`${base}/${num3}.mp4`);
+                    } else {
+                        if (patron.usaSubcarpetaCantado) {
+                            candidatos.push(`${base}/cantado/${num3}.mp4`);
+                            candidatos.push(`${base}/cantado/${numRaw}.mp4`);
+                        }
+                        candidatos.push(`${base}/${num3}.mp4`);
+                        candidatos.push(`${base}/${numRaw}.mp4`);
+                    }
+                }
+        
+                return [...new Set(candidatos)];
+            }
+        
+            function extraerInfoDeFila(row) {
+                const clone = row.cloneNode(true);
+                clone.querySelectorAll('button, svg').forEach(el => el.remove());
+                const textoLimpio = clone.textContent.replace(/\s+/g, ' ').trim();
+                const match = textoLimpio.match(/^(\d{1,3})\s+(.+)$/);
+                if (!match) return null;
+        
+                const numInt = parseInt(match[1], 10);
+                const numStr = String(numInt).padStart(3, '0');
+                const titulo = match[2].trim();
+                return { numInt, numStr, titulo };
+            }
+        
+            // Inyectar botón "MP4" a la par de Descarga, Favorito y Lista en cada fila
+            function inyectarBotonesMp4EnLista() {
+                const botonesAccion = Array.from(document.querySelectorAll('button')).filter(btn => {
+                    if (btn.classList.contains('btn-row-mp4')) return false;
+                    const title = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase();
+                    return title.includes('descarg') || title.includes('local') || title.includes('offline');
+                });
+        
+                botonesAccion.forEach(btnDescargaOculta => {
+                    const contenedorAcciones = btnDescargaOculta.parentElement;
+                    if (!contenedorAcciones || contenedorAcciones.querySelector('.btn-row-mp4')) return;
+        
+                    let fila = contenedorAcciones.parentElement;
+                    let info = null;
+                    for (let i = 0; i < 4 && fila; i++) {
+                        info = extraerInfoDeFila(fila);
+                        if (info) break;
+                        fila = fila.parentElement;
+                    }
+                    if (!info) return;
+        
+                    const btnMp4 = document.createElement('button');
+                    btnMp4.type = 'button';
+                    btnMp4.className = 'btn-row-mp4';
+                    btnMp4.title = 'Descargar archivo MP4 en el dispositivo';
+                    btnMp4.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>MP4</span>
+                    `;
+        
+                    btnMp4.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        descargarHimnoPorInfo(info.numInt, info.numStr, info.titulo);
+                    });
+        
+                    contenedorAcciones.insertBefore(btnMp4, btnDescargaOculta.nextSibling);
+                });
+            }
+        
+            async function descargarHimnoPorInfo(numInt, numStr, titulo) {
+                const esInstrumental = esModoInstrumentalActivo();
+                const sufijo = esInstrumental ? ' (Instrumental)' : ' (Cantado)';
+                const fileName = `${limpiarNombreArchivo(`${numStr} - ${titulo}${sufijo}`)}.mp4`;
+                const candidatos = construirCandidatosUrl(numInt, esInstrumental);
+        
+                if (candidatos.length === 0) {
+                    notificarUsuario('No se pudo localizar el enlace del archivo MP4.');
+                    return;
+                }
+        
+                let tienePermisoPC = false;
+                if (soportaSelectorCarpetasPC && pcDirHandle) {
+                    tienePermisoPC = await verificarPermisoCarpeta(pcDirHandle);
+                }
+        
+                await guardarVideoDesdeCandidatos(candidatos, fileName, tienePermisoPC);
+            }
+        
+            function obtenerDatosHimnoActual() {
+                const titleEl = Array.from(document.querySelectorAll('div, span, h1, h2, h3')).find(el => {
+                    return el.children.length === 0 && /^Himno\s+\d+\s*:/i.test(el.textContent.trim());
+                });
+        
+                const esInstrumental = esModoInstrumentalActivo();
+                const sufijo = esInstrumental ? ' (Instrumental)' : ' (Cantado)';
+        
+                if (titleEl) {
+                    const match = titleEl.textContent.trim().match(/^Himno\s+(\d+)\s*:\s*(.+)$/i);
+                    if (match) {
+                        const numInt = parseInt(match[1], 10);
+                        const numStr = String(numInt).padStart(3, '0');
+                        const titulo = match[2].trim();
+                        const fileName = `${limpiarNombreArchivo(`${numStr} - ${titulo}${sufijo}`)}.mp4`;
+                        const candidatos = construirCandidatosUrl(numInt, esInstrumental);
+        
+                        const videos = Array.from(document.querySelectorAll('video'));
+                        for (const v of videos) {
+                            const src = v.currentSrc || v.src || (v.querySelector('source') && v.querySelector('source').src) || '';
+                            if (/^https?:\/\//i.test(src)) {
+                                candidatos.unshift(src);
+                                break;
+                            }
+                        }
+        
+                        return {
+                            candidatos: [...new Set(candidatos)],
+                            fileName
+                        };
+                    }
+                }
+        
+                return null;
+            }
+        
+            async function verificarPermisoCarpeta(handle) {
+                if (!handle) return false;
+                const opts = { mode: 'readwrite' };
+                if ((await handle.queryPermission(opts)) === 'granted') return true;
+                if ((await handle.requestPermission(opts)) === 'granted') return true;
+                return false;
+            }
+        
+            function accionBotonDescargaExterna() {
+                if (soportaSelectorCarpetasPC) {
+                    abrirModalCarpetaPC();
+                } else {
+                    descargarVideoEnMovil();
+                }
+            }
+        
+            async function abrirModalCarpetaPC() {
+                const modal = document.getElementById('folderManagerModal');
+                if (modal) modal.classList.add('active');
+                actualizarInterfazCarpetaPC();
+                if (pcDirHandle) {
+                    await verificarPermisoCarpeta(pcDirHandle);
+                    await listarArchivosEnCarpetaPC();
+                }
+            }
+        
+            function cerrarModalCarpetaPC() {
+                const modal = document.getElementById('folderManagerModal');
+                if (modal) modal.classList.remove('active');
+            }
+        
+            function actualizarInterfazCarpetaPC() {
+                const nameEl = document.getElementById('selectedFolderName');
+                const removeBtn = document.getElementById('btnRemoveFolderPC');
+                if (!nameEl) return;
+        
+                if (pcDirHandle) {
+                    nameEl.textContent = `📁 ${pcDirHandle.name}`;
+                    if (removeBtn) removeBtn.style.display = 'flex';
+                } else {
+                    nameEl.textContent = 'Ninguna (usa la carpeta Descargas del navegador)';
+                    if (removeBtn) removeBtn.style.display = 'none';
+                    const listBox = document.getElementById('folderFilesList');
+                    if (listBox) listBox.classList.remove('has-items');
+                }
+            }
+        
+            async function seleccionarCarpetaPC() {
+                if (!soportaSelectorCarpetasPC) {
+                    notificarUsuario('Tu navegador no admite seleccionar carpetas personalizadas.');
+                    return;
+                }
+                try {
+                    const handle = await window.showDirectoryPicker({
+                        id: 'himnario-adventista-videos',
+                        mode: 'readwrite',
+                        startIn: 'videos'
+                    });
+                    pcDirHandle = handle;
+                    await guardarHandleCarpetaDB(handle);
+                    actualizarInterfazCarpetaPC();
+                    notificarUsuario(`Carpeta "${handle.name}" activada`);
+                    await listarArchivosEnCarpetaPC();
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Error seleccionando carpeta:', err);
+                        notificarUsuario('No se pudo acceder a la carpeta seleccionada.');
+                    }
+                }
+            }
+        
+            async function quitarCarpetaPC() {
+                pcDirHandle = null;
+                await borrarHandleCarpetaDB();
+                actualizarInterfazCarpetaPC();
+                notificarUsuario('Se restableció la descarga estándar');
+            }
+        
+            async function listarArchivosEnCarpetaPC() {
+                const listBox = document.getElementById('folderFilesList');
+                const container = document.getElementById('folderFilesContainer');
+                if (!listBox || !container || !pcDirHandle) return;
+        
+                try {
+                    const permiso = await pcDirHandle.queryPermission({ mode: 'readwrite' });
+                    if (permiso !== 'granted') {
+                        listBox.classList.remove('has-items');
+                        return;
+                    }
+        
+                    const archivos = [];
+                    for await (const entry of pcDirHandle.values()) {
+                        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.mp4')) {
+                            archivos.push(entry);
+                        }
+                    }
+        
+                    archivos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+                    container.innerHTML = '';
+        
+                    if (archivos.length === 0) {
+                        listBox.classList.remove('has-items');
+                        return;
+                    }
+        
+                    archivos.forEach((fileHandle) => {
+                        const row = document.createElement('div');
+                        row.className = 'folder-file-item';
+        
+                        const span = document.createElement('span');
+                        span.textContent = fileHandle.name;
+                        span.title = fileHandle.name;
+        
+                        const actions = document.createElement('div');
+                        actions.className = 'folder-file-actions';
+        
+                        const btnPlay = document.createElement('button');
+                        btnPlay.type = 'button';
+                        btnPlay.textContent = 'Reproducir';
+                        btnPlay.onclick = () => reproducirDesdeCarpetaPC(fileHandle);
+        
+                        const btnDel = document.createElement('button');
+                        btnDel.type = 'button';
+                        btnDel.className = 'btn-file-del';
+                        btnDel.textContent = 'Eliminar';
+                        btnDel.onclick = () => solicitarEliminarArchivoPC([fileHandle.name], true);
+        
+                        actions.appendChild(btnPlay);
+                        actions.appendChild(btnDel);
+        
+                        row.appendChild(span);
+                        row.appendChild(actions);
+                        container.appendChild(row);
+                    });
+        
+                    listBox.classList.add('has-items');
+                } catch (e) {
+                    listBox.classList.remove('has-items');
+                }
+            }
+        
+            async function reproducirDesdeCarpetaPC(fileHandle) {
+                try {
+                    const file = await fileHandle.getFile();
+                    const blobUrl = URL.createObjectURL(file);
+                    const videoEl = document.querySelector('video');
+                    if (videoEl) {
+                        videoEl.src = blobUrl;
+                        videoEl.play();
+                        cerrarModalCarpetaPC();
+                        notificarUsuario(`Reproduciendo: ${fileHandle.name}`);
+                    }
+                } catch (e) {
+                    notificarUsuario('No se pudo leer el archivo de la carpeta.');
+                }
+            }
+        
+            async function buscarArchivosHimnoEnPC(numStr, esInstrumental) {
+                if (!soportaSelectorCarpetasPC || !pcDirHandle) return [];
+        
+                const tienePermiso = await verificarPermisoCarpeta(pcDirHandle);
+                if (!tienePermiso) return [];
+        
+                const coincidenciaModo = [];
+                const coincidenciaNumero = [];
+                const tagModo = esInstrumental ? '(instrumental)' : '(cantado)';
+        
+                for await (const entry of pcDirHandle.values()) {
+                    if (entry.kind !== 'file' || !entry.name.toLowerCase().endsWith('.mp4')) continue;
+        
+                    const nombreLower = entry.name.toLowerCase();
+                    const esMismoHimno = nombreLower.startsWith(`${numStr.toLowerCase()} - `) ||
+                                         nombreLower.startsWith(`himno ${numStr.toLowerCase()}`) ||
+                                         nombreLower.startsWith(`himno ${parseInt(numStr, 10)} `);
+        
+                    if (esMismoHimno) {
+                        coincidenciaNumero.push(entry.name);
+                        if (nombreLower.includes(tagModo)) {
+                            coincidenciaModo.push(entry.name);
+                        }
+                    }
+                }
+        
+                return coincidenciaModo.length > 0 ? coincidenciaModo : coincidenciaNumero;
+            }
+        
+            function solicitarEliminarArchivoPC(listaNombres, desdeModalCarpeta = false) {
+                if (!pcDirHandle || !listaNombres || listaNombres.length === 0) return;
+        
+                archivosPendientesEliminarPC = listaNombres;
+                refrescarModalCarpetaTrasBorrar = desdeModalCarpeta;
+        
+                const descEl = document.getElementById('deletePcModalDesc');
+                const labelEl = document.getElementById('deletePcFileNameLabel');
+                const modal = document.getElementById('deletePcFileModal');
+        
+                if (descEl) {
+                    descEl.innerHTML = desdeModalCarpeta
+                        ? `¿Deseas eliminar permanentemente de la carpeta <strong>${pcDirHandle.name}</strong>?`
+                        : `Este himno también está en la carpeta <strong>${pcDirHandle.name}</strong> de tu PC. ¿Deseas eliminar también el archivo?`;
+                }
+                if (labelEl) {
+                    labelEl.textContent = listaNombres.join('\n');
+                }
+                if (modal) {
+                    modal.classList.add('active');
+                }
+            }
+        
+            function cerrarModalEliminarPC() {
+                archivosPendientesEliminarPC = [];
+                const modal = document.getElementById('deletePcFileModal');
+                if (modal) modal.classList.remove('active');
+            }
+        
+            async function confirmarEliminarArchivoPC() {
+                if (!pcDirHandle || archivosPendientesEliminarPC.length === 0) {
+                    cerrarModalEliminarPC();
+                    return;
+                }
+        
+                const nombres = [...archivosPendientesEliminarPC];
+                const carpetaNombre = pcDirHandle.name;
+                const refrescarLista = refrescarModalCarpetaTrasBorrar;
+                cerrarModalEliminarPC();
+        
+                try {
+                    const tienePermiso = await verificarPermisoCarpeta(pcDirHandle);
+                    if (!tienePermiso) {
+                        notificarUsuario('No se concedió permiso para modificar la carpeta.');
+                        return;
+                    }
+        
+                    let eliminados = 0;
+                    for (const nombre of nombres) {
+                        try {
+                            await pcDirHandle.removeEntry(nombre);
+                            eliminados++;
+                        } catch (e) {
+                            console.warn('No se pudo eliminar:', nombre, e);
+                        }
+                    }
+        
+                    if (eliminados > 0) {
+                        notificarUsuario(
+                            eliminados === 1
+                                ? `Archivo eliminado de "${carpetaNombre}"`
+                                : `${eliminados} archivos eliminados de "${carpetaNombre}"`
+                        );
+                    }
+        
+                    if (refrescarLista) {
+                        await listarArchivosEnCarpetaPC();
+                    }
+                } catch (err) {
+                    console.error('Error al eliminar archivo en PC:', err);
+                    notificarUsuario('No se pudo eliminar el archivo de la carpeta.');
+                }
+            }
+        
+            // Detectar cuando se elimina un himno en PC para preguntar si también se borra el MP4
+            document.addEventListener('click', async (e) => {
+                if (!soportaSelectorCarpetasPC || !pcDirHandle) return;
+        
+                const btn = e.target.closest('button');
+                if (!btn || btn.classList.contains('btn-row-mp4') || btn.classList.contains('btn-file-del')) return;
+        
+                const metaBtn = [
+                    btn.getAttribute('title') || '',
+                    btn.getAttribute('aria-label') || '',
+                    btn.getAttribute('onclick') || '',
+                    btn.className || ''
+                ].join(' ').toLowerCase();
+        
+                const esAccionEliminar = /(eliminar|borrar|quitar|delete|remove|trash)/i.test(metaBtn);
+                if (!esAccionEliminar) return;
+        
+                let fila = btn.parentElement;
+                let info = null;
+                for (let i = 0; i < 5 && fila; i++) {
+                    info = extraerInfoDeFila(fila);
+                    if (info) break;
+                    fila = fila.parentElement;
+                }
+                if (!info) return;
+        
+                const esInstrumental = esModoInstrumentalActivo();
+                const encontrados = await buscarArchivosHimnoEnPC(info.numStr, esInstrumental);
+        
+                if (encontrados.length > 0) {
+                    solicitarEliminarArchivoPC(encontrados, false);
+                }
+            }, true);
+        
+            async function descargarConProgreso(url, onProgress) {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+                const contentLength = Number(response.headers.get('Content-Length')) || 0;
+                if (!response.body || !contentLength) {
+                    const blob = await response.blob();
+                    onProgress(100);
+                    return blob;
+                }
+        
+                const reader = response.body.getReader();
+                const chunks = [];
+                let received = 0;
+        
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    onProgress(Math.min(99, Math.round((received / contentLength) * 100)));
+                }
+        
+                onProgress(100);
+                return new Blob(chunks, { type: 'video/mp4' });
+            }
+        
+            function mostrarProgresoMP4(visible, texto = '', porcentaje = 0) {
+                const banner = document.getElementById('mp4DownloadBanner');
+                const textEl = document.getElementById('mp4DownloadText');
+                const fillEl = document.getElementById('mp4ProgressFill');
+                if (!banner) return;
+        
+                if (!visible) {
+                    banner.classList.remove('active');
+                    return;
+                }
+                banner.classList.add('active');
+                if (textEl) textEl.textContent = texto;
+                if (fillEl) fillEl.style.width = `${porcentaje}%`;
+            }
+        
+            async function descargarHimnoActualDesdeModalPC() {
+                const datos = obtenerDatosHimnoActual();
+                if (!datos || !datos.candidatos || datos.candidatos.length === 0) {
+                    notificarUsuario('Selecciona un himno de la lista primero.');
+                    return;
+                }
+        
+                let tienePermiso = false;
+                if (soportaSelectorCarpetasPC && pcDirHandle) {
+                    tienePermiso = await verificarPermisoCarpeta(pcDirHandle);
+                }
+        
+                cerrarModalCarpetaPC();
+                await guardarVideoDesdeCandidatos(datos.candidatos, datos.fileName, tienePermiso);
+            }
+        
+            async function descargarVideoEnMovil() {
+                const datos = obtenerDatosHimnoActual();
+                if (!datos || !datos.candidatos || datos.candidatos.length === 0) {
+                    notificarUsuario('Selecciona un himno de la lista primero.');
+                    return;
+                }
+                await guardarVideoDesdeCandidatos(datos.candidatos, datos.fileName, false);
+            }
+        
+            async function guardarVideoDesdeCandidatos(candidatos, fileName, permisoYaConcedido = false) {
+                if (descargaEnCurso) {
+                    notificarUsuario('Ya hay una descarga en curso...');
+                    return;
+                }
+        
+                descargaEnCurso = true;
+                mostrarProgresoMP4(true, `Descargando ${fileName}... 0%`, 0);
+        
+                try {
+                    let blob = null;
+                    let ultimoError = null;
+        
+                    for (const url of candidatos) {
+                        try {
+                            blob = await descargarConProgreso(url, (pct) => {
+                                mostrarProgresoMP4(true, `Descargando ${fileName}... ${pct}%`, pct);
+                            });
+                            if (blob && blob.size > 0) break;
+                        } catch (err) {
+                            ultimoError = err;
+                        }
+                    }
+        
+                    if (!blob) {
+                        throw ultimoError || new Error('Archivo no disponible');
+                    }
+        
+                    if (soportaSelectorCarpetasPC && pcDirHandle && permisoYaConcedido) {
+                        const fileHandle = await pcDirHandle.getFileHandle(fileName, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+        
+                        mostrarProgresoMP4(false);
+                        descargaEnCurso = false;
+                        notificarUsuario(`Guardado en "${pcDirHandle.name}": ${fileName}`);
+                        return;
+                    }
+        
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        
+                    mostrarProgresoMP4(false);
+                    notificarUsuario(`Descargado: ${fileName}`);
+                } catch (err) {
+                    console.error('Error al descargar MP4:', err);
+                    mostrarProgresoMP4(false);
+                    notificarUsuario('No se pudo descargar el archivo MP4.');
+                } finally {
+                    descargaEnCurso = false;
+                }
+            }
+        
+            // Inicializar botón superior e inyectar botones MP4 en toda la lista
+            window.addEventListener('load', async () => {
+                const label = document.getElementById('saveMp4BtnLabel');
+                if (soportaSelectorCarpetasPC) {
+                    if (label) label.textContent = 'Carpeta / MP4';
+                    try {
+                        pcDirHandle = await leerHandleCarpetaDB();
+                        actualizarInterfazCarpetaPC();
+                    } catch (e) {}
+                } else {
+                    if (label) label.textContent = 'Guardar MP4';
+                }
+        
+                inyectarBotonesMp4EnLista();
+                const observer = new MutationObserver(() => inyectarBotonesMp4EnLista());
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
 </script>
     <div id="mp4DownloadBanner" role="status" aria-live="polite">
             <div id="mp4DownloadText">Preparando descarga...</div>
