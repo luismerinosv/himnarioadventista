@@ -5695,29 +5695,43 @@
         if (installBtn) installBtn.style.display = 'none';
         mostrarToast('Himnario instalado en tus aplicaciones');
     });
-    let exitGuardArmed = false;
+        let exitGuardArmed = false;
+    let userGestureArmed = false;
     let isExitingApp = false;
 
-    function armExitGuard() {
-        if (isExitingApp || exitGuardArmed) return;
-        history.pushState({ pwaExitGuard: true }, '', window.location.href);
+    function armExitGuard(fromUserGesture = false) {
+        if (isExitingApp) return;
+        if (exitGuardArmed && (!fromUserGesture || userGestureArmed)) return;
+
+        history.pushState({ pwaExitGuard: true, activated: fromUserGesture }, '', window.location.href);
         exitGuardArmed = true;
+        if (fromUserGesture) {
+            userGestureArmed = true;
+        }
     }
 
-    // Activar protección al cargar y tras el primer toque (requisito de Chrome en Android)
-    window.addEventListener('load', armExitGuard);
-    ['pointerdown', 'keydown'].forEach((evt) => {
+    // 1. Preparar base al cargar y activar el bloqueo real en el primer toque del usuario
+    window.addEventListener('load', () => {
+        if (!history.state) {
+            history.replaceState({ pwaBase: true }, '', window.location.href);
+        }
+        armExitGuard(false);
+    });
+
+    ['touchstart', 'pointerdown', 'keydown'].forEach((evt) => {
         window.addEventListener(evt, () => {
-            if (!history.state || !history.state.pwaExitGuard) {
-                exitGuardArmed = false;
-                armExitGuard();
+            if (!isExitingApp && !userGestureArmed) {
+                armExitGuard(true);
             }
         }, { passive: true });
     });
 
+    // 2. Interceptar siempre el botón Atrás (<)
     window.addEventListener('popstate', () => {
         if (isExitingApp) return;
+
         exitGuardArmed = false;
+        userGestureArmed = false;
 
         const exitModal = document.getElementById('exitConfirmModal');
         if (exitModal && exitModal.classList.contains('active')) {
@@ -5726,29 +5740,64 @@
         }
 
         if (exitModal) {
+            restaurarTextoModalSalida();
             exitModal.classList.add('active');
         }
     });
 
-        function cancelarSalidaApp() {
-            const exitModal = document.getElementById('exitConfirmModal');
-            if (exitModal) exitModal.classList.remove('active');
-            armExitGuard();
+    function restaurarTextoModalSalida() {
+        const title = document.getElementById('exitModalTitle');
+        const desc = document.querySelector('#exitConfirmModal p');
+        const btnStay = document.querySelector('#exitConfirmModal .btn-exit-stay');
+        const btnClose = document.querySelector('#exitConfirmModal .btn-exit-close');
+
+        if (title) title.textContent = '¿Deseas salir del Himnario?';
+        if (desc) desc.innerHTML = 'Si deseas mantenerlo en segundo plano mientras escuchas, presiona el botón <strong>Inicio (○)</strong> de tu teléfono.';
+        if (btnStay) btnStay.textContent = 'Seguir aquí';
+        if (btnClose) btnClose.style.display = '';
+    }
+
+    function cancelarSalidaApp() {
+        isExitingApp = false;
+        const exitModal = document.getElementById('exitConfirmModal');
+        if (exitModal) exitModal.classList.remove('active');
+        restaurarTextoModalSalida();
+        armExitGuard(true);
+    }
+
+    function confirmarSalidaApp() {
+        isExitingApp = true;
+
+        // Detener cualquier audio o video activo
+        document.querySelectorAll('video, audio').forEach((media) => {
+            try { media.pause(); } catch (e) {}
+        });
+
+        // Intentar cerrar la ventana directamente dentro del clic del usuario
+        try { window.close(); } catch (e) {}
+
+        // Volver a la entrada raíz del historial sin volver a activar el bloqueo
+        if (history.length > 1) {
+            try { history.go(-(history.length - 1)); } catch (e) {}
         }
-    
-        function confirmarSalidaApp() {
-            isExitingApp = true;
-            const exitModal = document.getElementById('exitConfirmModal');
-            if (exitModal) exitModal.classList.remove('active');
-    
-            // Detener reproducción antes de salir
-            document.querySelectorAll('video, audio').forEach((media) => {
-                try { media.pause(); } catch (e) {}
-            });
-    
-            history.back();
-            setTimeout(() => { window.close(); }, 150);
-        }
+
+        // Si el sistema operativo Android impide el cierre automático por código,
+        // dejar desbloqueado el botón Atrás para que el siguiente toque salga de inmediato
+        setTimeout(() => {
+            if (!window.closed) {
+                const title = document.getElementById('exitModalTitle');
+                const desc = document.querySelector('#exitConfirmModal p');
+                const btnStay = document.querySelector('#exitConfirmModal .btn-exit-stay');
+                const btnClose = document.querySelector('#exitConfirmModal .btn-exit-close');
+
+                if (title) title.textContent = 'Listo para salir';
+                if (desc) desc.innerHTML = 'Presiona el botón <strong>Atrás (&lt;)</strong> de tu teléfono una vez más para cerrar la aplicación.';
+                if (btnStay) btnStay.textContent = 'Cancelar';
+                if (btnClose) btnClose.style.display = 'none';
+            }
+        }, 250);
+    }
+
     (function initGlobalPullToRefresh() {
         const indicator = document.getElementById('ptrIndicator');
         const ptrText = document.getElementById('ptrText');
