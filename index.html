@@ -6087,373 +6087,439 @@
             }
         }, { passive: true });
     })();
-                            // =========================================================================
-                // DESCARGA MP4 EN MÓVIL Y SELECTOR DE CARPETA EN PC (FILE SYSTEM ACCESS API)
-                // =========================================================================
-                const FOLDER_DB_NAME = 'HimnarioCustomFolderDB';
-                const FOLDER_STORE_NAME = 'config';
-                const FOLDER_KEY = 'pcDirectoryHandle';
-                const soportaSelectorCarpetasPC = ('showDirectoryPicker' in window) && !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
-            
-                let pcDirHandle = null;
-                let descargaEnCurso = false;
-            
-                function notificarUsuario(msg) {
-                    if (typeof mostrarToast === 'function') {
-                        mostrarToast(msg);
-                    } else {
-                        alert(msg);
+  // =========================================================================
+    // DESCARGA MP4 EN MÓVIL Y SELECTOR DE CARPETA EN PC (CONECTADO A LA LISTA)
+    // =========================================================================
+    const FOLDER_DB_NAME = 'HimnarioCustomFolderDB';
+    const FOLDER_STORE_NAME = 'config';
+    const FOLDER_KEY = 'pcDirectoryHandle';
+    const soportaSelectorCarpetasPC = ('showDirectoryPicker' in window) && !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    let pcDirHandle = null;
+    let descargaEnCurso = false;
+    let internalFolderFetch = false;
+
+    function notificarUsuario(msg) {
+        if (typeof mostrarToast === 'function') {
+            mostrarToast(msg);
+        } else {
+            alert(msg);
+        }
+    }
+
+    function abrirFolderDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(FOLDER_DB_NAME, 1);
+            req.onupgradeneeded = () => {
+                req.result.createObjectStore(FOLDER_STORE_NAME);
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function guardarHandleCarpetaDB(handle) {
+        const db = await abrirFolderDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
+            tx.objectStore(FOLDER_STORE_NAME).put(handle, FOLDER_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    async function leerHandleCarpetaDB() {
+        const db = await abrirFolderDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(FOLDER_STORE_NAME, 'readonly');
+            const req = tx.objectStore(FOLDER_STORE_NAME).get(FOLDER_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function borrarHandleCarpetaDB() {
+        const db = await abrirFolderDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
+            tx.objectStore(FOLDER_STORE_NAME).delete(FOLDER_KEY);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    window.addEventListener('load', async () => {
+        const label = document.getElementById('saveMp4BtnLabel');
+        if (soportaSelectorCarpetasPC) {
+            if (label) label.textContent = 'Carpeta / MP4';
+            try {
+                pcDirHandle = await leerHandleCarpetaDB();
+                actualizarInterfazCarpetaPC();
+            } catch (e) {}
+        } else {
+            if (label) label.textContent = 'Guardar MP4';
+        }
+    });
+
+    function limpiarNombreArchivo(texto) {
+        return texto
+            .replace(/:/g, ' -')
+            .replace(/[\\/*?"<>|]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function construirNombreDesdeUrl(reqUrl) {
+        const matchNum = reqUrl.match(/\/(\d{1,3})\.mp4/i);
+        const numPadded = matchNum ? matchNum[1].padStart(3, '0') : '';
+        const esInstrumental = /instrumental/i.test(reqUrl);
+        const sufijo = esInstrumental ? ' (Instrumental)' : ' (Cantado)';
+
+        if (numPadded) {
+            // Buscar el título del himno en la lista visible
+            const fila = Array.from(document.querySelectorAll('.hymn-item, .song-item, li, div')).find(el => {
+                const txt = el.textContent.trim();
+                return txt.startsWith(numPadded + ' ') && txt.length < 90;
+            });
+            if (fila) {
+                const tituloLimpio = fila.textContent.trim().replace(/\s+/g, ' ');
+                return `${limpiarNombreArchivo('Himno ' + tituloLimpio + sufijo)}.mp4`;
+            }
+            return `Himno ${numPadded}${sufijo}.mp4`;
+        }
+
+        return `Himno Adventista${sufijo}.mp4`;
+    }
+
+    function obtenerDatosHimnoActual() {
+        const videoEl = document.querySelector('video');
+        if (!videoEl) return null;
+
+        const url = videoEl.currentSrc || videoEl.src || videoEl.getAttribute('data-src') || '';
+        if (!url) return null;
+
+        const titleEl = document.querySelector('.now-playing-title, #currentHymnTitle, .player-header h2, .video-info-title') ||
+                        Array.from(document.querySelectorAll('div, span, h2, h3')).find(el => /^Himno\s+\d+/i.test(el.textContent.trim()));
+
+        let baseName = titleEl ? titleEl.textContent.trim() : 'Himno Adventista';
+
+        const isInstrumental = Boolean(document.querySelector('#instrumentalToggle:checked, input[type="checkbox"][id*="instrum" i]:checked'));
+        const sufijo = isInstrumental ? ' (Instrumental)' : ' (Cantado)';
+        if (!/cantado|instrumental/i.test(baseName)) {
+            baseName += sufijo;
+        }
+
+        return {
+            url,
+            fileName: `${limpiarNombreArchivo(baseName)}.mp4`
+        };
+    }
+
+    async function verificarPermisoCarpeta(handle) {
+        if (!handle) return false;
+        const opts = { mode: 'readwrite' };
+        if ((await handle.queryPermission(opts)) === 'granted') return true;
+        if ((await handle.requestPermission(opts)) === 'granted') return true;
+        return false;
+    }
+
+    // Conectar automáticamente los botones de descarga (↓) de la lista con la carpeta de PC
+    const originalWindowFetch = window.fetch.bind(window);
+    window.fetch = async function(input, init) {
+        const response = await originalWindowFetch(input, init);
+
+        try {
+            if (!internalFolderFetch && soportaSelectorCarpetasPC && pcDirHandle && response.ok) {
+                const reqUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                const contentType = response.headers.get('Content-Type') || '';
+                const esMp4 = /\.mp4(\?|$)/i.test(reqUrl) || contentType.includes('video/mp4');
+
+                if (esMp4 && !reqUrl.startsWith('blob:')) {
+                    const permiso = await pcDirHandle.queryPermission({ mode: 'readwrite' });
+                    if (permiso === 'granted') {
+                        const cloned = response.clone();
+                        const fileName = construirNombreDesdeUrl(reqUrl);
+                        guardarResponseEnCarpetaPC(cloned, fileName);
                     }
                 }
-            
-                function abrirFolderDB() {
-                    return new Promise((resolve, reject) => {
-                        const req = indexedDB.open(FOLDER_DB_NAME, 1);
-                        req.onupgradeneeded = () => {
-                            req.result.createObjectStore(FOLDER_STORE_NAME);
-                        };
-                        req.onsuccess = () => resolve(req.result);
-                        req.onerror = () => reject(req.error);
-                    });
+            }
+        } catch (err) {
+            console.warn('No se pudo copiar la descarga a la carpeta PC:', err);
+        }
+
+        return response;
+    };
+
+    async function guardarResponseEnCarpetaPC(response, fileName) {
+        try {
+            const blob = await response.blob();
+            const fileHandle = await pcDirHandle.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            notificarUsuario(`Guardado también en "${pcDirHandle.name}": ${fileName}`);
+            await listarArchivosEnCarpetaPC();
+        } catch (e) {
+            console.error('Error escribiendo archivo en carpeta PC:', e);
+        }
+    }
+
+    function accionBotonDescargaExterna() {
+        if (soportaSelectorCarpetasPC) {
+            abrirModalCarpetaPC();
+        } else {
+            descargarVideoEnMovil();
+        }
+    }
+
+    async function abrirModalCarpetaPC() {
+        const modal = document.getElementById('folderManagerModal');
+        if (modal) modal.classList.add('active');
+        actualizarInterfazCarpetaPC();
+        if (pcDirHandle) {
+            await verificarPermisoCarpeta(pcDirHandle);
+            await listarArchivosEnCarpetaPC();
+        }
+    }
+
+    function cerrarModalCarpetaPC() {
+        const modal = document.getElementById('folderManagerModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    function actualizarInterfazCarpetaPC() {
+        const nameEl = document.getElementById('selectedFolderName');
+        const removeBtn = document.getElementById('btnRemoveFolderPC');
+        if (!nameEl) return;
+
+        if (pcDirHandle) {
+            nameEl.textContent = `📁 ${pcDirHandle.name}`;
+            if (removeBtn) removeBtn.style.display = 'flex';
+        } else {
+            nameEl.textContent = 'Ninguna (usa la carpeta Descargas del navegador)';
+            if (removeBtn) removeBtn.style.display = 'none';
+            const listBox = document.getElementById('folderFilesList');
+            if (listBox) listBox.classList.remove('has-items');
+        }
+    }
+
+    async function seleccionarCarpetaPC() {
+        if (!soportaSelectorCarpetasPC) {
+            notificarUsuario('Tu navegador no admite seleccionar carpetas personalizadas.');
+            return;
+        }
+        try {
+            const handle = await window.showDirectoryPicker({
+                id: 'himnario-adventista-videos',
+                mode: 'readwrite',
+                startIn: 'videos'
+            });
+            pcDirHandle = handle;
+            await guardarHandleCarpetaDB(handle);
+            actualizarInterfazCarpetaPC();
+            notificarUsuario(`Carpeta "${handle.name}" activada. Ya puedes descargar himnos.`);
+            await listarArchivosEnCarpetaPC();
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Error seleccionando carpeta:', err);
+                notificarUsuario('No se pudo acceder a la carpeta seleccionada.');
+            }
+        }
+    }
+
+    async function quitarCarpetaPC() {
+        pcDirHandle = null;
+        await borrarHandleCarpetaDB();
+        actualizarInterfazCarpetaPC();
+        notificarUsuario('Se restableció la descarga estándar');
+    }
+
+    async function listarArchivosEnCarpetaPC() {
+        const listBox = document.getElementById('folderFilesList');
+        const container = document.getElementById('folderFilesContainer');
+        if (!listBox || !container || !pcDirHandle) return;
+
+        try {
+            const permiso = await pcDirHandle.queryPermission({ mode: 'readwrite' });
+            if (permiso !== 'granted') {
+                listBox.classList.remove('has-items');
+                return;
+            }
+
+            const archivos = [];
+            for await (const entry of pcDirHandle.values()) {
+                if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.mp4')) {
+                    archivos.push(entry);
                 }
-            
-                async function guardarHandleCarpetaDB(handle) {
-                    const db = await abrirFolderDB();
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
-                        tx.objectStore(FOLDER_STORE_NAME).put(handle, FOLDER_KEY);
-                        tx.oncomplete = () => resolve();
-                        tx.onerror = () => reject(tx.error);
-                    });
-                }
-            
-                async function leerHandleCarpetaDB() {
-                    const db = await abrirFolderDB();
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(FOLDER_STORE_NAME, 'readonly');
-                        const req = tx.objectStore(FOLDER_STORE_NAME).get(FOLDER_KEY);
-                        req.onsuccess = () => resolve(req.result || null);
-                        req.onerror = () => reject(req.error);
-                    });
-                }
-            
-                async function borrarHandleCarpetaDB() {
-                    const db = await abrirFolderDB();
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(FOLDER_STORE_NAME, 'readwrite');
-                        tx.objectStore(FOLDER_STORE_NAME).delete(FOLDER_KEY);
-                        tx.oncomplete = () => resolve();
-                        tx.onerror = () => reject(tx.error);
-                    });
-                }
-            
-                // Inicializar estado al cargar
-                window.addEventListener('load', async () => {
-                    const label = document.getElementById('saveMp4BtnLabel');
-                    if (soportaSelectorCarpetasPC) {
-                        if (label) label.textContent = 'Carpeta / MP4';
-                        try {
-                            pcDirHandle = await leerHandleCarpetaDB();
-                            actualizarInterfazCarpetaPC();
-                        } catch (e) {}
-                    } else {
-                        if (label) label.textContent = 'Guardar MP4';
-                    }
-                });
-            
-                function limpiarNombreArchivo(texto) {
-                    return texto
-                        .replace(/:/g, ' -')
-                        .replace(/[\\/*?"<>|]/g, '')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                }
-            
-                function obtenerDatosHimnoActual() {
-                    const videoEl = document.querySelector('video');
-                    if (!videoEl) return null;
-            
-                    const url = videoEl.currentSrc || videoEl.src || '';
-                    if (!url || url.startsWith('blob:')) {
-                        // Si está reproduciendo desde blob local, buscar si existe atributo data-remote-src o similar
-                        const remoteUrl = videoEl.getAttribute('data-src') || videoEl.dataset.url || url;
-                        if (!remoteUrl) return null;
-                    }
-            
-                    // Obtener título visible del reproductor
-                    const titleEl = document.querySelector('.now-playing-title, #currentHymnTitle, .player-header h2, .video-info-title') ||
-                                    Array.from(document.querySelectorAll('div, span, h2, h3')).find(el => /^Himno\s+\d+/i.test(el.textContent.trim()));
-            
-                    let baseName = titleEl ? titleEl.textContent.trim() : 'Himno Adventista';
-            
-                    // Detectar si está en modo Cantado o Instrumental
-                    const isInstrumental = Boolean(document.querySelector('#instrumentalToggle:checked, input[type="checkbox"][id*="instrum" i]:checked'));
-                    const sufijo = isInstrumental ? ' (Instrumental)' : ' (Cantado)';
-                    if (!/cantado|instrumental/i.test(baseName)) {
-                        baseName += sufijo;
-                    }
-            
-                    return {
-                        url,
-                        fileName: `${limpiarNombreArchivo(baseName)}.mp4`
-                    };
-                }
-            
-                async function verificarPermisoCarpeta(handle) {
-                    if (!handle) return false;
-                    const opts = { mode: 'readwrite' };
-                    if ((await handle.queryPermission(opts)) === 'granted') return true;
-                    if ((await handle.requestPermission(opts)) === 'granted') return true;
-                    return false;
-                }
-            
-                function accionBotonDescargaExterna() {
-                    if (soportaSelectorCarpetasPC) {
-                        abrirModalCarpetaPC();
-                    } else {
-                        descargarVideoEnMovil();
-                    }
-                }
-            
-                async function abrirModalCarpetaPC() {
-                    const modal = document.getElementById('folderManagerModal');
-                    if (modal) modal.classList.add('active');
-                    actualizarInterfazCarpetaPC();
-                    if (pcDirHandle) {
-                        await listarArchivosEnCarpetaPC();
-                    }
-                }
-            
-                function cerrarModalCarpetaPC() {
-                    const modal = document.getElementById('folderManagerModal');
-                    if (modal) modal.classList.remove('active');
-                }
-            
-                function actualizarInterfazCarpetaPC() {
-                    const nameEl = document.getElementById('selectedFolderName');
-                    const removeBtn = document.getElementById('btnRemoveFolderPC');
-                    if (!nameEl) return;
-            
-                    if (pcDirHandle) {
-                        nameEl.textContent = `📁 ${pcDirHandle.name}`;
-                        if (removeBtn) removeBtn.style.display = 'flex';
-                    } else {
-                        nameEl.textContent = 'Ninguna (usa la carpeta Descargas del navegador)';
-                        if (removeBtn) removeBtn.style.display = 'none';
-                        const listBox = document.getElementById('folderFilesList');
-                        if (listBox) listBox.classList.remove('has-items');
-                    }
-                }
-            
-                async function seleccionarCarpetaPC() {
-                    if (!soportaSelectorCarpetasPC) {
-                        notificarUsuario('Tu navegador no admite seleccionar carpetas personalizadas.');
-                        return;
-                    }
-                    try {
-                        const handle = await window.showDirectoryPicker({
-                            id: 'himnario-adventista-videos',
-                            mode: 'readwrite',
-                            startIn: 'videos'
-                        });
-                        pcDirHandle = handle;
-                        await guardarHandleCarpetaDB(handle);
-                        actualizarInterfazCarpetaPC();
-                        notificarUsuario(`Carpeta "${handle.name}" configurada`);
-                        await listarArchivosEnCarpetaPC();
-                    } catch (err) {
-                        if (err.name !== 'AbortError') {
-                            console.error('Error seleccionando carpeta:', err);
-                            notificarUsuario('No se pudo acceder a la carpeta seleccionada.');
-                        }
-                    }
-                }
-            
-                async function quitarCarpetaPC() {
-                    pcDirHandle = null;
-                    await borrarHandleCarpetaDB();
-                    actualizarInterfazCarpetaPC();
-                    notificarUsuario('Se restableció la descarga estándar');
-                }
-            
-                async function listarArchivosEnCarpetaPC() {
-                    const listBox = document.getElementById('folderFilesList');
-                    const container = document.getElementById('folderFilesContainer');
-                    if (!listBox || !container || !pcDirHandle) return;
-            
-                    try {
-                        const permiso = await pcDirHandle.queryPermission({ mode: 'readwrite' });
-                        if (permiso !== 'granted') {
-                            listBox.classList.remove('has-items');
-                            return;
-                        }
-            
-                        const archivos = [];
-                        for await (const entry of pcDirHandle.values()) {
-                            if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.mp4')) {
-                                archivos.push(entry);
-                            }
-                        }
-            
-                        archivos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-                        container.innerHTML = '';
-            
-                        if (archivos.length === 0) {
-                            listBox.classList.remove('has-items');
-                            return;
-                        }
-            
-                        archivos.forEach((fileHandle) => {
-                            const row = document.createElement('div');
-                            row.className = 'folder-file-item';
-            
-                            const span = document.createElement('span');
-                            span.textContent = fileHandle.name;
-                            span.title = fileHandle.name;
-            
-                            const btn = document.createElement('button');
-                            btn.type = 'button';
-                            btn.textContent = 'Reproducir';
-                            btn.onclick = () => reproducirDesdeCarpetaPC(fileHandle);
-            
-                            row.appendChild(span);
-                            row.appendChild(btn);
-                            container.appendChild(row);
-                        });
-            
-                        listBox.classList.add('has-items');
-                    } catch (e) {
-                        listBox.classList.remove('has-items');
-                    }
-                }
-            
-                async function reproducirDesdeCarpetaPC(fileHandle) {
-                    try {
-                        const file = await fileHandle.getFile();
-                        const blobUrl = URL.createObjectURL(file);
-                        const videoEl = document.querySelector('video');
-                        if (videoEl) {
-                            videoEl.src = blobUrl;
-                            videoEl.play();
-                            cerrarModalCarpetaPC();
-                            notificarUsuario(`Reproduciendo desde carpeta: ${fileHandle.name}`);
-                        }
-                    } catch (e) {
-                        notificarUsuario('No se pudo leer el archivo de la carpeta.');
-                    }
-                }
-            
-                async function descargarConProgreso(url, onProgress) {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-                    const contentLength = Number(response.headers.get('Content-Length')) || 0;
-                    if (!response.body || !contentLength) {
-                        const blob = await response.blob();
-                        onProgress(100);
-                        return blob;
-                    }
-            
-                    const reader = response.body.getReader();
-                    const chunks = [];
-                    let received = 0;
-            
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        chunks.push(value);
-                        received += value.length;
-                        onProgress(Math.min(99, Math.round((received / contentLength) * 100)));
-                    }
-            
-                    onProgress(100);
-                    return new Blob(chunks, { type: 'video/mp4' });
-                }
-            
-                function mostrarProgresoMP4(visible, texto = '', porcentaje = 0) {
-                    const banner = document.getElementById('mp4DownloadBanner');
-                    const textEl = document.getElementById('mp4DownloadText');
-                    const fillEl = document.getElementById('mp4ProgressFill');
-                    if (!banner) return;
-            
-                    if (!visible) {
-                        banner.classList.remove('active');
-                        return;
-                    }
-                    banner.classList.add('active');
-                    if (textEl) textEl.textContent = texto;
-                    if (fillEl) fillEl.style.width = `${porcentaje}%`;
-                }
-            
-                async function descargarHimnoActualDesdeModalPC() {
-                    cerrarModalCarpetaPC();
-                    const datos = obtenerDatosHimnoActual();
-                    if (!datos || !datos.url || datos.url.startsWith('blob:')) {
-                        notificarUsuario('Selecciona primero un himno en línea para descargarlo.');
-                        return;
-                    }
-                    await guardarVideoEnCarpetaONavegador(datos.url, datos.fileName);
-                }
-            
-                async function descargarVideoEnMovil() {
-                    const datos = obtenerDatosHimnoActual();
-                    if (!datos || !datos.url || datos.url.startsWith('blob:')) {
-                        notificarUsuario('Selecciona primero un himno para guardar su video.');
-                        return;
-                    }
-                    await guardarVideoEnCarpetaONavegador(datos.url, datos.fileName);
-                }
-            
-                async function guardarVideoEnCarpetaONavegador(url, fileName) {
-                    if (descargaEnCurso) {
-                        notificarUsuario('Ya hay una descarga en curso...');
-                        return;
-                    }
-            
-                    descargaEnCurso = true;
-                    mostrarProgresoMP4(true, `Descargando ${fileName}... 0%`, 0);
-            
-                    try {
-                        const blob = await descargarConProgreso(url, (pct) => {
-                            mostrarProgresoMP4(true, `Descargando ${fileName}... ${pct}%`, pct);
-                        });
-            
-                        // 1. Si es PC y hay una carpeta personalizada elegida
-                        if (soportaSelectorCarpetasPC && pcDirHandle) {
-                            const tienePermiso = await verificarPermisoCarpeta(pcDirHandle);
-                            if (tienePermiso) {
-                                const fileHandle = await pcDirHandle.getFileHandle(fileName, { create: true });
-                                const writable = await fileHandle.createWritable();
-                                await writable.write(blob);
-                                await writable.close();
-            
-                                mostrarProgresoMP4(false);
-                                descargaEnCurso = false;
-                                notificarUsuario(`Guardado en carpeta "${pcDirHandle.name}": ${fileName}`);
-                                return;
-                            }
-                        }
-            
-                        // 2. Descarga estándar a la carpeta Descargas (Móvil o PC sin carpeta fija)
-                        const blobUrl = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = blobUrl;
-                        a.download = fileName;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-            
-                        mostrarProgresoMP4(false);
-                        notificarUsuario(`Video guardado en Descargas: ${fileName}`);
-                    } catch (err) {
-                        console.error('Error al descargar MP4:', err);
-                        mostrarProgresoMP4(false);
-                        notificarUsuario('No se pudo completar la descarga del video.');
-                    } finally {
-                        descargaEnCurso = false;
-                    }
-                }
+            }
+
+            archivos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+            container.innerHTML = '';
+
+            if (archivos.length === 0) {
+                listBox.classList.remove('has-items');
+                return;
+            }
+
+            archivos.forEach((fileHandle) => {
+                const row = document.createElement('div');
+                row.className = 'folder-file-item';
+
+                const span = document.createElement('span');
+                span.textContent = fileHandle.name;
+                span.title = fileHandle.name;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = 'Reproducir';
+                btn.onclick = () => reproducirDesdeCarpetaPC(fileHandle);
+
+                row.appendChild(span);
+                row.appendChild(btn);
+                container.appendChild(row);
+            });
+
+            listBox.classList.add('has-items');
+        } catch (e) {
+            listBox.classList.remove('has-items');
+        }
+    }
+
+    async function reproducirDesdeCarpetaPC(fileHandle) {
+        try {
+            const file = await fileHandle.getFile();
+            const blobUrl = URL.createObjectURL(file);
+            const videoEl = document.querySelector('video');
+            if (videoEl) {
+                videoEl.src = blobUrl;
+                videoEl.play();
+                cerrarModalCarpetaPC();
+                notificarUsuario(`Reproduciendo desde carpeta: ${fileHandle.name}`);
+            }
+        } catch (e) {
+            notificarUsuario('No se pudo leer el archivo de la carpeta.');
+        }
+    }
+
+    async function descargarConProgreso(url, onProgress) {
+        internalFolderFetch = true;
+        try {
+            const response = await originalWindowFetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const contentLength = Number(response.headers.get('Content-Length')) || 0;
+            if (!response.body || !contentLength) {
+                const blob = await response.blob();
+                onProgress(100);
+                return blob;
+            }
+
+            const reader = response.body.getReader();
+            const chunks = [];
+            let received = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                onProgress(Math.min(99, Math.round((received / contentLength) * 100)));
+            }
+
+            onProgress(100);
+            return new Blob(chunks, { type: 'video/mp4' });
+        } finally {
+            internalFolderFetch = false;
+        }
+    }
+
+    function mostrarProgresoMP4(visible, texto = '', porcentaje = 0) {
+        const banner = document.getElementById('mp4DownloadBanner');
+        const textEl = document.getElementById('mp4DownloadText');
+        const fillEl = document.getElementById('mp4ProgressFill');
+        if (!banner) return;
+
+        if (!visible) {
+            banner.classList.remove('active');
+            return;
+        }
+        banner.classList.add('active');
+        if (textEl) textEl.textContent = texto;
+        if (fillEl) fillEl.style.width = `${porcentaje}%`;
+    }
+
+    async function descargarHimnoActualDesdeModalPC() {
+        const datos = obtenerDatosHimnoActual();
+        if (!datos || !datos.url) {
+            notificarUsuario('Reproduce primero un himno (o pulsa ↓ en la lista) para descargarlo.');
+            return;
+        }
+
+        // Solicitar permiso de escritura ANTES de iniciar la descarga
+        let tienePermiso = false;
+        if (soportaSelectorCarpetasPC && pcDirHandle) {
+            tienePermiso = await verificarPermisoCarpeta(pcDirHandle);
+        }
+
+        cerrarModalCarpetaPC();
+        await guardarVideoEnCarpetaONavegador(datos.url, datos.fileName, tienePermiso);
+    }
+
+    async function descargarVideoEnMovil() {
+        const datos = obtenerDatosHimnoActual();
+        if (!datos || !datos.url) {
+            notificarUsuario('Selecciona primero un himno para guardar su video.');
+            return;
+        }
+        await guardarVideoEnCarpetaONavegador(datos.url, datos.fileName, false);
+    }
+
+    async function guardarVideoEnCarpetaONavegador(url, fileName, permisoYaConcedido = false) {
+        if (descargaEnCurso) {
+            notificarUsuario('Ya hay una descarga en curso...');
+            return;
+        }
+
+        descargaEnCurso = true;
+        mostrarProgresoMP4(true, `Descargando ${fileName}... 0%`, 0);
+
+        try {
+            const blob = await descargarConProgreso(url, (pct) => {
+                mostrarProgresoMP4(true, `Descargando ${fileName}... ${pct}%`, pct);
+            });
+
+            if (soportaSelectorCarpetasPC && pcDirHandle && permisoYaConcedido) {
+                const fileHandle = await pcDirHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+
+                mostrarProgresoMP4(false);
+                descargaEnCurso = false;
+                notificarUsuario(`Guardado en carpeta "${pcDirHandle.name}": ${fileName}`);
+                return;
+            }
+
+            // Descarga estándar a la carpeta Descargas del navegador
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+
+            mostrarProgresoMP4(false);
+            notificarUsuario(`Video guardado en Descargas: ${fileName}`);
+        } catch (err) {
+            console.error('Error al descargar MP4:', err);
+            mostrarProgresoMP4(false);
+            notificarUsuario(`Error al descargar: ${err.message}`);
+        } finally {
+            descargaEnCurso = false;
+        }
+    }
 </script>
     <div id="mp4DownloadBanner" role="status" aria-live="polite">
             <div id="mp4DownloadText">Preparando descarga...</div>
