@@ -1,6 +1,6 @@
 {
-  "name": "Himnario Adventista en Línea",
-  "short_name": "Himnario",
+  "name": "Himnario Adventista App",
+  "short_name": "Himnario Adventista App",
   "description": "Colección completa de 613 himnos cantados e instrumentales.",
   "start_url": "./index.html",
   "scope": "./",
