@@ -8629,707 +8629,707 @@
 </script>
 
 <script>
-(function () {
-    const esPC = ('showDirectoryPicker' in window) && !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
-    const DB_NAME = 'HimnarioPcStorageDB';
-    const STORE_NAME = 'handles';
-    const KEY_OFFLINE_DIR = 'offlineDirHandle';
-    const KEY_MP4_DIR = 'mp4DirHandle';
-    const HIDDEN_SUBFOLDER = '.himnario_offline';
-    const LS_SAVED_KEYS = 'himnario_pc_offline_index_v1';
-
-    let pcOfflineHandle = null;
-    let pcMp4Handle = null;
-    let descargaActiva = false;
-    let r2Patron = null;
-    let scanTimer = null;
-    let isScanning = false;
-    let pendienteBorrarPC = null;
-
-    function avisar(texto) {
-        if (typeof window.mostrarToast === 'function') {
-            window.mostrarToast(texto);
-        } else {
-            alert(texto);
-        }
-    }
-
-    function limpiarNombre(str) {
-        return str
-            .replace(/:/g, ' -')
-            .replace(/[\\/*?"<>|]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    // --- IndexedDB para recordar ambas carpetas en PC ---
-    function abrirDB() {
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(DB_NAME, 1);
-            req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    }
-
-    async function guardarHandleDB(key, handle) {
-        const db = await abrirDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put(handle, key);
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-        });
-    }
-
-    async function leerHandleDB(key) {
-        const db = await abrirDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const req = tx.objectStore(STORE_NAME).get(key);
-            req.onsuccess = () => resolve(req.result || null);
-            req.onerror = () => reject(req.error);
-        });
-    }
-
-    function obtenerIndiceGuardadosPC() {
-        try {
-            return new Set(JSON.parse(localStorage.getItem(LS_SAVED_KEYS) || '[]'));
-        } catch (e) {
-            return new Set();
-        }
-    }
-
-    function guardarIndicePC(setKeys) {
-        try {
-            localStorage.setItem(LS_SAVED_KEYS, JSON.stringify([...setKeys]));
-        } catch (e) {}
-    }
-
-    function claveHimno(numStr, esInstrumental) {
-        return `${numStr}_${esInstrumental ? 'inst' : 'cant'}`;
-    }
-
-    function nombreOcultoArchivo(numStr, esInstrumental) {
-        return `${claveHimno(numStr, esInstrumental)}.dat`;
-    }
-
-    // --- Detección de modo (Cantado / Instrumental) y rutas de video ---
-    function esInstrumentalActivo() {
-        const chk = document.querySelector('#instrumentalToggle, input[type="checkbox"][id*="instrum" i]');
-        if (chk) return Boolean(chk.checked);
-
-        const lbl = Array.from(document.querySelectorAll('label, span, button')).find(el => {
-            return el.children.length === 0 && el.textContent.trim() === 'Instrumental';
-        });
-        if (lbl && lbl.previousElementSibling && lbl.previousElementSibling.type === 'checkbox') {
-            return lbl.previousElementSibling.checked;
-        }
-        return false;
-    }
-
-    function obtenerPatronR2() {
-        if (r2Patron) return r2Patron;
-
-        const videos = document.querySelectorAll('video');
-        for (const v of videos) {
-            const src = v.currentSrc || v.src || (v.querySelector('source') && v.querySelector('source').src) || '';
-            if (/^https?:\/\/.+\.mp4/i.test(src)) {
-                r2Patron = { sampleUrl: src };
-                return r2Patron;
-            }
-        }
-
-        const scripts = document.querySelectorAll('script:not([src])');
-        for (const s of scripts) {
-            const txt = s.textContent;
-            const match = txt.match(/https:\/\/[a-zA-Z0-9.-]+\.r2\.dev[^\s"'`)]*/i);
-            if (match) {
-                r2Patron = {
-                    baseUrl: match[0].replace(/\/+$/, ''),
-                    tieneCantado: /\/cantado\//i.test(txt),
-                    tieneInstrumental: /\/instrumental\//i.test(txt)
-                };
-                return r2Patron;
-            }
-        }
-        return null;
-    }
-
-    function obtenerUrlsCandidatas(numInt, esInstrumental) {
-        const num3 = String(numInt).padStart(3, '0');
-        const numRaw = String(numInt);
-        const urls = [];
-
-        const listas = [window.himnos, window.hymns, window.listaHimnos, window.allHymns, window.HIMNOS].filter(Array.isArray);
-        for (const lista of listas) {
-            const item = lista.find(h => Number(h.numero ?? h.num ?? h.id) === numInt);
-            if (item) {
-                const directa = esInstrumental
-                    ? (item.instrumental || item.urlInstrumental || item.inst || item.url_inst)
-                    : (item.cantado || item.urlCantado || item.url || item.src || item.mp4 || item.video);
-                if (directa && /^https?:\/\//i.test(directa)) urls.push(directa);
-            }
-        }
-
-        const patron = obtenerPatronR2();
-        if (patron && patron.sampleUrl) {
-            let u = patron.sampleUrl;
-            u = esInstrumental ? u.replace(/\/cantado\//i, '/instrumental/') : u.replace(/\/instrumental\//i, '/cantado/');
-            urls.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${num3}$1`));
-            urls.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${numRaw}$1`));
-        } else if (patron && patron.baseUrl) {
-            const base = patron.baseUrl.replace(/\/(cantado|instrumental)$/i, '');
-            if (esInstrumental) {
-                if (patron.tieneInstrumental) {
-                    urls.push(`${base}/instrumental/${num3}.mp4`);
-                    urls.push(`${base}/instrumental/${numRaw}.mp4`);
-                }
-                urls.push(`${base}/${num3}-instrumental.mp4`);
-                urls.push(`${base}/${num3}.mp4`);
-            } else {
-                if (patron.tieneCantado) {
-                    urls.push(`${base}/cantado/${num3}.mp4`);
-                    urls.push(`${base}/cantado/${numRaw}.mp4`);
-                }
-                urls.push(`${base}/${num3}.mp4`);
-                urls.push(`${base}/${numRaw}.mp4`);
-            }
-        }
-
-        return [...new Set(urls)];
-    }
-
-    function mostrarProgreso(visible, texto = '', pct = 0) {
-        const box = document.getElementById('mp4ToastProgress');
-        const lbl = document.getElementById('mp4ToastLabel');
-        const fill = document.getElementById('mp4ToastFill');
-        if (!box) return;
-
-        if (!visible) {
-            box.classList.remove('active');
-            return;
-        }
-        box.classList.add('active');
-        if (lbl) lbl.textContent = texto;
-        if (fill) fill.style.width = `${pct}%`;
-    }
-
-    async function bajarBlobConProgreso(candidatos, etiquetaProgreso) {
-        for (const url of candidatos) {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) continue;
-
-                const total = Number(res.headers.get('Content-Length')) || 0;
-                if (!res.body || !total) {
-                    const blob = await res.blob();
-                    mostrarProgreso(true, `${etiquetaProgreso}... 100%`, 100);
-                    if (blob && blob.size > 0) return blob;
+        (function () {
+            const esPC = ('showDirectoryPicker' in window) && !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+            const DB_NAME = 'HimnarioPcStorageDB';
+            const STORE_NAME = 'handles';
+            const KEY_OFFLINE_DIR = 'offlineDirHandle';
+            const KEY_MP4_DIR = 'mp4DirHandle';
+            const HIDDEN_SUBFOLDER = '.himnario_offline';
+            const LS_SAVED_KEYS = 'himnario_pc_offline_index_v1';
+        
+            let pcOfflineHandle = null;
+            let pcMp4Handle = null;
+            let descargaActiva = false;
+            let r2Patron = null;
+            let scanTimer = null;
+            let isScanning = false;
+            let pendienteBorrarPC = null;
+        
+            function avisar(texto) {
+                if (typeof window.mostrarToast === 'function') {
+                    window.mostrarToast(texto);
                 } else {
-                    const reader = res.body.getReader();
-                    const chunks = [];
-                    let recibido = 0;
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        chunks.push(value);
-                        recibido += value.length;
-                        const pct = Math.min(99, Math.round((recibido / total) * 100));
-                        mostrarProgreso(true, `${etiquetaProgreso}... ${pct}%`, pct);
-                    }
-                    const blob = new Blob(chunks, { type: 'video/mp4' });
-                    mostrarProgreso(true, `${etiquetaProgreso}... 100%`, 100);
-                    if (blob && blob.size > 0) return blob;
+                    alert(texto);
                 }
-            } catch (e) {}
-        }
-        return null;
-    }
-
-    async function asegurarPermisoCarpeta(handle) {
-        if (!handle) return false;
-        const opts = { mode: 'readwrite' };
-        if ((await handle.queryPermission(opts)) === 'granted') return true;
-        if ((await handle.requestPermission(opts)) === 'granted') return true;
-        return false;
-    }
-
-    // =========================================================================
-    // 1. DESCARGA DE MP4 VISIBLE (Para compartir)
-    //    En PC pide carpeta la 1ra vez; en móvil va directo a Descargas
-    // =========================================================================
-    async function descargarMp4ParaCompartir(numInt, numStr, titulo) {
-        if (descargaActiva) {
-            avisar('Ya se está descargando un himno...');
-            return;
-        }
-
-        let usarCarpetaPC = false;
-
-        if (esPC) {
-            if (!pcMp4Handle) {
+            }
+        
+            function limpiarNombre(str) {
+                return str
+                    .replace(/:/g, ' -')
+                    .replace(/[\\/*?"<>|]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+        
+            // --- IndexedDB para recordar ambas carpetas en PC ---
+            function abrirDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(DB_NAME, 1);
+                    req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        
+            async function guardarHandleDB(key, handle) {
+                const db = await abrirDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    tx.objectStore(STORE_NAME).put(handle, key);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+        
+            async function leerHandleDB(key) {
+                const db = await abrirDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const req = tx.objectStore(STORE_NAME).get(key);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        
+            function obtenerIndiceGuardadosPC() {
                 try {
-                    const handle = await window.showDirectoryPicker({
-                        id: 'himnario-mp4-share-dir',
-                        mode: 'readwrite',
-                        startIn: 'videos'
-                    });
+                    return new Set(JSON.parse(localStorage.getItem(LS_SAVED_KEYS) || '[]'));
+                } catch (e) {
+                    return new Set();
+                }
+            }
+        
+            function guardarIndicePC(setKeys) {
+                try {
+                    localStorage.setItem(LS_SAVED_KEYS, JSON.stringify([...setKeys]));
+                } catch (e) {}
+            }
+        
+            function claveHimno(numStr, esInstrumental) {
+                return `${numStr}_${esInstrumental ? 'inst' : 'cant'}`;
+            }
+        
+            function nombreOcultoArchivo(numStr, esInstrumental) {
+                return `${claveHimno(numStr, esInstrumental)}.dat`;
+            }
+        
+            // --- Detección de modo (Cantado / Instrumental) y rutas de video ---
+            function esInstrumentalActivo() {
+                const chk = document.querySelector('#instrumentalToggle, input[type="checkbox"][id*="instrum" i]');
+                if (chk) return Boolean(chk.checked);
+        
+                const lbl = Array.from(document.querySelectorAll('label, span, button')).find(el => {
+                    return el.children.length === 0 && el.textContent.trim() === 'Instrumental';
+                });
+                if (lbl && lbl.previousElementSibling && lbl.previousElementSibling.type === 'checkbox') {
+                    return lbl.previousElementSibling.checked;
+                }
+                return false;
+            }
+        
+            function obtenerPatronR2() {
+                if (r2Patron) return r2Patron;
+        
+                const videos = document.querySelectorAll('video');
+                for (const v of videos) {
+                    const src = v.currentSrc || v.src || (v.querySelector('source') && v.querySelector('source').src) || '';
+                    if (/^https?:\/\/.+\.mp4/i.test(src)) {
+                        r2Patron = { sampleUrl: src };
+                        return r2Patron;
+                    }
+                }
+        
+                const scripts = document.querySelectorAll('script:not([src])');
+                for (const s of scripts) {
+                    const txt = s.textContent;
+                    const match = txt.match(/https:\/\/[a-zA-Z0-9.-]+\.r2\.dev[^\s"'`)]*/i);
+                    if (match) {
+                        r2Patron = {
+                            baseUrl: match[0].replace(/\/+$/, ''),
+                            tieneCantado: /\/cantado\//i.test(txt),
+                            tieneInstrumental: /\/instrumental\//i.test(txt)
+                        };
+                        return r2Patron;
+                    }
+                }
+                return null;
+            }
+        
+            function obtenerUrlsCandidatas(numInt, esInstrumental) {
+                const num3 = String(numInt).padStart(3, '0');
+                const numRaw = String(numInt);
+                const urls = [];
+        
+                const listas = [window.himnos, window.hymns, window.listaHimnos, window.allHymns, window.HIMNOS].filter(Array.isArray);
+                for (const lista of listas) {
+                    const item = lista.find(h => Number(h.numero ?? h.num ?? h.id) === numInt);
+                    if (item) {
+                        const directa = esInstrumental
+                            ? (item.instrumental || item.urlInstrumental || item.inst || item.url_inst)
+                            : (item.cantado || item.urlCantado || item.url || item.src || item.mp4 || item.video);
+                        if (directa && /^https?:\/\//i.test(directa)) urls.push(directa);
+                    }
+                }
+        
+                const patron = obtenerPatronR2();
+                if (patron && patron.sampleUrl) {
+                    let u = patron.sampleUrl;
+                    u = esInstrumental ? u.replace(/\/cantado\//i, '/instrumental/') : u.replace(/\/instrumental\//i, '/cantado/');
+                    urls.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${num3}$1`));
+                    urls.push(u.replace(/\/0*\d{1,3}(\.mp4)/i, `/${numRaw}$1`));
+                } else if (patron && patron.baseUrl) {
+                    const base = patron.baseUrl.replace(/\/(cantado|instrumental)$/i, '');
+                    if (esInstrumental) {
+                        if (patron.tieneInstrumental) {
+                            urls.push(`${base}/instrumental/${num3}.mp4`);
+                            urls.push(`${base}/instrumental/${numRaw}.mp4`);
+                        }
+                        urls.push(`${base}/${num3}-instrumental.mp4`);
+                        urls.push(`${base}/${num3}.mp4`);
+                    } else {
+                        if (patron.tieneCantado) {
+                            urls.push(`${base}/cantado/${num3}.mp4`);
+                            urls.push(`${base}/cantado/${numRaw}.mp4`);
+                        }
+                        urls.push(`${base}/${num3}.mp4`);
+                        urls.push(`${base}/${numRaw}.mp4`);
+                    }
+                }
+        
+                return [...new Set(urls)];
+            }
+        
+            function mostrarProgreso(visible, texto = '', pct = 0) {
+                const box = document.getElementById('mp4ToastProgress');
+                const lbl = document.getElementById('mp4ToastLabel');
+                const fill = document.getElementById('mp4ToastFill');
+                if (!box) return;
+        
+                if (!visible) {
+                    box.classList.remove('active');
+                    return;
+                }
+                box.classList.add('active');
+                if (lbl) lbl.textContent = texto;
+                if (fill) fill.style.width = `${pct}%`;
+            }
+        
+            async function bajarBlobConProgreso(candidatos, etiquetaProgreso) {
+                for (const url of candidatos) {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) continue;
+        
+                        const total = Number(res.headers.get('Content-Length')) || 0;
+                        if (!res.body || !total) {
+                            const blob = await res.blob();
+                            mostrarProgreso(true, `${etiquetaProgreso}... 100%`, 100);
+                            if (blob && blob.size > 0) return blob;
+                        } else {
+                            const reader = res.body.getReader();
+                            const chunks = [];
+                            let recibido = 0;
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                chunks.push(value);
+                                recibido += value.length;
+                                const pct = Math.min(99, Math.round((recibido / total) * 100));
+                                mostrarProgreso(true, `${etiquetaProgreso}... ${pct}%`, pct);
+                            }
+                            const blob = new Blob(chunks, { type: 'video/mp4' });
+                            mostrarProgreso(true, `${etiquetaProgreso}... 100%`, 100);
+                            if (blob && blob.size > 0) return blob;
+                        }
+                    } catch (e) {}
+                }
+                return null;
+            }
+        
+            async function asegurarPermisoCarpeta(handle) {
+                if (!handle) return false;
+                const opts = { mode: 'readwrite' };
+                if ((await handle.queryPermission(opts)) === 'granted') return true;
+                if ((await handle.requestPermission(opts)) === 'granted') return true;
+                return false;
+            }
+        
+            // =========================================================================
+            // 1. DESCARGA DE MP4 VISIBLE (Para compartir)
+            //    En PC pide carpeta la 1ra vez; en móvil va directo a Descargas
+            // =========================================================================
+            async function descargarMp4ParaCompartir(numInt, numStr, titulo) {
+                if (descargaActiva) {
+                    avisar('Ya se está descargando un himno...');
+                    return;
+                }
+        
+                let usarCarpetaPC = false;
+        
+                if (esPC) {
+                    if (!pcMp4Handle) {
+                        try {
+                            const handle = await window.showDirectoryPicker({
+                                id: 'himnario-mp4-share-dir',
+                                mode: 'readwrite',
+                                startIn: 'videos'
+                            });
+                            pcMp4Handle = handle;
+                            await guardarHandleDB(KEY_MP4_DIR, handle);
+                            actualizarEtiquetasModalPC();
+                            usarCarpetaPC = true;
+                        } catch (err) {
+                            if (err.name === 'AbortError') {
+                                usarCarpetaPC = false;
+                            } else {
+                                avisar('No se pudo acceder a la carpeta elegida.');
+                                return;
+                            }
+                        }
+                    } else {
+                        usarCarpetaPC = await asegurarPermisoCarpeta(pcMp4Handle);
+                    }
+                }
+        
+                const esInstrumental = esInstrumentalActivo();
+                const modoTxt = esInstrumental ? 'Instrumental' : 'Cantado';
+                const nombreArchivo = `${limpiarNombre(`${numStr} - ${titulo} (${modoTxt})`)}.mp4`;
+                const candidatos = obtenerUrlsCandidatas(numInt, esInstrumental);
+        
+                if (candidatos.length === 0) {
+                    avisar('No se encontró el enlace del video MP4.');
+                    return;
+                }
+        
+                descargaActiva = true;
+                mostrarProgreso(true, `Descargando MP4 ${numStr} (${modoTxt})... 0%`, 0);
+        
+                try {
+                    const blob = await bajarBlobConProgreso(candidatos, `Descargando MP4 ${numStr} (${modoTxt})`);
+        
+                    if (blob && esPC && usarCarpetaPC && pcMp4Handle) {
+                        const fileHandle = await pcMp4Handle.getFileHandle(nombreArchivo, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        avisar(`MP4 guardado en "${pcMp4Handle.name}": ${nombreArchivo}`);
+                        return;
+                    }
+        
+                    if (blob) {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = nombreArchivo;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+                        avisar(`MP4 listo para compartir: ${nombreArchivo}`);
+                    } else {
+                        const a = document.createElement('a');
+                        a.href = candidatos[0];
+                        a.download = nombreArchivo;
+                        a.target = '_blank';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                    }
+                } catch (err) {
+                    avisar('Error al descargar el archivo MP4.');
+                } finally {
+                    mostrarProgreso(false);
+                    descargaActiva = false;
+                }
+            }
+        
+            // =========================================================================
+            // 2. DESCARGA LOCAL OCULTA EN PC (Pide carpeta/partición la 1ra vez)
+            // =========================================================================
+            async function guardarDescargaOcultaEnPC(info, btnLocalEl) {
+                if (descargaActiva) {
+                    avisar('Ya hay una descarga en curso...');
+                    return;
+                }
+        
+                const esInstrumental = esInstrumentalActivo();
+                const modoTxt = esInstrumental ? 'Instrumental' : 'Cantado';
+                const key = claveHimno(info.numStr, esInstrumental);
+                const hiddenName = nombreOcultoArchivo(info.numStr, esInstrumental);
+                const candidatos = obtenerUrlsCandidatas(info.numInt, esInstrumental);
+        
+                if (candidatos.length === 0) {
+                    avisar('No se encontró el archivo del himno.');
+                    return;
+                }
+        
+                descargaActiva = true;
+                mostrarProgreso(true, `Guardando offline ${info.numStr} (${modoTxt})... 0%`, 0);
+        
+                try {
+                    const blob = await bajarBlobConProgreso(candidatos, `Guardando offline ${info.numStr} (${modoTxt})`);
+                    if (!blob) throw new Error('No se pudo descargar');
+        
+                    const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: true });
+                    const fileHandle = await subDir.getFileHandle(hiddenName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+        
+                    const savedSet = obtenerIndiceGuardadosPC();
+                    savedSet.add(key);
+                    guardarIndicePC(savedSet);
+        
+                    if (btnLocalEl) btnLocalEl.classList.add('pc-offline-saved');
+                    avisar(`Guardado oculto en "${pcOfflineHandle.name}"`);
+                } catch (err) {
+                    console.error(err);
+                    avisar('No se pudo guardar en la carpeta seleccionada.');
+                } finally {
+                    mostrarProgreso(false);
+                    descargaActiva = false;
+                }
+            }
+        
+            function abrirModalBorrarPC(info, btnLocalEl) {
+                const esInstrumental = esInstrumentalActivo();
+                const key = claveHimno(info.numStr, esInstrumental);
+                const hiddenName = nombreOcultoArchivo(info.numStr, esInstrumental);
+        
+                pendienteBorrarPC = { info, key, hiddenName, btnLocalEl };
+        
+                const txt = document.getElementById('delPcText');
+                if (txt && pcOfflineHandle) {
+                    txt.innerHTML = `El himno <strong>${info.numStr} - ${info.titulo}</strong> está guardado en la carpeta oculta de <strong>${pcOfflineHandle.name}</strong>. ¿Deseas eliminarlo también de tu disco?`;
+                }
+                const modal = document.getElementById('deletePcOfflineModal');
+                if (modal) modal.classList.add('active');
+            }
+        
+            function cerrarModalBorrarPC() {
+                pendienteBorrarPC = null;
+                const modal = document.getElementById('deletePcOfflineModal');
+                if (modal) modal.classList.remove('active');
+            }
+        
+            async function ejecutarBorradoArchivoPC() {
+                if (!pendienteBorrarPC || !pcOfflineHandle) {
+                    cerrarModalBorrarPC();
+                    return;
+                }
+        
+                const { key, hiddenName, btnLocalEl } = pendienteBorrarPC;
+                cerrarModalBorrarPC();
+        
+                try {
+                    const ok = await asegurarPermisoCarpeta(pcOfflineHandle);
+                    if (!ok) return;
+        
+                    const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: false });
+                    await subDir.removeEntry(hiddenName);
+        
+                    const savedSet = obtenerIndiceGuardadosPC();
+                    savedSet.delete(key);
+                    guardarIndicePC(savedSet);
+        
+                    if (btnLocalEl) btnLocalEl.classList.remove('pc-offline-saved');
+                    avisar(`Eliminado de "${pcOfflineHandle.name}"`);
+                } catch (e) {
+                    const savedSet = obtenerIndiceGuardadosPC();
+                    savedSet.delete(key);
+                    guardarIndicePC(savedSet);
+                    if (btnLocalEl) btnLocalEl.classList.remove('pc-offline-saved');
+                }
+            }
+        
+            async function intentarReproducirDesdeCarpetaPC(numStr) {
+                if (!esPC || !pcOfflineHandle) return;
+        
+                const esInstrumental = esInstrumentalActivo();
+                const key = claveHimno(numStr, esInstrumental);
+                const savedSet = obtenerIndiceGuardadosPC();
+                if (!savedSet.has(key)) return;
+        
+                try {
+                    const permiso = await pcOfflineHandle.queryPermission({ mode: 'readwrite' });
+                    if (permiso !== 'granted') return;
+        
+                    const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: false });
+                    const fileHandle = await subDir.getFileHandle(nombreOcultoArchivo(numStr, esInstrumental), { create: false });
+                    const file = await fileHandle.getFile();
+                    const blobUrl = URL.createObjectURL(file);
+        
+                    setTimeout(() => {
+                        const video = document.querySelector('video');
+                        if (video) {
+                            video.src = blobUrl;
+                            video.play().catch(() => {});
+                        }
+                    }, 80);
+                } catch (e) {}
+            }
+        
+            // =========================================================================
+            // 3. PANEL DEL BOTÓN SUPERIOR EN PC (Configurar ambas carpetas y descargar)
+            // =========================================================================
+            function actualizarEtiquetasModalPC() {
+                const lblOff = document.getElementById('lblPcOfflineDir');
+                const lblMp4 = document.getElementById('lblPcMp4Dir');
+                if (lblOff) {
+                    lblOff.textContent = pcOfflineHandle
+                        ? `📁 ${pcOfflineHandle.name}\\${HIDDEN_SUBFOLDER}`
+                        : 'Sin configurar (se pedirá en la 1ra descarga local)';
+                }
+                if (lblMp4) {
+                    lblMp4.textContent = pcMp4Handle
+                        ? `📁 ${pcMp4Handle.name}`
+                        : 'Sin configurar (se pedirá en la 1ra descarga MP4)';
+                }
+            }
+        
+            function obtenerHimnoReproduciendoAhora() {
+                const titleEl = Array.from(document.querySelectorAll('div, span, h1, h2, h3')).find(el => {
+                    return el.children.length === 0 && /^Himno\s+\d+\s*:/i.test(el.textContent.trim());
+                });
+                if (!titleEl) return null;
+                const m = titleEl.textContent.trim().match(/^Himno\s+(\d+)\s*:\s*(.+)$/i);
+                if (!m) return null;
+                const numInt = parseInt(m[1], 10);
+                const numStr = String(numInt).padStart(3, '0');
+                return { numInt, numStr, titulo: m[2].trim() };
+            }
+        
+            function conectarBotonSuperior() {
+                const btnTop = document.getElementById('saveMp4Btn') || Array.from(document.querySelectorAll('button')).find(b => {
+                    return b.textContent.trim().includes('Guardar MP4');
+                });
+                if (!btnTop || btnTop.dataset.topMp4Bound) return;
+                btnTop.dataset.topMp4Bound = '1';
+        
+                if (esPC) {
+                    const spanLbl = btnTop.querySelector('span');
+                    if (spanLbl) spanLbl.textContent = 'Carpetas PC';
+                }
+        
+                btnTop.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+        
+                    if (esPC) {
+                        actualizarEtiquetasModalPC();
+                        document.getElementById('pcFoldersModal')?.classList.add('active');
+                    } else {
+                        const actual = obtenerHimnoReproduciendoAhora();
+                        if (!actual) {
+                            avisar('Selecciona un himno primero o usa el ícono MP4 en la lista.');
+                            return;
+                        }
+                        await descargarMp4ParaCompartir(actual.numInt, actual.numStr, actual.titulo);
+                    }
+                }, true);
+            }
+        
+            document.getElementById('btnClosePcFoldersModal')?.addEventListener('click', () => {
+                document.getElementById('pcFoldersModal')?.classList.remove('active');
+            });
+        
+            document.getElementById('btnPickOfflineDir')?.addEventListener('click', async () => {
+                try {
+                    const handle = await window.showDirectoryPicker({ id: 'himnario-offline-partition', mode: 'readwrite' });
+                    pcOfflineHandle = handle;
+                    await guardarHandleDB(KEY_OFFLINE_DIR, handle);
+                    actualizarEtiquetasModalPC();
+                    avisar(`Carpeta oculta configurada en "${handle.name}"`);
+                } catch (e) {}
+            });
+        
+            document.getElementById('btnPickMp4Dir')?.addEventListener('click', async () => {
+                try {
+                    const handle = await window.showDirectoryPicker({ id: 'himnario-mp4-share-dir', mode: 'readwrite', startIn: 'videos' });
                     pcMp4Handle = handle;
                     await guardarHandleDB(KEY_MP4_DIR, handle);
                     actualizarEtiquetasModalPC();
-                    usarCarpetaPC = true;
-                } catch (err) {
-                    if (err.name === 'AbortError') {
-                        usarCarpetaPC = false;
-                    } else {
-                        avisar('No se pudo acceder a la carpeta elegida.');
-                        return;
-                    }
-                }
-            } else {
-                usarCarpetaPC = await asegurarPermisoCarpeta(pcMp4Handle);
-            }
-        }
-
-        const esInstrumental = esInstrumentalActivo();
-        const modoTxt = esInstrumental ? 'Instrumental' : 'Cantado';
-        const nombreArchivo = `${limpiarNombre(`${numStr} - ${titulo} (${modoTxt})`)}.mp4`;
-        const candidatos = obtenerUrlsCandidatas(numInt, esInstrumental);
-
-        if (candidatos.length === 0) {
-            avisar('No se encontró el enlace del video MP4.');
-            return;
-        }
-
-        descargaActiva = true;
-        mostrarProgreso(true, `Descargando MP4 ${numStr} (${modoTxt})... 0%`, 0);
-
-        try {
-            const blob = await bajarBlobConProgreso(candidatos, `Descargando MP4 ${numStr} (${modoTxt})`);
-
-            if (blob && esPC && usarCarpetaPC && pcMp4Handle) {
-                const fileHandle = await pcMp4Handle.getFileHandle(nombreArchivo, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                avisar(`MP4 guardado en "${pcMp4Handle.name}": ${nombreArchivo}`);
-                return;
-            }
-
-            if (blob) {
-                const blobUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = blobUrl;
-                a.download = nombreArchivo;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-                avisar(`MP4 listo para compartir: ${nombreArchivo}`);
-            } else {
-                const a = document.createElement('a');
-                a.href = candidatos[0];
-                a.download = nombreArchivo;
-                a.target = '_blank';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            }
-        } catch (err) {
-            avisar('Error al descargar el archivo MP4.');
-        } finally {
-            mostrarProgreso(false);
-            descargaActiva = false;
-        }
-    }
-
-    // =========================================================================
-    // 2. DESCARGA LOCAL OCULTA EN PC (Pide carpeta/partición la 1ra vez)
-    // =========================================================================
-    async function guardarDescargaOcultaEnPC(info, btnLocalEl) {
-        if (descargaActiva) {
-            avisar('Ya hay una descarga en curso...');
-            return;
-        }
-
-        const esInstrumental = esInstrumentalActivo();
-        const modoTxt = esInstrumental ? 'Instrumental' : 'Cantado';
-        const key = claveHimno(info.numStr, esInstrumental);
-        const hiddenName = nombreOcultoArchivo(info.numStr, esInstrumental);
-        const candidatos = obtenerUrlsCandidatas(info.numInt, esInstrumental);
-
-        if (candidatos.length === 0) {
-            avisar('No se encontró el archivo del himno.');
-            return;
-        }
-
-        descargaActiva = true;
-        mostrarProgreso(true, `Guardando offline ${info.numStr} (${modoTxt})... 0%`, 0);
-
-        try {
-            const blob = await bajarBlobConProgreso(candidatos, `Guardando offline ${info.numStr} (${modoTxt})`);
-            if (!blob) throw new Error('No se pudo descargar');
-
-            const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: true });
-            const fileHandle = await subDir.getFileHandle(hiddenName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-
-            const savedSet = obtenerIndiceGuardadosPC();
-            savedSet.add(key);
-            guardarIndicePC(savedSet);
-
-            if (btnLocalEl) btnLocalEl.classList.add('pc-offline-saved');
-            avisar(`Guardado oculto en "${pcOfflineHandle.name}"`);
-        } catch (err) {
-            console.error(err);
-            avisar('No se pudo guardar en la carpeta seleccionada.');
-        } finally {
-            mostrarProgreso(false);
-            descargaActiva = false;
-        }
-    }
-
-    function abrirModalBorrarPC(info, btnLocalEl) {
-        const esInstrumental = esInstrumentalActivo();
-        const key = claveHimno(info.numStr, esInstrumental);
-        const hiddenName = nombreOcultoArchivo(info.numStr, esInstrumental);
-
-        pendienteBorrarPC = { info, key, hiddenName, btnLocalEl };
-
-        const txt = document.getElementById('delPcText');
-        if (txt && pcOfflineHandle) {
-            txt.innerHTML = `El himno <strong>${info.numStr} - ${info.titulo}</strong> está guardado en la carpeta oculta de <strong>${pcOfflineHandle.name}</strong>. ¿Deseas eliminarlo también de tu disco?`;
-        }
-        const modal = document.getElementById('deletePcOfflineModal');
-        if (modal) modal.classList.add('active');
-    }
-
-    function cerrarModalBorrarPC() {
-        pendienteBorrarPC = null;
-        const modal = document.getElementById('deletePcOfflineModal');
-        if (modal) modal.classList.remove('active');
-    }
-
-    async function ejecutarBorradoArchivoPC() {
-        if (!pendienteBorrarPC || !pcOfflineHandle) {
-            cerrarModalBorrarPC();
-            return;
-        }
-
-        const { key, hiddenName, btnLocalEl } = pendienteBorrarPC;
-        cerrarModalBorrarPC();
-
-        try {
-            const ok = await asegurarPermisoCarpeta(pcOfflineHandle);
-            if (!ok) return;
-
-            const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: false });
-            await subDir.removeEntry(hiddenName);
-
-            const savedSet = obtenerIndiceGuardadosPC();
-            savedSet.delete(key);
-            guardarIndicePC(savedSet);
-
-            if (btnLocalEl) btnLocalEl.classList.remove('pc-offline-saved');
-            avisar(`Eliminado de "${pcOfflineHandle.name}"`);
-        } catch (e) {
-            const savedSet = obtenerIndiceGuardadosPC();
-            savedSet.delete(key);
-            guardarIndicePC(savedSet);
-            if (btnLocalEl) btnLocalEl.classList.remove('pc-offline-saved');
-        }
-    }
-
-    async function intentarReproducirDesdeCarpetaPC(numStr) {
-        if (!esPC || !pcOfflineHandle) return;
-
-        const esInstrumental = esInstrumentalActivo();
-        const key = claveHimno(numStr, esInstrumental);
-        const savedSet = obtenerIndiceGuardadosPC();
-        if (!savedSet.has(key)) return;
-
-        try {
-            const permiso = await pcOfflineHandle.queryPermission({ mode: 'readwrite' });
-            if (permiso !== 'granted') return;
-
-            const subDir = await pcOfflineHandle.getDirectoryHandle(HIDDEN_SUBFOLDER, { create: false });
-            const fileHandle = await subDir.getFileHandle(nombreOcultoArchivo(numStr, esInstrumental), { create: false });
-            const file = await fileHandle.getFile();
-            const blobUrl = URL.createObjectURL(file);
-
-            setTimeout(() => {
-                const video = document.querySelector('video');
-                if (video) {
-                    video.src = blobUrl;
-                    video.play().catch(() => {});
-                }
-            }, 80);
-        } catch (e) {}
-    }
-
-    // =========================================================================
-    // 3. PANEL DEL BOTÓN SUPERIOR EN PC (Configurar ambas carpetas y descargar)
-    // =========================================================================
-    function actualizarEtiquetasModalPC() {
-        const lblOff = document.getElementById('lblPcOfflineDir');
-        const lblMp4 = document.getElementById('lblPcMp4Dir');
-        if (lblOff) {
-            lblOff.textContent = pcOfflineHandle
-                ? `📁 ${pcOfflineHandle.name}\\${HIDDEN_SUBFOLDER}`
-                : 'Sin configurar (se pedirá en la 1ra descarga local)';
-        }
-        if (lblMp4) {
-            lblMp4.textContent = pcMp4Handle
-                ? `📁 ${pcMp4Handle.name}`
-                : 'Sin configurar (se pedirá en la 1ra descarga MP4)';
-        }
-    }
-
-    function obtenerHimnoReproduciendoAhora() {
-        const titleEl = Array.from(document.querySelectorAll('div, span, h1, h2, h3')).find(el => {
-            return el.children.length === 0 && /^Himno\s+\d+\s*:/i.test(el.textContent.trim());
-        });
-        if (!titleEl) return null;
-        const m = titleEl.textContent.trim().match(/^Himno\s+(\d+)\s*:\s*(.+)$/i);
-        if (!m) return null;
-        const numInt = parseInt(m[1], 10);
-        const numStr = String(numInt).padStart(3, '0');
-        return { numInt, numStr, titulo: m[2].trim() };
-    }
-
-    function conectarBotonSuperior() {
-        const btnTop = document.getElementById('saveMp4Btn') || Array.from(document.querySelectorAll('button')).find(b => {
-            return b.textContent.trim().includes('Guardar MP4');
-        });
-        if (!btnTop || btnTop.dataset.topMp4Bound) return;
-        btnTop.dataset.topMp4Bound = '1';
-
-        if (esPC) {
-            const spanLbl = btnTop.querySelector('span');
-            if (spanLbl) spanLbl.textContent = 'Carpetas PC';
-        }
-
-        btnTop.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-
-            if (esPC) {
-                actualizarEtiquetasModalPC();
-                document.getElementById('pcFoldersModal')?.classList.add('active');
-            } else {
+                    avisar(`Carpeta MP4 configurada en "${handle.name}"`);
+                } catch (e) {}
+            });
+        
+            document.getElementById('btnDownloadCurrentMp4Pc')?.addEventListener('click', async () => {
                 const actual = obtenerHimnoReproduciendoAhora();
                 if (!actual) {
-                    avisar('Selecciona un himno primero o usa el ícono MP4 en la lista.');
+                    avisar('Selecciona un himno de la lista primero.');
                     return;
                 }
+                document.getElementById('pcFoldersModal')?.classList.remove('active');
                 await descargarMp4ParaCompartir(actual.numInt, actual.numStr, actual.titulo);
-            }
-        }, true);
-    }
-
-    document.getElementById('btnClosePcFoldersModal')?.addEventListener('click', () => {
-        document.getElementById('pcFoldersModal')?.classList.remove('active');
-    });
-
-    document.getElementById('btnPickOfflineDir')?.addEventListener('click', async () => {
-        try {
-            const handle = await window.showDirectoryPicker({ id: 'himnario-offline-partition', mode: 'readwrite' });
-            pcOfflineHandle = handle;
-            await guardarHandleDB(KEY_OFFLINE_DIR, handle);
-            actualizarEtiquetasModalPC();
-            avisar(`Carpeta oculta configurada en "${handle.name}"`);
-        } catch (e) {}
-    });
-
-    document.getElementById('btnPickMp4Dir')?.addEventListener('click', async () => {
-        try {
-            const handle = await window.showDirectoryPicker({ id: 'himnario-mp4-share-dir', mode: 'readwrite', startIn: 'videos' });
-            pcMp4Handle = handle;
-            await guardarHandleDB(KEY_MP4_DIR, handle);
-            actualizarEtiquetasModalPC();
-            avisar(`Carpeta MP4 configurada en "${handle.name}"`);
-        } catch (e) {}
-    });
-
-    document.getElementById('btnDownloadCurrentMp4Pc')?.addEventListener('click', async () => {
-        const actual = obtenerHimnoReproduciendoAhora();
-        if (!actual) {
-            avisar('Selecciona un himno de la lista primero.');
-            return;
-        }
-        document.getElementById('pcFoldersModal')?.classList.remove('active');
-        await descargarMp4ParaCompartir(actual.numInt, actual.numStr, actual.titulo);
-    });
-
-    // =========================================================================
-    // 4. INYECCIÓN DEL ÍCONO MP4 EN CADA FILA DE LA LISTA
-    // =========================================================================
-    function configurarFilas() {
-        if (isScanning) return;
-        isScanning = true;
-
-        try {
-            const savedSet = esPC ? obtenerIndiceGuardadosPC() : null;
-            const esInst = esPC ? esInstrumentalActivo() : false;
-
-            const hojasNumero = Array.from(document.querySelectorAll('span, div, strong, b')).filter(el => {
-                if (el.children.length > 0) return false;
-                return /^\d{3}$/.test(el.textContent.trim());
             });
-
-            hojasNumero.forEach(numEl => {
-                let row = numEl.parentElement;
-                let info = null;
-
-                for (let i = 0; i < 4 && row && row !== document.body; i++) {
-                    const txt = row.textContent.replace(/\s+/g, ' ').trim();
-                    const match = txt.match(/^(\d{3})\s+(.+)$/);
-                    if (match && txt.length < 160) {
-                        const numInt = parseInt(match[1], 10);
-                        const numStr = match[1];
-                        const titulo = match[2].replace(/\+$/, '').trim();
-                        if (numInt >= 1 && numInt <= 700 && titulo) {
-                            info = { numInt, numStr, titulo };
+        
+            // =========================================================================
+            // 4. INYECCIÓN DEL ÍCONO MP4 EN CADA FILA DE LA LISTA
+            // =========================================================================
+            function configurarFilas() {
+                if (isScanning) return;
+                isScanning = true;
+        
+                try {
+                    const savedSet = esPC ? obtenerIndiceGuardadosPC() : null;
+                    const esInst = esPC ? esInstrumentalActivo() : false;
+        
+                    const hojasNumero = Array.from(document.querySelectorAll('span, div, strong, b')).filter(el => {
+                        if (el.children.length > 0) return false;
+                        return /^\d{3}$/.test(el.textContent.trim());
+                    });
+        
+                    hojasNumero.forEach(numEl => {
+                        let row = numEl.parentElement;
+                        let info = null;
+        
+                        for (let i = 0; i < 4 && row && row !== document.body; i++) {
+                            const txt = row.textContent.replace(/\s+/g, ' ').trim();
+                            const match = txt.match(/^(\d{3})\s+(.+)$/);
+                            if (match && txt.length < 160) {
+                                const numInt = parseInt(match[1], 10);
+                                const numStr = match[1];
+                                const titulo = match[2].replace(/\+$/, '').trim();
+                                if (numInt >= 1 && numInt <= 700 && titulo) {
+                                    info = { numInt, numStr, titulo };
+                                    break;
+                                }
+                            }
+                            row = row.parentElement;
+                        }
+        
+                        if (!row || !info || row.dataset.mp4RowDone === '1') return;
+        
+                        const crudos = Array.from(row.querySelectorAll('button, [role="button"], [onclick], svg')).map(el => {
+                            if (el.tagName.toLowerCase() === 'svg') {
+                                return (el.parentElement && el.parentElement !== row) ? el.parentElement : el;
+                            }
+                            return el;
+                        });
+        
+                        const unicos = [...new Set(crudos)].filter(el => {
+                            if (el === row || el === numEl || el.contains(numEl)) return false;
+                            return Boolean(numEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+                        });
+        
+                        const accionesDerecha = unicos.filter(el => !unicos.some(otro => otro !== el && el.contains(otro)));
+        
+                        if (accionesDerecha.length === 0) return;
+        
+                        row.dataset.mp4RowDone = '1';
+                        const btnDescargaLocal = accionesDerecha[0];
+        
+                        if (esPC && savedSet && savedSet.has(claveHimno(info.numStr, esInst))) {
+                            btnDescargaLocal.classList.add('pc-offline-saved');
+                        }
+        
+                        if (esPC) {
+                            btnDescargaLocal.addEventListener('click', async (e) => {
+                                e.preventDefault();
+                                e.stopImmediatePropagation();
+        
+                                const keyActual = claveHimno(info.numStr, esInstrumentalActivo());
+                                const yaGuardado = obtenerIndiceGuardadosPC().has(keyActual);
+        
+                                if (yaGuardado && pcOfflineHandle) {
+                                    abrirModalBorrarPC(info, btnDescargaLocal);
+                                    return;
+                                }
+        
+                                if (!pcOfflineHandle) {
+                                    try {
+                                        const handle = await window.showDirectoryPicker({
+                                            id: 'himnario-offline-partition',
+                                            mode: 'readwrite'
+                                        });
+                                        pcOfflineHandle = handle;
+                                        await guardarHandleDB(KEY_OFFLINE_DIR, handle);
+                                        actualizarEtiquetasModalPC();
+                                        avisar(`Carpeta oculta configurada en "${handle.name}"`);
+                                    } catch (err) {
+                                        if (err.name === 'AbortError') {
+                                            avisar('Elige una carpeta para guardar sin llenar el disco C.');
+                                        } else {
+                                            avisar('No se pudo acceder a la carpeta elegida.');
+                                        }
+                                        return;
+                                    }
+                                } else {
+                                    const permiso = await asegurarPermisoCarpeta(pcOfflineHandle);
+                                    if (!permiso) {
+                                        avisar('Se necesita permiso para guardar en la carpeta elegida.');
+                                        return;
+                                    }
+                                }
+        
+                                await guardarDescargaOcultaEnPC(info, btnDescargaLocal);
+                            }, true);
+        
+                            row.addEventListener('click', (e) => {
+                                if (e.target.closest('button, .btn-dl-mp4')) return;
+                                intentarReproducirDesdeCarpetaPC(info.numStr);
+                            });
+                        }
+        
+                        // Crear e insertar el ícono MP4 justo a la par del botón de descarga local
+                        const btnMp4 = document.createElement('button');
+                        btnMp4.type = 'button';
+                        btnMp4.className = 'btn-dl-mp4';
+                        btnMp4.title = 'Descargar video MP4 para compartir';
+                        btnMp4.setAttribute('aria-label', 'Descargar video MP4 para compartir');
+                        btnMp4.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2v10"/>
+                                <polyline points="8.5 8.5 12 12 15.5 8.5"/>
+                                <path d="M4 13v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+                                <text x="12" y="22.8" text-anchor="middle" fill="currentColor" stroke="none" font-size="6.8" font-weight="800" font-family="system-ui, sans-serif" letter-spacing="0.2">MP4</text>
+                            </svg>
+                        `;
+        
+                        btnMp4.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            descargarMp4ParaCompartir(info.numInt, info.numStr, info.titulo);
+                        });
+        
+                        btnDescargaLocal.parentElement.insertBefore(btnMp4, btnDescargaLocal.nextSibling);
+                    });
+                } finally {
+                    isScanning = false;
+                }
+            }
+        
+            function programarEscaneo() {
+                clearTimeout(scanTimer);
+                scanTimer = setTimeout(configurarFilas, 120);
+            }
+        
+            document.getElementById('btnKeepPcOffline')?.addEventListener('click', cerrarModalBorrarPC);
+            document.getElementById('btnConfirmDelPcOffline')?.addEventListener('click', ejecutarBorradoArchivoPC);
+        
+            window.addEventListener('load', async () => {
+                if (esPC) {
+                    try {
+                        pcOfflineHandle = await leerHandleDB(KEY_OFFLINE_DIR);
+                        pcMp4Handle = await leerHandleDB(KEY_MP4_DIR);
+                    } catch (e) {}
+                }
+        
+                conectarBotonSuperior();
+                configurarFilas();
+        
+                const observer = new MutationObserver((mutations) => {
+                    for (let i = 0; i < mutations.length; i++) {
+                        if (mutations[i].addedNodes.length > 0) {
+                            programarEscaneo();
                             break;
                         }
                     }
-                    row = row.parentElement;
-                }
-
-                if (!row || !info || row.dataset.mp4RowDone === '1') return;
-
-                const crudos = Array.from(row.querySelectorAll('button, [role="button"], [onclick], svg')).map(el => {
-                    if (el.tagName.toLowerCase() === 'svg') {
-                        return (el.parentElement && el.parentElement !== row) ? el.parentElement : el;
-                    }
-                    return el;
                 });
-
-                const unicos = [...new Set(crudos)].filter(el => {
-                    if (el === row || el === numEl || el.contains(numEl)) return false;
-                    return Boolean(numEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
-                });
-
-                const accionesDerecha = unicos.filter(el => !unicos.some(otro => otro !== el && el.contains(otro)));
-
-                if (accionesDerecha.length === 0) return;
-
-                row.dataset.mp4RowDone = '1';
-                const btnDescargaLocal = accionesDerecha[0];
-
-                if (esPC && savedSet && savedSet.has(claveHimno(info.numStr, esInst))) {
-                    btnDescargaLocal.classList.add('pc-offline-saved');
-                }
-
-                if (esPC) {
-                    btnDescargaLocal.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-
-                        const keyActual = claveHimno(info.numStr, esInstrumentalActivo());
-                        const yaGuardado = obtenerIndiceGuardadosPC().has(keyActual);
-
-                        if (yaGuardado && pcOfflineHandle) {
-                            abrirModalBorrarPC(info, btnDescargaLocal);
-                            return;
-                        }
-
-                        if (!pcOfflineHandle) {
-                            try {
-                                const handle = await window.showDirectoryPicker({
-                                    id: 'himnario-offline-partition',
-                                    mode: 'readwrite'
-                                });
-                                pcOfflineHandle = handle;
-                                await guardarHandleDB(KEY_OFFLINE_DIR, handle);
-                                actualizarEtiquetasModalPC();
-                                avisar(`Carpeta oculta configurada en "${handle.name}"`);
-                            } catch (err) {
-                                if (err.name === 'AbortError') {
-                                    avisar('Elige una carpeta para guardar sin llenar el disco C.');
-                                } else {
-                                    avisar('No se pudo acceder a la carpeta elegida.');
-                                }
-                                return;
-                            }
-                        } else {
-                            const permiso = await asegurarPermisoCarpeta(pcOfflineHandle);
-                            if (!permiso) {
-                                avisar('Se necesita permiso para guardar en la carpeta elegida.');
-                                return;
-                            }
-                        }
-
-                        await guardarDescargaOcultaEnPC(info, btnDescargaLocal);
-                    }, true);
-
-                    row.addEventListener('click', (e) => {
-                        if (e.target.closest('button, .btn-dl-mp4')) return;
-                        intentarReproducirDesdeCarpetaPC(info.numStr);
-                    });
-                }
-
-                // Crear e insertar el ícono MP4 justo a la par del botón de descarga local
-                const btnMp4 = document.createElement('button');
-                btnMp4.type = 'button';
-                btnMp4.className = 'btn-dl-mp4';
-                btnMp4.title = 'Descargar video MP4 para compartir';
-                btnMp4.setAttribute('aria-label', 'Descargar video MP4 para compartir');
-                btnMp4.innerHTML = `
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2v10"/>
-                        <polyline points="8.5 8.5 12 12 15.5 8.5"/>
-                        <path d="M4 13v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-                        <text x="12" y="22.8" text-anchor="middle" fill="currentColor" stroke="none" font-size="6.8" font-weight="800" font-family="system-ui, sans-serif" letter-spacing="0.2">MP4</text>
-                    </svg>
-                `;
-
-                btnMp4.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    descargarMp4ParaCompartir(info.numInt, info.numStr, info.titulo);
-                });
-
-                btnDescargaLocal.parentElement.insertBefore(btnMp4, btnDescargaLocal.nextSibling);
+                observer.observe(document.body, { childList: true, subtree: true });
             });
-        } finally {
-            isScanning = false;
-        }
-    }
-
-    function programarEscaneo() {
-        clearTimeout(scanTimer);
-        scanTimer = setTimeout(configurarFilas, 120);
-    }
-
-    document.getElementById('btnKeepPcOffline')?.addEventListener('click', cerrarModalBorrarPC);
-    document.getElementById('btnConfirmDelPcOffline')?.addEventListener('click', ejecutarBorradoArchivoPC);
-
-    window.addEventListener('load', async () => {
-        if (esPC) {
-            try {
-                pcOfflineHandle = await leerHandleDB(KEY_OFFLINE_DIR);
-                pcMp4Handle = await leerHandleDB(KEY_MP4_DIR);
-            } catch (e) {}
-        }
-
-        conectarBotonSuperior();
-        configurarFilas();
-
-        const observer = new MutationObserver((mutations) => {
-            for (let i = 0; i < mutations.length; i++) {
-                if (mutations[i].addedNodes.length > 0) {
-                    programarEscaneo();
-                    break;
-                }
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
-})();
+        })();
 </script>
 </body>
 </html>
