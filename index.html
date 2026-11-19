@@ -6681,7 +6681,7 @@
         } catch (e) {}
 
         // 2. Intentar cargar himnos.json local y, si falla (ej. archivo abierto en otra carpeta), usar el del repositorio
-        const jsonSources = ['himnos.json', `${GITHUB_PAGES_BASE}/himnos.json`];
+        const jsonSources = ['titulos.json', `${GITHUB_PAGES_BASE}/titulos.json`];
         for (const srcUrl of jsonSources) {
             try {
                 const res = await fetch(srcUrl);
