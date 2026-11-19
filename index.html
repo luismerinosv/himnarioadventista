@@ -6826,20 +6826,29 @@
         if (exitModal) exitModal.classList.remove('active');
     }
 
-    function confirmarSalidaApp() {
+function confirmarSalidaApp() {
         exitPromptActive = false;
         cerrandoAppConfirmado = true;
 
         const exitModal = document.getElementById('exitConfirmModal');
         if (exitModal) exitModal.classList.remove('active');
 
-        // Detiene el audio/video para que no quede sonando al salir
-        const vid = document.querySelector('video');
-        if (vid) {
-            vid.pause();
-            vid.removeAttribute('src');
-            vid.load();
+        // 1. Acciona el botón "Detener" propio de tu reproductor para reiniciar su estado
+        const btnDetener = Array.from(document.querySelectorAll('button')).find(
+            b => b.textContent.trim().toLowerCase().includes('detener')
+        );
+        if (btnDetener) {
+            btnDetener.click();
         }
+
+        // 2. Pausa y descarga todos los elementos de video y audio activos
+        document.querySelectorAll('video, audio').forEach(media => {
+            media.pause();
+            media.currentTime = 0;
+            media.removeAttribute('src');
+            media.load();
+        });
+
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'none';
         }
@@ -6847,8 +6856,6 @@
         try { window.close(); } catch (e) {}
         window.history.back();
 
-        // Si Android bloquea el cierre automático por seguridad en modo app instalada,
-        // deja desactivado el bloqueo para que un toque en Atrás (<) salga directo
         setTimeout(() => {
             if (!document.hidden && typeof mostrarToast === 'function') {
                 mostrarToast('Reproducción detenida. Toca Atrás (<) para salir.');
