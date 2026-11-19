@@ -3004,29 +3004,8 @@
         }
 
         let usarCarpetaPC = false;
-        if (esPC) {
-            if (!pcMp4Handle) {
-                try {
-                    const handle = await window.showDirectoryPicker({
-                        id: 'himnario-mp4-share-dir',
-                        mode: 'readwrite',
-                        startIn: 'videos'
-                    });
-                    pcMp4Handle = handle;
-                    await guardarHandlePcDB(KEY_MP4_DIR, handle);
-                    actualizarEtiquetasModalCarpetasPC();
-                    usarCarpetaPC = true;
-                } catch (err) {
-                    if (err && err.name === 'AbortError') {
-                        usarCarpetaPC = false;
-                    } else {
-                        mostrarToast('No se pudo acceder a la carpeta elegida.');
-                        return;
-                    }
-                }
-            } else {
-                usarCarpetaPC = await asegurarPermisoCarpetaPC(pcMp4Handle);
-            }
+        if (esPC && pcMp4Handle) {
+            usarCarpetaPC = await asegurarPermisoCarpetaPC(pcMp4Handle);
         }
 
         const isInst = document.getElementById('instrumentalCheckbox').checked;
@@ -3120,8 +3099,12 @@
             actualizarEtiquetasModalCarpetasPC();
             actualizarUIAlmacenamientoLocal();
             renderList(getFilteredList());
-            mostrarToast(`Carpeta oculta configurada en "${handle.name}"`);
-        } catch (e) {}
+            mostrarToast(`Carpeta offline configurada en "${handle.name}"`);
+        } catch (e) {
+            if (e && e.name === 'SecurityError') {
+                mostrarToast('Windows protege esa carpeta raíz. Crea o abre una subcarpeta (ej. Himnos) y selecciónala.');
+            }
+        }
     }
 
     async function quitarCarpetaOfflinePC() {
@@ -3139,14 +3122,17 @@
         try {
             const handle = await window.showDirectoryPicker({
                 id: 'himnario-mp4-share-dir',
-                mode: 'readwrite',
-                startIn: 'videos'
+                mode: 'readwrite'
             });
             pcMp4Handle = handle;
             await guardarHandlePcDB(KEY_MP4_DIR, handle);
             actualizarEtiquetasModalCarpetasPC();
             mostrarToast(`Carpeta MP4 configurada en "${handle.name}"`);
-        } catch (e) {}
+        } catch (e) {
+            if (e && e.name === 'SecurityError') {
+                mostrarToast('Windows protege esa carpeta raíz. Crea o abre una subcarpeta (ej. Himnos MP4) y selecciónala.');
+            }
+        }
     }
 
     async function quitarCarpetaMp4PC() {
@@ -4324,7 +4310,7 @@
             return;
         }
 
-        if (esPC) {
+        if (esPC && pcOfflineHandle) {
             const key = claveHimnoPC(h.num, isInst);
             if (pcOfflineSavedKeys.has(key)) {
                 abrirModalBorrarPC(h, isInst);
