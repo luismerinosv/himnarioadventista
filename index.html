@@ -6773,10 +6773,11 @@
         }
     }
 
-    /* =========================================================================
+  /* =========================================================================
        BOTÓN ATRÁS EN MÓVIL: CIERRA MODALES O PIDE CONFIRMACIÓN PARA SALIR
        ========================================================================= */
     let exitPromptActive = false;
+    let cerrandoAppConfirmado = false;
 
     function inicializarProteccionSalidaMovil() {
         const esMovilOTablet = /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
@@ -6787,6 +6788,11 @@
         window.history.pushState({ himnarioShell: true }, '', window.location.href);
 
         window.addEventListener('popstate', () => {
+            if (cerrandoAppConfirmado) {
+                window.history.back();
+                return;
+            }
+
             if (document.fullscreenElement || document.webkitFullscreenElement) {
                 if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -6815,16 +6821,39 @@
 
     function cancelarSalidaApp() {
         exitPromptActive = false;
+        cerrandoAppConfirmado = false;
         const exitModal = document.getElementById('exitConfirmModal');
         if (exitModal) exitModal.classList.remove('active');
     }
 
     function confirmarSalidaApp() {
         exitPromptActive = false;
+        cerrandoAppConfirmado = true;
+
         const exitModal = document.getElementById('exitConfirmModal');
         if (exitModal) exitModal.classList.remove('active');
+
+        // Detiene el audio/video para que no quede sonando al salir
+        const vid = document.querySelector('video');
+        if (vid) {
+            vid.pause();
+            vid.removeAttribute('src');
+            vid.load();
+        }
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'none';
+        }
+
         try { window.close(); } catch (e) {}
-        window.history.go(-2);
+        window.history.back();
+
+        // Si Android bloquea el cierre automático por seguridad en modo app instalada,
+        // deja desactivado el bloqueo para que un toque en Atrás (<) salga directo
+        setTimeout(() => {
+            if (!document.hidden && typeof mostrarToast === 'function') {
+                mostrarToast('Reproducción detenida. Toca Atrás (<) para salir.');
+            }
+        }, 300);
     }
 
     inicializarProteccionSalidaMovil();
