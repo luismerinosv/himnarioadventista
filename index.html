@@ -632,15 +632,15 @@
             display: none;
         }
 
-        /* LISTA DE HIMNOS */
+/* LISTA DE HIMNOS */
         #playlist {
             list-style: none;
             flex: 1;
             min-height: 100px;
             height: 0;
             overflow-y: auto;
-            padding-bottom: max(28px, env(safe-area-inset-bottom));
-            scroll-padding-bottom: 28px;
+            padding-bottom: calc(64px + env(safe-area-inset-bottom));
+            scroll-padding-bottom: 64px;
             background: rgba(22, 14, 9, 0.75);
             border: 1px solid var(--border-subtle);
             border-radius: 10px;
@@ -6750,7 +6750,7 @@
             }
         }
     }
-    function renderList(items) {
+function renderList(items) {
         const playlistEl = document.getElementById('playlist');
         playlistEl.innerHTML = '';
 
@@ -6799,13 +6799,14 @@
             });
 
             playlistEl.appendChild(grid);
+
+            const catSpacer = document.createElement('li');
+            catSpacer.className = 'playlist-item';
+            catSpacer.setAttribute('aria-hidden', 'true');
+            catSpacer.style.cssText = 'opacity: 0; pointer-events: none; border: none; background: transparent;';
+            catSpacer.innerHTML = '<span class="hymn-item-title">&nbsp;</span>';
+            playlistEl.appendChild(catSpacer);
             return;
-        if (items.length > 0) {
-            const spacer = document.createElement('li');
-            spacer.setAttribute('aria-hidden', 'true');
-            spacer.style.cssText = 'height: 58px; min-height: 58px; border: none; background: transparent; pointer-events: none; flex-shrink: 0;';
-            playlistEl.appendChild(spacer);
-        }
         }
 
         if (vistaCategoriasActiva && categoriaSeleccionada) {
@@ -6998,6 +6999,13 @@
         });
 
         playlistEl.appendChild(fragment);
+
+        const bottomSpacer = document.createElement('li');
+        bottomSpacer.className = 'playlist-item';
+        bottomSpacer.setAttribute('aria-hidden', 'true');
+        bottomSpacer.style.cssText = 'opacity: 0; pointer-events: none; border: none; background: transparent;';
+        bottomSpacer.innerHTML = '<span class="hymn-item-title">&nbsp;</span>';
+        playlistEl.appendChild(bottomSpacer);
     }
 
     function extraerTituloLimpioDeEntrada(entry, numStr, numInt) {
