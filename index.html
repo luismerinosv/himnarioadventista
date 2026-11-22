@@ -6870,10 +6870,15 @@ function toggleSoloAudio() {
         document.getElementById('modeBadge').innerText = isInst ? 'Instrumental' : 'Cantado';
         actualizarSelectorListasUI();
         renderList(getFilteredList());
-
+    
+        const engine = getPrimaryAudioEngine();
+        const isPlaying = engine && !engine.paused;
+    
+        // Si hay un himno sonando, no lo interrumpe; el cambio aplicará al abrir el siguiente
+        if (isPlaying) return;
+    
         if (currentHimno) {
-            const wasPlaying = !getPrimaryAudioEngine().paused;
-            reproducirHimno(currentHimno, wasPlaying, Boolean(activeQueuePlaylistId));
+            reproducirHimno(currentHimno, false, Boolean(activeQueuePlaylistId));
         }
     }
 
