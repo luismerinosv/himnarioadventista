@@ -6237,40 +6237,46 @@
         }
     });
 
-    function toggleSoloAudio() {
-        const activo = !document.body.classList.contains('solo-audio-mode');
-        document.body.classList.toggle('solo-audio-mode', activo);
-        const btn = document.getElementById('btnSoloAudio');
-        if (btn) btn.classList.toggle('active', activo);
-        try { localStorage.setItem('himnario_solo_audio', activo ? '1' : '0'); } catch (e) {}
-
-        if (activo) {
-            actualizarPortadaSoloAudio(currentHimno);
-            const vid = getActiveVideo();
-            if (vid && !vid.paused) vid.pause();
-        } else {
-            const vid = getActiveVideo();
-            if (vid && currentActivePlayUrl) {
-                configurarVideoSilencioso(vid);
-                vid.playbackRate = currentSpeed;
-                const needsReload = !vid.src || (vid.dataset.loadedUrl !== currentActivePlayUrl);
-                if (needsReload) {
-                    vid.dataset.loadedUrl = currentActivePlayUrl;
-                    vid.src = currentActivePlayUrl;
-                    vid.load();
-                }
-                const syncAlMostrar = () => {
-                    try {
-                        if (!isNaN(masterAudio.currentTime)) vid.currentTime = masterAudio.currentTime;
-                    } catch (e) {}
-                    if (!isUserPaused && !masterAudio.paused) vid.play().catch(() => {});
-                };
-                if (vid.readyState >= 1) syncAlMostrar();
-                else vid.addEventListener('loadedmetadata', syncAlMostrar, { once: true });
-            }
-        }
-        enviarEstadoProyeccion();
+function toggleSoloAudio() {
+    const activo = !document.body.classList.contains('solo-audio-mode');
+    document.body.classList.toggle('solo-audio-mode', activo);
+    const btn = document.getElementById('btnSoloAudio');
+    if (btn) {
+        btn.classList.toggle('active', activo);
+        btn.textContent = activo ? 'Ver video' : 'Solo audio';
+        btn.title = activo
+            ? 'Mostrar el video del himno'
+            : 'Ocultar video y mostrar solo la portada del himno';
     }
+    try { localStorage.setItem('himnario_solo_audio', activo ? '1' : '0'); } catch (e) {}
+
+    if (activo) {
+        actualizarPortadaSoloAudio(currentHimno);
+        const vid = getActiveVideo();
+        if (vid && !vid.paused) vid.pause();
+    } else {
+        const vid = getActiveVideo();
+        if (vid && currentActivePlayUrl) {
+            configurarVideoSilencioso(vid);
+            vid.playbackRate = currentSpeed;
+            const needsReload = !vid.src || (vid.dataset.loadedUrl !== currentActivePlayUrl);
+            if (needsReload) {
+                vid.dataset.loadedUrl = currentActivePlayUrl;
+                vid.src = currentActivePlayUrl;
+                vid.load();
+            }
+            const syncAlMostrar = () => {
+                try {
+                    if (!isNaN(masterAudio.currentTime)) vid.currentTime = masterAudio.currentTime;
+                } catch (e) {}
+                if (!isUserPaused && !masterAudio.paused) vid.play().catch(() => {});
+            };
+            if (vid.readyState >= 1) syncAlMostrar();
+            else vid.addEventListener('loadedmetadata', syncAlMostrar, { once: true });
+        }
+    }
+    enviarEstadoProyeccion();
+}
 
     function actualizarPortadaSoloAudio(h) {
         const container = document.querySelector('.video-container');
@@ -6329,7 +6335,11 @@
             if (localStorage.getItem('himnario_solo_audio') === '1') {
                 document.body.classList.add('solo-audio-mode');
                 const btn = document.getElementById('btnSoloAudio');
-                if (btn) btn.classList.add('active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.textContent = 'Ver video';
+                    btn.title = 'Mostrar el video del himno';
+                }
             }
         } catch (e) {}
     })();
