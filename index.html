@@ -6978,6 +6978,11 @@ function renderList(items) {
         items.forEach((h, idx) => {
             const li = document.createElement('li');
             li.className = 'playlist-item';
+            li.dataset.num = h.num;
+            if (selectedHimno && selectedHimno.num === h.num) {
+                li.classList.add('selected');
+            }
+
             if (currentHimno && currentHimno.num === h.num) {
                 li.classList.add('active');
             }
@@ -7076,25 +7081,32 @@ function renderList(items) {
             li.appendChild(titleSpan);
             li.appendChild(actionsDiv);
 
-            li.onclick = () => {
-                clearTimeout(clickTimer);
-                clickTimer = setTimeout(() => {
-                    if (currentViewId !== 'all' && currentViewId !== 'offline_saved') {
-                        activeQueuePlaylistId = currentViewId;
-                        actualizarBadgeColaActiva();
-                    }
-                    reproducirHimno(h, false, activeQueuePlaylistId !== null);
-                }, 220);
-            };
+                        li.onclick = () => {
+                const ahora = Date.now();
+                const esDobleToque = (lastTapHimnoNum === h.num) && (ahora - lastTapHimnoTime < 380);
+                lastTapHimnoNum = h.num;
+                lastTapHimnoTime = ahora;
 
-            li.ondblclick = () => {
-                clearTimeout(clickTimer);
+                selectedHimno = h;
+                actualizarSeleccionVisualLista();
+
                 if (currentViewId !== 'all' && currentViewId !== 'offline_saved') {
                     activeQueuePlaylistId = currentViewId;
                     actualizarBadgeColaActiva();
                 }
-                reproducirHimno(h, true, activeQueuePlaylistId !== null);
+
+                if (esDobleToque) {
+                    lastTapHimnoNum = null;
+                    reproducirHimno(h, true, activeQueuePlaylistId !== null);
+                    return;
+                }
+
+                if (!hayHimnoReproduciendo()) {
+                    reproducirHimno(h, false, activeQueuePlaylistId !== null);
+                }
             };
+
+
 
             fragment.appendChild(li);
         });
