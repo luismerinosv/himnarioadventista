@@ -6809,6 +6809,48 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             }
         }
     }
+    let selectedHimno = null;
+    let lastTapHimnoNum = null;
+    let lastTapHimnoTime = 0;
+
+    function hayHimnoReproduciendo() {
+        const audioEl = document.querySelector('audio');
+        const videoEl = document.querySelector('video');
+        const audioActivo = audioEl && !audioEl.paused && !audioEl.ended && audioEl.currentTime > 0;
+        const videoActivo = videoEl && !videoEl.paused && !videoEl.ended && videoEl.currentTime > 0;
+        return Boolean(audioActivo || videoActivo);
+    }
+
+    function actualizarSeleccionVisualLista() {
+        document.querySelectorAll('#playlist .playlist-item[data-num]').forEach(el => {
+            const esSel = selectedHimno && el.dataset.num === selectedHimno.num;
+            el.classList.toggle('selected', Boolean(esSel));
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (btn && btn.textContent && btn.textContent.includes('Repr.')) {
+            if (selectedHimno && (!currentHimno || selectedHimno.num !== currentHimno.num)) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                reproducirHimno(selectedHimno, true, activeQueuePlaylistId !== null);
+            }
+        }
+    }, true);
+
+    (function sincronizarSeleccionAlReproducir() {
+        const audioEl = document.querySelector('audio');
+        if (audioEl) {
+            audioEl.addEventListener('play', () => {
+                if (typeof currentHimno !== 'undefined' && currentHimno) {
+                    selectedHimno = currentHimno;
+                    actualizarSeleccionVisualLista();
+                }
+            });
+        }
+    })();
+
 function renderList(items) {
         const playlistEl = document.getElementById('playlist');
         playlistEl.innerHTML = '';
