@@ -2155,7 +2155,7 @@
                 height: 3px !important;
             }
         }
-/* === CATEGORÍAS TEMÁTICAS DEL HIMNARIO === */
+/* === CATEGORÍAS TEMÁTICAS Y SUBCATEGORÍAS DEL HIMNARIO === */
 .cat-grid {
     display: flex;
     flex-direction: column;
@@ -2164,71 +2164,116 @@
 }
 .cat-card {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 11px 13px;
     border-radius: 10px;
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    transition: background 0.16s, border-color 0.16s, transform 0.1s;
+    transition: background 0.16s, border-color 0.16s;
 }
 .cat-card:hover {
     background: var(--bg-hover);
     border-color: var(--border-strong);
 }
-.cat-card:active {
-    transform: scale(0.99);
-}
-.cat-card-info {
+.cat-card-header {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
 }
 .cat-card-title {
     font-weight: 700;
-    font-size: 0.94rem;
+    font-size: 0.93rem;
     color: var(--text-primary);
-}
-.cat-card-sub {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    line-height: 1.35;
 }
 .cat-card-range {
     flex-shrink: 0;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    padding: 4px 10px;
+    padding: 3px 9px;
     border-radius: 999px;
     background: var(--accent-gold-soft);
     color: #e8b36d;
     border: 1px solid rgba(216, 144, 62, 0.35);
     font-variant-numeric: tabular-nums;
 }
-.cat-active-bar {
+.cat-chips-preview {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.cat-chip-mini {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.cat-chip-mini:hover {
+    background: var(--accent-gold-soft);
+    border-color: rgba(216, 144, 62, 0.45);
+    color: #e8b36d;
+}
+.cat-active-panel {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 9px 11px;
     margin: 6px 8px 4px;
     border-radius: 9px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-strong);
     color: var(--text-primary);
+}
+.cat-active-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     font-size: 0.84rem;
+}
+.cat-sub-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.cat-sub-pill {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.73rem;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.cat-sub-pill:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+.cat-sub-pill.active {
+    background: var(--accent-gold);
+    border-color: #f0c285;
+    color: #160d05;
+    font-weight: 700;
 }
 .cat-back-btn {
     background: var(--accent-gold-soft);
     border: 1px solid rgba(216, 144, 62, 0.35);
     color: #e8b36d;
     font-weight: 700;
-    font-size: 0.78rem;
-    padding: 5px 10px;
+    font-size: 0.76rem;
+    padding: 4px 9px;
     border-radius: 7px;
     cursor: pointer;
     white-space: nowrap;
@@ -5137,6 +5182,7 @@
     function abrirVistaDesdeGestion(listId) {
         vistaCategoriasActiva = false;
         categoriaSeleccionada = null;
+        subcategoriaSeleccionada = null;
         document.getElementById('btnTabCategorias')?.classList.remove('active');
 
         currentViewId = listId;
@@ -6527,68 +6573,105 @@
             titulo: '1. El Culto',
             inicio: 1,
             fin: 52,
-            subtemas: 'Adoración y alabanza (1–21) · Inicio y cierre (22–45) · Culto matutino y vespertino (46–52)'
+            subcategorias: [
+                { titulo: 'Adoración y alabanza', inicio: 1, fin: 21 },
+                { titulo: 'Inicio y cierre del culto', inicio: 22, fin: 45 },
+                { titulo: 'Culto matutino y vespertino', inicio: 46, fin: 52 }
+            ]
         },
         {
             id: 2,
             titulo: '2. Dios el Padre',
             inicio: 53,
             fin: 78,
-            subtemas: 'Su majestad, amor y providencia · La Creación'
+            subcategorias: [
+                { titulo: 'Su majestad, amor y providencia', inicio: 53, fin: 73 },
+                { titulo: 'La Creación', inicio: 74, fin: 78 }
+            ]
         },
         {
             id: 3,
             titulo: '3. Jesucristo',
             inicio: 79,
             fin: 189,
-            subtemas: 'Nacimiento y ministerio · Pasión, muerte y resurrección · Segunda venida y reino'
+            subcategorias: [
+                { titulo: 'Su nacimiento y ministerio', inicio: 79, fin: 93 },
+                { titulo: 'Pasión, muerte y resurrección', inicio: 94, fin: 106 },
+                { titulo: 'Su amor y amistad', inicio: 107, fin: 133 },
+                { titulo: 'Alabanza a Jesús', inicio: 134, fin: 153 },
+                { titulo: 'Segunda venida y reino', inicio: 154, fin: 189 }
+            ]
         },
         {
             id: 4,
             titulo: '4. El Espíritu Santo y las Sagradas Escrituras',
             inicio: 190,
             fin: 211,
-            subtemas: 'El Espíritu Santo (190–202) · La Biblia (203–211)'
+            subcategorias: [
+                { titulo: 'El Espíritu Santo', inicio: 190, fin: 202 },
+                { titulo: 'La Biblia', inicio: 203, fin: 211 }
+            ]
         },
         {
             id: 5,
             titulo: '5. El Evangelio y la Salvación',
             inicio: 212,
             fin: 333,
-            subtemas: 'Llamamiento y arrepentimiento · Fe, gracia y gozo en la salvación'
+            subcategorias: [
+                { titulo: 'Llamamiento y arrepentimiento', inicio: 212, fin: 265 },
+                { titulo: 'Perdón, gracia y fe', inicio: 266, fin: 295 },
+                { titulo: 'Gozo y seguridad en la salvación', inicio: 296, fin: 333 }
+            ]
         },
         {
             id: 6,
             titulo: '6. La Vida Cristiana',
             inicio: 334,
             fin: 503,
-            subtemas: 'Consagración y oración · Confianza en las pruebas · La patria celestial y resurrección'
+            subcategorias: [
+                { titulo: 'Consagración y servicio', inicio: 334, fin: 370 },
+                { titulo: 'Oración y comunión', inicio: 371, fin: 389 },
+                { titulo: 'Lucha y victoria', inicio: 390, fin: 410 },
+                { titulo: 'Confianza y consuelo', inicio: 411, fin: 455 },
+                { titulo: 'Peregrinaje y patria celestial', inicio: 456, fin: 503 }
+            ]
         },
         {
             id: 7,
             titulo: '7. La Iglesia y Ritos Especiales',
             inicio: 504,
             fin: 585,
-            subtemas: 'El sábado · Bautismo, Santa Cena y mayordomía · Testificación y misión'
+            subcategorias: [
+                { titulo: 'La Iglesia', inicio: 504, fin: 511 },
+                { titulo: 'El sábado', inicio: 512, fin: 525 },
+                { titulo: 'Bautismo y Santa Cena', inicio: 526, fin: 540 },
+                { titulo: 'Mayordomía', inicio: 541, fin: 548 },
+                { titulo: 'Testificación y misión', inicio: 549, fin: 585 }
+            ]
         },
         {
             id: 8,
             titulo: '8. Ocasiones Especiales y Hogares',
             inicio: 586,
             fin: 613,
-            subtemas: 'Hogar cristiano, matrimonio y niños · Año nuevo, acción de gracias y despedidas'
+            subcategorias: [
+                { titulo: 'Hogar cristiano y matrimonio', inicio: 586, fin: 595 },
+                { titulo: 'Los niños', inicio: 596, fin: 604 },
+                { titulo: 'Año nuevo, gratitud y despedidas', inicio: 605, fin: 613 }
+            ]
         }
     ];
 
     let vistaCategoriasActiva = false;
     let categoriaSeleccionada = null;
+    let subcategoriaSeleccionada = null;
 
     function abrirVistaCategorias() {
         const btnCat = document.getElementById('btnTabCategorias');
 
-        // Si ya estás viendo las 8 tarjetas, al volver a tocar regresa a la lista normal
         if (vistaCategoriasActiva && !categoriaSeleccionada) {
             vistaCategoriasActiva = false;
+            subcategoriaSeleccionada = null;
             if (btnCat) btnCat.classList.remove('active');
             renderList(getFilteredList());
             return;
@@ -6596,6 +6679,7 @@
 
         vistaCategoriasActiva = true;
         categoriaSeleccionada = null;
+        subcategoriaSeleccionada = null;
         currentViewId = 'all';
         actualizarSelectorListasUI();
 
@@ -6603,9 +6687,10 @@
         renderList(getFilteredList());
     }
 
-    function seleccionarCategoria(cat) {
+    function seleccionarCategoria(cat, sub = null) {
         vistaCategoriasActiva = true;
         categoriaSeleccionada = cat;
+        subcategoriaSeleccionada = sub;
         renderList(getFilteredList());
     }
 
@@ -6618,9 +6703,11 @@
             : obtenerHimnosDeLista(currentViewId);
 
         if (vistaCategoriasActiva && categoriaSeleccionada) {
+            const rangoInicio = subcategoriaSeleccionada ? subcategoriaSeleccionada.inicio : categoriaSeleccionada.inicio;
+            const rangoFin = subcategoriaSeleccionada ? subcategoriaSeleccionada.fin : categoriaSeleccionada.fin;
             baseList = baseList.filter(h => {
                 const n = parseInt(h.num, 10);
-                return n >= categoriaSeleccionada.inicio && n <= categoriaSeleccionada.fin;
+                return n >= rangoInicio && n <= rangoFin;
             });
         }
 
@@ -6661,35 +6748,94 @@
             const grid = document.createElement('li');
             grid.className = 'cat-grid';
             grid.style.listStyle = 'none';
+
             CATEGORIAS_HIMNARIO.forEach(cat => {
-                const card = document.createElement('button');
-                card.type = 'button';
+                const card = document.createElement('div');
                 card.className = 'cat-card';
-                card.innerHTML = `
-                    <div class="cat-card-info">
-                        <div class="cat-card-title">${cat.titulo}</div>
-                        <div class="cat-card-sub">${cat.subtemas}</div>
-                    </div>
+                card.setAttribute('role', 'button');
+                card.tabIndex = 0;
+
+                const header = document.createElement('div');
+                header.className = 'cat-card-header';
+                header.innerHTML = `
+                    <span class="cat-card-title">${cat.titulo}</span>
                     <span class="cat-card-range">${cat.inicio} – ${cat.fin}</span>
                 `;
-                card.onclick = () => seleccionarCategoria(cat);
+                card.appendChild(header);
+
+                if (cat.subcategorias && cat.subcategorias.length > 0) {
+                    const chipsWrap = document.createElement('div');
+                    chipsWrap.className = 'cat-chips-preview';
+
+                    cat.subcategorias.forEach(sub => {
+                        const chip = document.createElement('button');
+                        chip.type = 'button';
+                        chip.className = 'cat-chip-mini';
+                        chip.textContent = `${sub.titulo} (${sub.inicio}–${sub.fin})`;
+                        chip.onclick = (e) => {
+                            e.stopPropagation();
+                            seleccionarCategoria(cat, sub);
+                        };
+                        chipsWrap.appendChild(chip);
+                    });
+
+                    card.appendChild(chipsWrap);
+                }
+
+                card.onclick = () => seleccionarCategoria(cat, null);
                 grid.appendChild(card);
             });
+
             playlistEl.appendChild(grid);
             return;
         }
 
         if (vistaCategoriasActiva && categoriaSeleccionada) {
-            const bar = document.createElement('li');
-            bar.className = 'cat-active-bar';
-            bar.style.listStyle = 'none';
-            bar.innerHTML = `
-                <strong>${categoriaSeleccionada.titulo} (${categoriaSeleccionada.inicio}–${categoriaSeleccionada.fin})</strong>
+            const panel = document.createElement('li');
+            panel.className = 'cat-active-panel';
+            panel.style.listStyle = 'none';
+
+            const rangoActivo = subcategoriaSeleccionada
+                ? `${subcategoriaSeleccionada.titulo} (${subcategoriaSeleccionada.inicio}–${subcategoriaSeleccionada.fin})`
+                : `${categoriaSeleccionada.inicio}–${categoriaSeleccionada.fin}`;
+
+            const topRow = document.createElement('div');
+            topRow.className = 'cat-active-top';
+            topRow.innerHTML = `
+                <strong>${categoriaSeleccionada.titulo} · ${rangoActivo}</strong>
                 <button type="button" class="cat-back-btn" onclick="abrirVistaCategorias()">← Categorías</button>
             `;
-            playlistEl.appendChild(bar);
-        }
+            panel.appendChild(topRow);
 
+            if (categoriaSeleccionada.subcategorias && categoriaSeleccionada.subcategorias.length > 0) {
+                const subBar = document.createElement('div');
+                subBar.className = 'cat-sub-bar';
+
+                const allPill = document.createElement('button');
+                allPill.type = 'button';
+                allPill.className = 'cat-sub-pill' + (!subcategoriaSeleccionada ? ' active' : '');
+                allPill.textContent = `Todos (${categoriaSeleccionada.inicio}–${categoriaSeleccionada.fin})`;
+                allPill.onclick = () => seleccionarCategoria(categoriaSeleccionada, null);
+                subBar.appendChild(allPill);
+
+                categoriaSeleccionada.subcategorias.forEach(sub => {
+                    const isSubActive = subcategoriaSeleccionada &&
+                        subcategoriaSeleccionada.inicio === sub.inicio &&
+                        subcategoriaSeleccionada.fin === sub.fin;
+
+                    const pill = document.createElement('button');
+                    pill.type = 'button';
+                    pill.className = 'cat-sub-pill' + (isSubActive ? ' active' : '');
+                    pill.textContent = `${sub.titulo} (${sub.inicio}–${sub.fin})`;
+                    pill.onclick = () => seleccionarCategoria(categoriaSeleccionada, sub);
+                    subBar.appendChild(pill);
+                });
+
+                panel.appendChild(subBar);
+            }
+
+            playlistEl.appendChild(panel);
+        }
         const isInst = document.getElementById('instrumentalCheckbox').checked;
 
         if (items.length === 0) {
