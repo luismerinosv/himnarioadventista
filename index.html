@@ -7556,6 +7556,81 @@ function confirmarSalidaApp() {
             }
         } catch (e) {}
     })();
+        (function suavizarInicioHimnos() {
+        const audioEl = document.querySelector('audio');
+        if (!audioEl) return;
+
+        let rampFrame = null;
+        let enRamp = false;
+        let volumenObjetivo = audioEl.volume || 1;
+
+        const volSlider = document.querySelector('input[type="range"][max="1"]');
+        if (volSlider) {
+            volSlider.addEventListener('input', () => {
+                if (rampFrame) {
+                    cancelAnimationFrame(rampFrame);
+                    rampFrame = null;
+                }
+                enRamp = false;
+                volumenObjetivo = parseFloat(volSlider.value);
+            });
+        }
+
+        audioEl.addEventListener('volumechange', () => {
+            if (!enRamp && audioEl.volume > 0.02) {
+                volumenObjetivo = audioEl.volume;
+            }
+        });
+
+        function aplicarEntradaSuave() {
+            if (audioEl.currentTime > 0.25) return;
+            if (rampFrame) cancelAnimationFrame(rampFrame);
+
+            const target = volSlider ? parseFloat(volSlider.value) : volumenObjetivo;
+            if (target <= 0.02) return;
+
+            enRamp = true;
+            audioEl.volume = 0;
+            const inicio = performance.now();
+            const duracion = 150;
+
+            function paso(ahora) {
+                const progreso = Math.min(1, (ahora - inicio) / duracion);
+                audioEl.volume = target * (progreso * progreso);
+                if (progreso < 1 && !audioEl.paused) {
+                    rampFrame = requestAnimationFrame(paso);
+                } else {
+                    audioEl.volume = target;
+                    enRamp = false;
+                    rampFrame = null;
+                }
+            }
+
+            rampFrame = requestAnimationFrame(paso);
+        }
+
+        audioEl.addEventListener('play', aplicarEntradaSuave);
+
+        if (typeof window.reproducirHimno === 'function') {
+            const origReproducir = window.reproducirHimno;
+            let ultimoNum = null;
+            let ultimoAuto = null;
+            let ultimoTs = 0;
+
+            window.reproducirHimno = function(himno, autoPlay, useQueue) {
+                const ahora = Date.now();
+                const num = himno && himno.num;
+                if (num && num === ultimoNum && autoPlay === ultimoAuto && (ahora - ultimoTs < 350)) {
+                    return;
+                }
+                ultimoNum = num;
+                ultimoAuto = autoPlay;
+                ultimoTs = ahora;
+                return origReproducir.apply(this, arguments);
+            };
+        }
+    })();
+
 
 </script>
 
