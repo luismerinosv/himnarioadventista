@@ -3883,13 +3883,18 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     const masterAudio = document.getElementById('masterAudio');
     let masterAudioUnlocked = false;
     let volumeRampId = 0;
+    let volumeRampTimer = null;
     let needsAudioFadeIn = false;
 
     function cancelarRampaVolumen() {
         volumeRampId++;
+        if (volumeRampTimer) {
+            clearInterval(volumeRampTimer);
+            volumeRampTimer = null;
+        }
     }
 
-    function fadeOutMasterAudio(durationMs = 45) {
+    function fadeOutMasterAudio(durationMs = 42) {
         cancelarRampaVolumen();
         needsAudioFadeIn = false;
 
@@ -3897,7 +3902,7 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             useVideoAudioFallback ||
             masterAudio.paused ||
             masterAudio.muted ||
-            masterAudio.volume <= 0.01 ||
+            masterAudio.volume <= 0.005 ||
             !masterAudio.src ||
             masterAudio.src === SILENT_AUDIO_DATA_URI
         ) {
@@ -3910,26 +3915,30 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         const startTime = performance.now();
 
         return new Promise((resolve) => {
-            function step(now) {
+            volumeRampTimer = setInterval(() => {
                 if (rampId !== volumeRampId) {
+                    clearInterval(volumeRampTimer);
+                    volumeRampTimer = null;
                     resolve();
                     return;
                 }
-                const progress = Math.min(1, (now - startTime) / durationMs);
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(1, elapsed / durationMs);
                 const ease = 1 - progress;
                 masterAudio.volume = Math.max(0, startVol * (ease * ease));
-                if (progress < 1 && !masterAudio.paused) {
-                    requestAnimationFrame(step);
-                } else {
+
+                if (progress >= 1 || masterAudio.paused) {
                     masterAudio.volume = 0;
-                    resolve();
+                    clearInterval(volumeRampTimer);
+                    volumeRampTimer = null;
+                    // Dejar 12 ms en silencio absoluto para vaciar el búfer de audio antes de pausar/cambiar src
+                    setTimeout(resolve, 12);
                 }
-            }
-            requestAnimationFrame(step);
+            }, 4);
         });
     }
 
-    function iniciarFadeInAudio(durationMs = 140) {
+    function iniciarFadeInAudio(durationMs = 135) {
         if (!needsAudioFadeIn) return;
         needsAudioFadeIn = false;
         cancelarRampaVolumen();
@@ -3943,18 +3952,21 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         const startTime = performance.now();
         masterAudio.volume = 0;
 
-        function step(now) {
-            if (rampId !== volumeRampId) return;
-            const target = isAudioMuted ? 0 : currentVolume;
-            const progress = Math.min(1, (now - startTime) / durationMs);
-            masterAudio.volume = target * (progress * progress);
-            if (progress < 1 && !masterAudio.paused) {
-                requestAnimationFrame(step);
-            } else {
-                masterAudio.volume = target;
+        volumeRampTimer = setInterval(() => {
+            if (rampId !== volumeRampId) {
+                clearInterval(volumeRampTimer);
+                volumeRampTimer = null;
+                return;
             }
-        }
-        requestAnimationFrame(step);
+            const target = isAudioMuted ? 0 : currentVolume;
+            const progress = Math.min(1, (performance.now() - startTime) / durationMs);
+            masterAudio.volume = target * (progress * progress);
+            if (progress >= 1 || masterAudio.paused) {
+                masterAudio.volume = target;
+                clearInterval(volumeRampTimer);
+                volumeRampTimer = null;
+            }
+        }, 6);
     }
 
     masterAudio.onplaying = () => {
@@ -3969,6 +3981,12 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     masterAudio.onerror = () => {
         if (masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
         if (currentHimno && currentActivePlayUrl) {
+            const isInstErr = document.getElementById('instrumentalCheckbox').checked;
+            const cacheKeyErr = getResolvedCacheKey(currentHimno, isInstErr);
+            if (resolvedUrlsCache[cacheKeyErr] === currentActivePlayUrl) {
+                delete resolvedUrlsCache[cacheKeyErr];
+                guardarResolvedUrlsCache();
+            }
             if (masterAudio.src !== currentActivePlayUrl) {
                 masterAudio.loop = false;
                 masterAudio.src = currentActivePlayUrl;
@@ -4345,8 +4363,15 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             if (savedUrlsSet.has(cand)) return cand;
         }
 
+        const cachedResolved = resolvedUrlsCache[getResolvedCacheKey(h, isInst)];
+        if (cachedResolved) {
+            return forzarEnieMinusculaUrl(cachedResolved);
+        }
+
         const primaryUrl = candidates[0];
         if (await urlExisteEnServidor(primaryUrl, signal)) {
+            resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = primaryUrl;
+            guardarResolvedUrlsCache();
             return primaryUrl;
         }
 
@@ -6580,15 +6605,15 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
 
         isUserPaused = !autoPlay;
 
-        let audioResult = { url: playUrl, ok: true };
+        const pureCacheKey = `${playUrl}|inst:${isInst ? 1 : 0}`;
+        let audioResult = { url: playUrl, ok: true, directFallback: true };
         if (isPlayingFromLocal) {
             audioResult = await obtenerUrlAudioPuro(playUrl, isInst);
+        } else if (audioOnlyBlobCache.has(pureCacheKey)) {
+            audioResult = audioOnlyBlobCache.get(pureCacheKey);
         } else {
-            const fastRes = await Promise.race([
-                obtenerUrlAudioPuro(playUrl, isInst),
-                new Promise(resolve => setTimeout(() => resolve({ url: playUrl, ok: true, directFallback: true }), 1600))
-            ]);
-            audioResult = fastRes;
+            // Arrancar streaming de inmediato (0 ms) y cachear pista pura en segundo plano
+            obtenerUrlAudioPuro(playUrl, isInst).catch(() => {});
         }
         await fadeOutPromise;
         if (requestId !== currentPlayRequestId) return;
@@ -6615,7 +6640,7 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         configurarVideoSilencioso(nextVid);
 
         nextVid.oncanplay = null;
-        nextVid.onerror = null;
+        nextVid.one rror = null;
         nextVid.onloadeddata = null;
         nextVid.pause();
         nextVid.dataset.loadedUrl = playUrl;
@@ -6669,6 +6694,12 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
                 updatePlayPauseUI(false);
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
                 syncSecondary();
+                // Precargar el himno siguiente en segundo plano sin afectar el audio actual
+                setTimeout(() => {
+                    if (requestId === currentPlayRequestId && !masterAudio.paused) {
+                        precachearSiguienteHimno();
+                    }
+                }, 1800);
             }).catch((err) => {
                 if (err && err.name === 'AbortError') return;
                 if (requestId !== currentPlayRequestId) return;
@@ -6692,7 +6723,8 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             guardarHimnoEnLocal(h, isInst, null, true);
         }
 
-        renderList(getFilteredList());
+        selectedHimno = h;
+        actualizarEstadoActivoLista();
     }
 
     function stopHymn() {
@@ -6963,6 +6995,20 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     function actualizarSeleccionVisualLista() {
         document.querySelectorAll('#playlist .playlist-item[data-num]').forEach(el => {
             const esSel = selectedHimno && el.dataset.num === selectedHimno.num;
+            el.classList.toggle('selected', Boolean(esSel));
+        });
+    }
+
+    function actualizarEstadoActivoLista() {
+        const itemsDom = document.querySelectorAll('#playlist .playlist-item[data-num]');
+        if (itemsDom.length === 0) {
+            renderList(getFilteredList());
+            return;
+        }
+        itemsDom.forEach(el => {
+            const esActivo = currentHimno && el.dataset.num === currentHimno.num;
+            const esSel = selectedHimno && el.dataset.num === selectedHimno.num;
+            el.classList.toggle('active', Boolean(esActivo));
             el.classList.toggle('selected', Boolean(esSel));
         });
     }
