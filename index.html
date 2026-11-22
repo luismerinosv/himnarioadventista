@@ -2290,6 +2290,43 @@
     color: #e8b36d;
     background: var(--accent-gold-soft);
 }
+
+/* === MODO SOLO AUDIO (JUNTO A PANTALLA ÚNICA) === */
+.btn-solo-audio {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.btn-solo-audio:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+.btn-solo-audio.active {
+    background: var(--accent-gold-soft);
+    border-color: rgba(216, 144, 62, 0.45);
+    color: #e8b36d;
+    font-weight: 700;
+}
+body.solo-audio-mode video {
+    display: none !important;
+}
+body.solo-audio-mode div:has(> img[alt="Logo Adventista"]) {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 5 !important;
+}
+
     </style>
 </head>
 <body>
@@ -2325,6 +2362,7 @@
                 <span id="playerCurrentTitle" style="font-weight: 600; color: var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Seleccione un himno para comenzar</span>
                 <div class="header-badges-right">
                     <span id="localPlaybackBadge" class="local-play-badge" title="Reproduciendo desde el almacenamiento local">Local</span>
+                    <button type="button" id="btnSoloAudio" class="btn-solo-audio" onclick="toggleSoloAudio()" title="Ocultar video y mostrar solo la portada del himno">Solo audio</button>
                     <span id="projectionStatusBadge" class="status-pill">Pantalla única</span>
                 </div>
             </div>
@@ -7306,6 +7344,26 @@ function confirmarSalidaApp() {
     }
 
     cargarDatosYArrancar();
+        function toggleSoloAudio() {
+        const activo = !document.body.classList.contains('solo-audio-mode');
+        document.body.classList.toggle('solo-audio-mode', activo);
+        const btn = document.getElementById('btnSoloAudio');
+        if (btn) btn.classList.toggle('active', activo);
+        try {
+            localStorage.setItem('himnario_solo_audio', activo ? '1' : '0');
+        } catch (e) {}
+    }
+
+    (function restaurarSoloAudio() {
+        try {
+            if (localStorage.getItem('himnario_solo_audio') === '1') {
+                document.body.classList.add('solo-audio-mode');
+                const btn = document.getElementById('btnSoloAudio');
+                if (btn) btn.classList.add('active');
+            }
+        } catch (e) {}
+    })();
+
 </script>
 
 </body>
