@@ -6800,6 +6800,12 @@
 
             playlistEl.appendChild(grid);
             return;
+        if (items.length > 0) {
+            const spacer = document.createElement('li');
+            spacer.setAttribute('aria-hidden', 'true');
+            spacer.style.cssText = 'height: 58px; min-height: 58px; border: none; background: transparent; pointer-events: none; flex-shrink: 0;';
+            playlistEl.appendChild(spacer);
+        }
         }
 
         if (vistaCategoriasActiva && categoriaSeleccionada) {
