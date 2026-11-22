@@ -2567,9 +2567,9 @@
         <div class="playlist-header">
             <div class="playlist-nav-group">
                 <select id="playlistViewSelect" class="playlist-select" onchange="cambiarVistaLista(this.value)" title="Seleccionar vista o lista de reproducción">
-                    <option value="all">Todos los himnos (613)</option>
+                    <option value="all">Todos (613)</option>
                     <option value="favorites">Favoritos (0)</option>
-                    <option value="offline_saved">Guardados en local (0)</option>
+                    <option value="offline_saved">Local (0)</option>
                 </select>
                 <button id="playPlaylistBtn" class="btn-mini-pl play-all" style="display:none;" onclick="iniciarReproduccionListaActual()" title="Reproducir esta lista de principio a fin">Repr. Lista</button>
                 <button id="loopPlaylistBtn" class="btn-mini-pl" style="display:none;" onclick="toggleRepetirLista()" title="Repetir lista al finalizar">
@@ -5173,7 +5173,7 @@
 
         const optOffline = document.createElement('option');
         optOffline.value = 'offline_saved';
-        optOffline.textContent = `Guardados en local (${totalLocalCount})`;
+        optOffline.textContent = `Local (${totalLocalCount})`;
         select.appendChild(optOffline);
 
         playlistsData.custom.forEach(pl => {
@@ -5213,9 +5213,9 @@
     }
 
     function obtenerNombreLista(viewId) {
-        if (viewId === 'all') return 'Todos los himnos';
+        if (viewId === 'all') return 'Todos';
         if (viewId === 'favorites') return 'Favoritos';
-        if (viewId === 'offline_saved') return 'Guardados en local';
+        if (viewId === 'offline_saved') return 'Local';
         const pl = playlistsData.custom.find(p => p.id === viewId);
         return pl ? pl.name : 'Lista';
     }
