@@ -7082,6 +7082,7 @@ function renderList(items) {
             li.appendChild(actionsDiv);
 
                         li.onclick = () => {
+                clearTimeout(clickTimer);
                 const ahora = Date.now();
                 const esDobleToque = (lastTapHimnoNum === h.num) && (ahora - lastTapHimnoTime < 380);
                 lastTapHimnoNum = h.num;
@@ -7101,11 +7102,12 @@ function renderList(items) {
                     return;
                 }
 
-                if (!hayHimnoReproduciendo()) {
-                    reproducirHimno(h, false, activeQueuePlaylistId !== null);
-                }
+                clickTimer = setTimeout(() => {
+                    if (!hayHimnoReproduciendo() && (!currentHimno || currentHimno.num !== h.num)) {
+                        reproducirHimno(h, false, activeQueuePlaylistId !== null);
+                    }
+                }, 260);
             };
-
 
 
             fragment.appendChild(li);
@@ -7457,7 +7459,10 @@ function confirmarSalidaApp() {
         return coverImg;
     }
 
+    let timerPortadaSoloAudio = null;
+
     function actualizarPortadaSoloAudio() {
+        clearTimeout(timerPortadaSoloAudio);
         const coverImg = obtenerElementoPortada();
         if (!coverImg) return;
 
@@ -7472,44 +7477,58 @@ function confirmarSalidaApp() {
             return;
         }
 
-        const num3 = String(parseInt(numRaw, 10)).padStart(3, '0');
-        const base = obtenerBaseServidor();
-        const candidatos = [];
+        timerPortadaSoloAudio = setTimeout(() => {
+            const num3 = String(parseInt(numRaw, 10)).padStart(3, '0');
+            const base = obtenerBaseServidor();
+            const candidatos = [];
 
-        const msArt = navigator.mediaSession?.metadata?.artwork?.[0]?.src;
-        if (msArt && !msArt.includes('logo-adventista')) {
-            candidatos.push(msArt);
-        }
-
-        if (base) {
-            candidatos.push(
-                `${base}/Portadas/${num3}.webp`,
-                `${base}/Portadas/${num3}.jpg`,
-                `${base}/Portadas/${num3}.png`,
-                `${base}/portadas/${num3}.webp`,
-                `${base}/portadas/${num3}.jpg`,
-                `${base}/Covers/${num3}.jpg`,
-                `${base}/${num3}.jpg`
-            );
-        }
-
-        let idx = 0;
-        function probarSiguiente() {
-            if (idx >= candidatos.length) {
-                coverImg.classList.remove('loaded');
-                document.body.classList.remove('has-hymn-cover');
-                return;
+            const msArt = navigator.mediaSession?.metadata?.artwork?.[0]?.src;
+            if (msArt && !msArt.includes('logo-adventista')) {
+                candidatos.push(msArt);
             }
-            const url = candidatos[idx++];
-            coverImg.onload = () => {
-                coverImg.classList.add('loaded');
-                document.body.classList.add('has-hymn-cover');
-            };
-            coverImg.onerror = probarSiguiente;
-            coverImg.src = url;
-        }
 
-        probarSiguiente();
+            if (base) {
+                let rutaGuardada = '';
+                try { rutaGuardada = localStorage.getItem('himnario_cover_fmt') || ''; } catch (e) {}
+                if (rutaGuardada) {
+                    candidatos.push(rutaGuardada.replace('{NUM}', num3));
+                }
+                const rutas = [
+                    `${base}/Portadas/{NUM}.webp`,
+                    `${base}/Portadas/{NUM}.jpg`,
+                    `${base}/Portadas/{NUM}.png`,
+                    `${base}/portadas/{NUM}.webp`,
+                    `${base}/portadas/{NUM}.jpg`,
+                    `${base}/Covers/{NUM}.jpg`,
+                    `${base}/{NUM}.jpg`
+                ];
+                rutas.forEach(r => {
+                    const url = r.replace('{NUM}', num3);
+                    if (!candidatos.includes(url)) candidatos.push(url);
+                });
+            }
+
+            let idx = 0;
+            function probarSiguiente() {
+                if (idx >= candidatos.length) {
+                    coverImg.classList.remove('loaded');
+                    document.body.classList.remove('has-hymn-cover');
+                    return;
+                }
+                const url = candidatos[idx++];
+                coverImg.onload = () => {
+                    coverImg.classList.add('loaded');
+                    document.body.classList.add('has-hymn-cover');
+                    try {
+                        localStorage.setItem('himnario_cover_fmt', url.replace(num3, '{NUM}'));
+                    } catch (e) {}
+                };
+                coverImg.onerror = probarSiguiente;
+                coverImg.src = url;
+            }
+
+            probarSiguiente();
+        }, 300);
     }
 
     function toggleSoloAudio() {
@@ -7527,14 +7546,13 @@ function confirmarSalidaApp() {
         const audioEl = document.querySelector('audio');
         if (audioEl) {
             audioEl.addEventListener('loadstart', actualizarPortadaSoloAudio);
-            audioEl.addEventListener('loadedmetadata', actualizarPortadaSoloAudio);
         }
         try {
             if (localStorage.getItem('himnario_solo_audio') === '1') {
                 document.body.classList.add('solo-audio-mode');
                 const btn = document.getElementById('btnSoloAudio');
                 if (btn) btn.classList.add('active');
-                setTimeout(actualizarPortadaSoloAudio, 250);
+                actualizarPortadaSoloAudio();
             }
         } catch (e) {}
     })();
