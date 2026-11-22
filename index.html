@@ -2155,6 +2155,88 @@
                 height: 3px !important;
             }
         }
+        /* === CATEGORÍAS TEMÁTICAS DEL HIMNARIO === */
+.cat-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 2px;
+}
+.cat-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.18s, border-color 0.18s, transform 0.12s;
+}
+.cat-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(230, 168, 58, 0.55);
+}
+.cat-card:active {
+    transform: scale(0.99);
+}
+.cat-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.cat-card-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: inherit;
+}
+.cat-card-sub {
+    font-size: 0.78rem;
+    opacity: 0.72;
+    line-height: 1.35;
+}
+.cat-card-range {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(230, 168, 58, 0.16);
+    color: #e6a83a;
+    border: 1px solid rgba(230, 168, 58, 0.35);
+}
+.cat-active-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    background: rgba(230, 168, 58, 0.14);
+    border: 1px solid rgba(230, 168, 58, 0.35);
+    font-size: 0.85rem;
+}
+.cat-back-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: inherit;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.cat-back-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+.btn-mini-pl.active {
+    border-color: #e6a83a;
+    color: #e6a83a;
+    background: rgba(230, 168, 58, 0.14);
+}
     </style>
 </head>
 <body>
@@ -2295,6 +2377,7 @@
                     <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                 </button>
                 <button class="btn-mini-pl" onclick="abrirModalGestionListas()" title="Crear o administrar listas de reproducción">Listas</button>
+                <button type="button" id="btnTabCategorias" class="btn-mini-pl" onclick="abrirVistaCategorias()" title="Explorar himnos por temas y categorías">Categorías</button>
                 <button id="offlineMgrBtn" class="btn-mini-pl" onclick="abrirModalOffline()" title="Guardar himnos en el dispositivo o revisar archivos en servidor">Local (0)</button>
             </div>
             <div class="playlist-right-badges">
@@ -6420,46 +6503,123 @@
         if (prevIdx < 0) prevIdx = himnosList.length - 1;
         reproducirHimno(himnosList[prevIdx], true);
     }
+    const CATEGORIAS_HIMNARIO = [
+        {
+            id: 1,
+            titulo: '1. El Culto',
+            inicio: 1,
+            fin: 52,
+            subtemas: 'Adoración y alabanza (1–21) · Inicio y cierre (22–45) · Culto matutino y vespertino (46–52)'
+        },
+        {
+            id: 2,
+            titulo: '2. Dios el Padre',
+            inicio: 53,
+            fin: 78,
+            subtemas: 'Su majestad, amor y providencia · La Creación'
+        },
+        {
+            id: 3,
+            titulo: '3. Jesucristo',
+            inicio: 79,
+            fin: 189,
+            subtemas: 'Nacimiento y ministerio · Pasión, muerte y resurrección · Segunda venida y reino'
+        },
+        {
+            id: 4,
+            titulo: '4. El Espíritu Santo y las Sagradas Escrituras',
+            inicio: 190,
+            fin: 211,
+            subtemas: 'El Espíritu Santo (190–202) · La Biblia (203–211)'
+        },
+        {
+            id: 5,
+            titulo: '5. El Evangelio y la Salvación',
+            inicio: 212,
+            fin: 333,
+            subtemas: 'Llamamiento y arrepentimiento · Fe, gracia y gozo en la salvación'
+        },
+        {
+            id: 6,
+            titulo: '6. La Vida Cristiana',
+            inicio: 334,
+            fin: 503,
+            subtemas: 'Consagración y oración · Confianza en las pruebas · La patria celestial y resurrección'
+        },
+        {
+            id: 7,
+            titulo: '7. La Iglesia y Ritos Especiales',
+            inicio: 504,
+            fin: 585,
+            subtemas: 'El sábado · Bautismo, Santa Cena y mayordomía · Testificación y misión'
+        },
+        {
+            id: 8,
+            titulo: '8. Ocasiones Especiales y Hogares',
+            inicio: 586,
+            fin: 613,
+            subtemas: 'Hogar cristiano, matrimonio y niños · Año nuevo, acción de gracias y despedidas'
+        }
+    ];
 
-    function getFilteredList() {
-        const rawQuery = document.getElementById('searchInput').value.trim();
-        const query = removeAccents(rawQuery.toLowerCase());
+    let vistaCategoriasActiva = false;
+    let categoriaSeleccionada = null;
 
-        const baseList = (currentViewId === 'all')
-            ? himnosList
-            : obtenerHimnosDeLista(currentViewId);
+    function abrirVistaCategorias() {
+        vistaCategoriasActiva = true;
+        categoriaSeleccionada = null;
 
-        if (!query) return baseList;
+        // Quita el estado activo de las otras pestañas y marca "Categorías"
+        document.querySelectorAll('.tab-btn, [data-tab], [data-filter]').forEach(b => b.classList.remove('active'));
+        const btnCat = document.getElementById('btnTabCategorias');
+        if (btnCat) btnCat.classList.add('active');
 
-        return baseList.filter(h => {
-            const numClean = parseInt(h.num, 10).toString();
-            const titleClean = removeAccents(h.title.toLowerCase());
-            return numClean.includes(query) || h.num.includes(query) || titleClean.includes(query);
-        });
-    }
-
-    function filtrarHimnos() {
         renderList(getFilteredList());
     }
 
-    function manejarTeclaBusqueda(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            const filtered = getFilteredList();
-            if (filtered.length > 0) {
-                reproducirHimno(filtered[0], true, currentViewId !== 'all');
-                if (currentViewId !== 'all') {
-                    activeQueuePlaylistId = currentViewId;
-                    actualizarBadgeColaActiva();
-                }
-                document.getElementById('searchInput').blur();
-            }
-        }
+    function seleccionarCategoria(cat) {
+        vistaCategoriasActiva = true;
+        categoriaSeleccionada = cat;
+        renderList(getFilteredList());
     }
-
     function renderList(items) {
         const playlistEl = document.getElementById('playlist');
         playlistEl.innerHTML = '';
+
+        const rawQuery = document.getElementById('searchInput').value.trim();
+
+        if (vistaCategoriasActiva && !categoriaSeleccionada && !rawQuery) {
+            const grid = document.createElement('li');
+            grid.className = 'cat-grid';
+            grid.style.listStyle = 'none';
+            CATEGORIAS_HIMNARIO.forEach(cat => {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'cat-card';
+                card.innerHTML = `
+                    <div class="cat-card-info">
+                        <div class="cat-card-title">${cat.titulo}</div>
+                        <div class="cat-card-sub">${cat.subtemas}</div>
+                    </div>
+                    <span class="cat-card-range">${cat.inicio} – ${cat.fin}</span>
+                `;
+                card.onclick = () => seleccionarCategoria(cat);
+                grid.appendChild(card);
+            });
+            playlistEl.appendChild(grid);
+            return;
+        }
+
+        if (vistaCategoriasActiva && categoriaSeleccionada) {
+            const bar = document.createElement('li');
+            bar.className = 'cat-active-bar';
+            bar.style.listStyle = 'none';
+            bar.innerHTML = `
+                <strong>${categoriaSeleccionada.titulo} (${categoriaSeleccionada.inicio}–${categoriaSeleccionada.fin})</strong>
+                <button type="button" class="cat-back-btn" onclick="abrirVistaCategorias()">← Categorías</button>
+            `;
+            playlistEl.appendChild(bar);
+        }
 
         const isInst = document.getElementById('instrumentalCheckbox').checked;
 
