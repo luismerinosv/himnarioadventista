@@ -4490,6 +4490,10 @@
     }
 
     function verSoloGuardadosLocal() {
+        vistaCategoriasActiva = false;
+        categoriaSeleccionada = null;
+        document.getElementById('btnTabCategorias')?.classList.remove('active');
+
         currentViewId = 'offline_saved';
         actualizarSelectorListasUI();
         renderList(getFilteredList());
@@ -4897,6 +4901,10 @@
     }
 
     function cambiarVistaLista(viewId) {
+        vistaCategoriasActiva = false;
+        categoriaSeleccionada = null;
+        document.getElementById('btnTabCategorias')?.classList.remove('active');
+
         currentViewId = viewId;
         actualizarSelectorListasUI();
         renderList(getFilteredList());
@@ -5121,6 +5129,10 @@
     }
 
     function abrirVistaDesdeGestion(listId) {
+        vistaCategoriasActiva = false;
+        categoriaSeleccionada = null;
+        document.getElementById('btnTabCategorias')?.classList.remove('active');
+
         currentViewId = listId;
         actualizarSelectorListasUI();
         renderList(getFilteredList());
@@ -6566,14 +6578,22 @@
     let categoriaSeleccionada = null;
 
     function abrirVistaCategorias() {
+        const btnCat = document.getElementById('btnTabCategorias');
+
+        // Si ya estás viendo las 8 tarjetas, al volver a tocar regresa a la lista normal
+        if (vistaCategoriasActiva && !categoriaSeleccionada) {
+            vistaCategoriasActiva = false;
+            if (btnCat) btnCat.classList.remove('active');
+            renderList(getFilteredList());
+            return;
+        }
+
         vistaCategoriasActiva = true;
         categoriaSeleccionada = null;
+        currentViewId = 'all';
+        actualizarSelectorListasUI();
 
-        // Quita el estado activo de las otras pestañas y marca "Categorías"
-        document.querySelectorAll('.tab-btn, [data-tab], [data-filter]').forEach(b => b.classList.remove('active'));
-        const btnCat = document.getElementById('btnTabCategorias');
         if (btnCat) btnCat.classList.add('active');
-
         renderList(getFilteredList());
     }
 
@@ -6581,6 +6601,49 @@
         vistaCategoriasActiva = true;
         categoriaSeleccionada = cat;
         renderList(getFilteredList());
+    }
+
+    function getFilteredList() {
+        const rawQuery = document.getElementById('searchInput').value.trim();
+        const query = removeAccents(rawQuery.toLowerCase());
+
+        let baseList = (vistaCategoriasActiva || currentViewId === 'all')
+            ? himnosList
+            : obtenerHimnosDeLista(currentViewId);
+
+        if (vistaCategoriasActiva && categoriaSeleccionada) {
+            baseList = baseList.filter(h => {
+                const n = parseInt(h.num, 10);
+                return n >= categoriaSeleccionada.inicio && n <= categoriaSeleccionada.fin;
+            });
+        }
+
+        if (!query) return baseList;
+
+        return baseList.filter(h => {
+            const numClean = parseInt(h.num, 10).toString();
+            const titleClean = removeAccents(h.title.toLowerCase());
+            return numClean.includes(query) || h.num.includes(query) || titleClean.includes(query);
+        });
+    }
+
+    function filtrarHimnos() {
+        renderList(getFilteredList());
+    }
+
+    function manejarTeclaBusqueda(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const filtered = getFilteredList();
+            if (filtered.length > 0) {
+                reproducirHimno(filtered[0], true, currentViewId !== 'all');
+                if (currentViewId !== 'all') {
+                    activeQueuePlaylistId = currentViewId;
+                    actualizarBadgeColaActiva();
+                }
+                document.getElementById('searchInput').blur();
+            }
+        }
     }
     function renderList(items) {
         const playlistEl = document.getElementById('playlist');
