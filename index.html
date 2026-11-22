@@ -1640,7 +1640,7 @@
     <span id="ptrText">Desliza para actualizar</span>
 </div>
 
-<!-- AUDIO MAESTRO (PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
+<!-- AUDIO MAESTRO (PISTA DE AUDIO PURA PARA SEGUNDO PLANO Y SELECCIÓN DE PISTA EN MÓVIL/PC) -->
 <audio id="masterAudio" preload="auto" playsinline></audio>
 
 <div id="hymn-player-wrapper">
@@ -2191,7 +2191,7 @@
     const PLAYLIST_STORAGE_KEY = "himnario_adventista_playlists_v1";
     const AUTOCACHE_PREF_KEY = "himnario_adventista_autocache_v1";
     const SOLO_AUDIO_PREF_KEY = "himnario_adventista_solo_audio_v1";
-    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v5";
+    const RESOLVED_URLS_CACHE_KEY = "himnario_adventista_resolved_urls_v6";
     const TITLES_CACHE_KEY = "himnario_adventista_titulos_cache_v1";
 
     const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -3069,9 +3069,10 @@
     })();
 
     /* =========================================================================
-       EXTRACTOR DE PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL
+       EXTRACTOR Y SELECTOR DE PISTAS DE AUDIO (PISTA 2 CANTADO EN HIMNOS DUALES)
        ========================================================================= */
     const audioOnlyBlobCache = new Map();
+    const audioOnlyPendingMap = new Map();
     const audioOnlyOrder = [];
     const utf8Decoder = new TextDecoder('utf-8', { fatal: false });
 
@@ -3158,27 +3159,30 @@
     function seleccionarIndicePistaAudio(soundTracks, isInstrumental) {
         if (!soundTracks || soundTracks.length <= 1) return 0;
 
-        const reCantado = /\b(cantad[oa]s?|vocal(es)?|voz|voces|canto|letra|con\s*voz)\b/;
-        const reInstrumental = /\b(instrumental(es)?|pista(s)?|karaoke|acompanamiento|sin\s*voz|musica\s*sola)\b/;
+        const reCantado = /\b(cantad[oa]s?|vocal(es)?|voz|voces|canto|letra|con\s*voz|track\s*2|pista\s*2)\b/;
+        const reInstrumental = /\b(instrumental(es)?|pista(s)?|karaoke|acompanamiento|sin\s*voz|musica\s*sola|track\s*1|pista\s*1)\b/;
 
         if (!isInstrumental) {
+            // 1. Si alguna pista está etiquetada explícitamente como cantada/vocal
             const idxCantado = soundTracks.findIndex(t => reCantado.test(t.searchableText) && !reInstrumental.test(t.searchableText));
             if (idxCantado !== -1) return idxCantado;
 
+            // 2. Si una pista está etiquetada como instrumental, elegir la otra
             const idxNotInst = soundTracks.findIndex(t => !reInstrumental.test(t.searchableText));
             if (soundTracks.some(t => reInstrumental.test(t.searchableText)) && idxNotInst !== -1) return idxNotInst;
 
-            const enabledTracks = soundTracks.map((t, idx) => ({ t, idx })).filter(item => item.t.isEnabled);
-            if (enabledTracks.length === 1) return enabledTracks[0].idx;
-
-            const idxSpa = soundTracks.findIndex(t => t.lang === 'spa' || t.lang === 'esl' || /^es\b/.test(normalizeHeaderLabel(t.extLang)));
-            return idxSpa !== -1 ? idxSpa : 0;
+            // 3. En los himnos con 2 pistas de audio (como el Himno 19), la pista 1 (índice 0) es instrumental y la pista 2 (índice 1) es cantada
+            return 1;
         } else {
+            // 1. Si alguna pista está etiquetada explícitamente como instrumental
             const idxInst = soundTracks.findIndex(t => reInstrumental.test(t.searchableText));
             if (idxInst !== -1) return idxInst;
 
+            // 2. Si una pista está etiquetada como cantada, elegir la otra
             const idxNotCantado = soundTracks.findIndex(t => !reCantado.test(t.searchableText));
             if (soundTracks.some(t => reCantado.test(t.searchableText)) && idxNotCantado !== -1) return idxNotCantado;
+
+            // 3. En los himnos con 2 pistas de audio, la pista 1 (índice 0) es instrumental
             return 0;
         }
     }
@@ -3253,32 +3257,40 @@
     async function obtenerUrlAudioPuro(sourceUrl, isInstrumental = false) {
         const cacheKey = `${sourceUrl}|inst:${isInstrumental ? 1 : 0}`;
         if (audioOnlyBlobCache.has(cacheKey)) return audioOnlyBlobCache.get(cacheKey);
+        if (audioOnlyPendingMap.has(cacheKey)) return audioOnlyPendingMap.get(cacheKey);
 
-        const ctrl = new AbortController();
-        const timeoutId = setTimeout(() => ctrl.abort(), 14000);
-        try {
-            const resp = await fetch(sourceUrl, { signal: ctrl.signal });
-            clearTimeout(timeoutId);
-            if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status };
-            const buf = await resp.arrayBuffer();
-            const parsedBlob = stripVideoTrackFromMp4(buf, isInstrumental);
-            if (!parsedBlob) return { url: sourceUrl, ok: true, directFallback: true };
+        const task = (async () => {
+            const ctrl = new AbortController();
+            const timeoutId = setTimeout(() => ctrl.abort(), 30000);
+            try {
+                const resp = await fetch(sourceUrl, { signal: ctrl.signal });
+                clearTimeout(timeoutId);
+                if (!resp.ok) return { url: sourceUrl, ok: false, status: resp.status };
+                const buf = await resp.arrayBuffer();
+                const parsedBlob = stripVideoTrackFromMp4(buf, isInstrumental);
+                if (!parsedBlob) return { url: sourceUrl, ok: true, directFallback: true };
 
-            const blobUrl = URL.createObjectURL(parsedBlob);
-            const resultObj = { url: blobUrl, ok: true };
-            audioOnlyBlobCache.set(cacheKey, resultObj);
-            audioOnlyOrder.push(cacheKey);
-            if (audioOnlyOrder.length > 15) {
-                const oldest = audioOnlyOrder.shift();
-                const oldEntry = audioOnlyBlobCache.get(oldest);
-                if (oldEntry && oldEntry.url) URL.revokeObjectURL(oldEntry.url);
-                audioOnlyBlobCache.delete(oldest);
+                const blobUrl = URL.createObjectURL(parsedBlob);
+                const resultObj = { url: blobUrl, ok: true };
+                audioOnlyBlobCache.set(cacheKey, resultObj);
+                audioOnlyOrder.push(cacheKey);
+                if (audioOnlyOrder.length > 15) {
+                    const oldest = audioOnlyOrder.shift();
+                    const oldEntry = audioOnlyBlobCache.get(oldest);
+                    if (oldEntry && oldEntry.url) URL.revokeObjectURL(oldEntry.url);
+                    audioOnlyBlobCache.delete(oldest);
+                }
+                return resultObj;
+            } catch (e) {
+                clearTimeout(timeoutId);
+                return { url: sourceUrl, ok: true, directFallback: true };
+            } finally {
+                audioOnlyPendingMap.delete(cacheKey);
             }
-            return resultObj;
-        } catch (e) {
-            clearTimeout(timeoutId);
-            return { url: sourceUrl, ok: true, directFallback: true };
-        }
+        })();
+
+        audioOnlyPendingMap.set(cacheKey, task);
+        return task;
     }
 
     /* =========================================================================
@@ -3382,7 +3394,7 @@
         handleMediaEnded();
     };
 
-    masterAudio.onerror = () => {
+    masterAudio.onerror = async () => {
         if (masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
         if (currentHimno && currentActivePlayUrl) {
             const isInstErr = DOM.instrumentalCheckbox.checked;
@@ -3392,33 +3404,32 @@
                 guardarResolvedUrlsCache();
             }
 
-            if (masterAudio.src !== currentActivePlayUrl) {
+            if (masterAudio.src !== currentActivePlayUrl && masterAudio.src.startsWith('blob:')) {
                 masterAudio.loop = false;
                 masterAudio.src = currentActivePlayUrl;
                 if (!isUserPaused) masterAudio.play().catch(() => {});
                 return;
             }
 
-            if (currentCandidateIndex + 1 < currentCandidateUrls.length) {
-                currentCandidateIndex++;
-                const altUrl = currentCandidateUrls[currentCandidateIndex];
-                currentActivePlayUrl = altUrl;
+            const recoveredUrl = await resolverUrlHimnoValida(currentHimno, isInstErr);
+            if (recoveredUrl && recoveredUrl !== currentActivePlayUrl) {
+                currentActivePlayUrl = recoveredUrl;
+                const audioRes = await obtenerUrlAudioPuro(recoveredUrl, isInstErr);
                 masterAudio.loop = false;
-                masterAudio.src = altUrl;
+                masterAudio.src = (audioRes && audioRes.url) ? audioRes.url : recoveredUrl;
                 if (!isUserPaused) masterAudio.play().catch(() => {});
                 const activeVid = getActiveVideo();
                 if (!soloAudioMode && activeVid && !document.hidden) {
                     configurarVideoSilencioso(activeVid);
-                    activeVid.dataset.loadedUrl = altUrl;
-                    activeVid.src = altUrl;
+                    activeVid.dataset.loadedUrl = recoveredUrl;
+                    activeVid.src = recoveredUrl;
                     activeVid.load();
                     if (!isUserPaused) activeVid.play().catch(() => {});
                 }
                 return;
             }
 
-            const isInst = DOM.instrumentalCheckbox.checked;
-            mostrarToast(`El número ${parseInt(currentHimno.num, 10)} no está disponible en modo ${isInst ? 'Instrumental' : 'Cantado'}.`);
+            mostrarToast(`El número ${parseInt(currentHimno.num, 10)} no está disponible en modo ${isInstErr ? 'Instrumental' : 'Cantado'}.`);
         }
     };
 
@@ -3431,7 +3442,7 @@
     }
 
     /* =========================================================================
-       ALMACENAMIENTO LOCAL (INDEXEDDB) Y RESOLUCIÓN RÁPIDA DE RUTAS R2
+       ALMACENAMIENTO LOCAL (INDEXEDDB) Y RESOLUCIÓN COMPLETA DE RUTAS R2
        ========================================================================= */
     const OFFLINE_DB_NAME = "HimnarioAdventistaOfflineDB";
     const OFFLINE_DB_VERSION = 1;
@@ -3468,58 +3479,99 @@
         return `${h.num}|${isInst ? 'Instrumental' : 'Cantado'}`;
     }
 
-    function normalizarEnieTitulo(str) {
-        return String(str || '').replace(/N\u0303/g, 'ñ').replace(/n\u0303/g, 'ñ').normalize('NFC').replace(/Ñ/g, 'ñ');
-    }
-
     function quitarTildesVocalesManteniendoEnie(str) {
-        return normalizarEnieTitulo(str).normalize('NFD').replace(/[\u0300-\u0302\u0304-\u036f]/g, '').normalize('NFC').replace(/Ñ/g, 'ñ');
+        return String(str || '')
+            .normalize('NFC')
+            .normalize('NFD')
+            .replace(/[\u0300-\u0302\u0304-\u036f]/g, '')
+            .normalize('NFC');
     }
 
     function quitarSignosPuntuacion(str) {
-        return String(str || '').replace(/[¡!¿?,.;:()'"«»“”]/g, '').replace(/\s+/g, ' ').trim();
+        return String(str || '')
+            .replace(/[¡!¿?,.;:()'"«»“”]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
-    function forzarEnieMinusculaUrl(url) {
-        return String(url || '').replace(/%C3%91/gi, '%C3%B1').replace(/N%CC%83/gi, '%C3%B1').replace(/n%CC%83/gi, '%C3%B1');
+    function generarVariantesTituloR2(rawTitle) {
+        const cleanBase = String(rawTitle || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+        if (!cleanBase) return [];
+
+        const titleNFC = cleanBase.normalize('NFC');
+        const titleEnieLower = titleNFC.replace(/Ñ/g, 'ñ');
+        const titleEnieUpper = titleNFC.replace(/ñ/g, 'Ñ');
+        const titleNFD = titleNFC.replace(/ñ/g, 'n\u0303').replace(/Ñ/g, 'N\u0303');
+        const titleNoAccents = quitarTildesVocalesManteniendoEnie(titleNFC);
+        const titleNoAccentsEnieLower = titleNoAccents.replace(/Ñ/g, 'ñ');
+        const titleNoAccentsEnieUpper = titleNoAccents.replace(/ñ/g, 'Ñ');
+        const titleNoPunct = quitarSignosPuntuacion(titleNFC);
+        const titleNoPunctNoAccents = quitarSignosPuntuacion(titleNoAccentsEnieLower);
+        const titleAscii = titleNoAccentsEnieLower.replace(/ñ/g, 'n').replace(/Ñ/g, 'N');
+
+        return [...new Set([
+            titleNFC,
+            titleEnieLower,
+            titleEnieUpper,
+            titleNFD,
+            titleNoAccents,
+            titleNoAccentsEnieLower,
+            titleNoAccentsEnieUpper,
+            titleNoPunct,
+            titleNoPunctNoAccents,
+            titleAscii
+        ].filter(Boolean))];
     }
 
     function getHymnCandidateUrls(h, isInstrumental = null) {
         const isInst = (isInstrumental !== null) ? isInstrumental : DOM.instrumentalCheckbox.checked;
         const carpeta = isInst ? 'Instrumental' : 'Cantado';
         const numInt = parseInt(h.num, 10);
+        const numStr = h.num;
         const candidates = [];
 
         const resolvedKey = getResolvedCacheKey(h, isInst);
         if (resolvedUrlsCache[resolvedKey]) {
-            candidates.push(forzarEnieMinusculaUrl(resolvedUrlsCache[resolvedKey]));
+            candidates.push(resolvedUrlsCache[resolvedKey]);
         }
 
-        const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[h.num];
+        const rawEntry = titulosDiccionario[numInt] || titulosDiccionario[numStr];
         if (rawEntry && typeof rawEntry === 'object') {
-            if (isInst && rawEntry.instrumental) candidates.push(forzarEnieMinusculaUrl(rawEntry.instrumental));
-            if (!isInst && rawEntry.cantado) candidates.push(forzarEnieMinusculaUrl(rawEntry.cantado));
-            if (rawEntry.url) candidates.push(forzarEnieMinusculaUrl(rawEntry.url));
+            if (isInst && rawEntry.instrumental) candidates.push(rawEntry.instrumental);
+            if (!isInst && rawEntry.cantado) candidates.push(rawEntry.cantado);
+            if (rawEntry.url) candidates.push(rawEntry.url);
         }
 
-        // Rutas principales en R2
-        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${h.num}.mp4`);
-        if (String(numInt) !== h.num) {
+        // Rutas directas por número
+        candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numStr}.mp4`);
+        if (String(numInt) !== numStr) {
             candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${numInt}.mp4`);
         }
 
-        const baseTitle = (h.title || '').replace(/[\\/:*?"<>|]/g, '').trim();
-        if (baseTitle) {
-            const titleEnie = normalizarEnieTitulo(baseTitle);
-            const titleNoAccents = quitarSignosPuntuacion(quitarTildesVocalesManteniendoEnie(titleEnie));
-            const variants = [...new Set([titleEnie, titleNoAccents].filter(Boolean))];
-            variants.forEach(t => {
-                [`${numInt} ${t}.mp4`, `${h.num} ${t}.mp4`, `${numInt} - ${t}.mp4`, `${h.num} - ${t}.mp4`].forEach(fn => {
-                    const enc = encodeURIComponent(fn).replace(/%C3%91/gi, '%C3%B1');
-                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${enc}`);
+        // Rutas con número + título (todas las variantes de ñ, Ñ, NFD, tildes, puntuación y separadores)
+        const titleVariants = generarVariantesTituloR2(h.title);
+        const numVariants = [...new Set([numStr, String(numInt)])];
+
+        titleVariants.forEach(t => {
+            numVariants.forEach(n => {
+                [
+                    `${n} ${t}.mp4`,
+                    `${n} - ${t}.mp4`,
+                    `${n}-${t}.mp4`,
+                    `${n}_${t}.mp4`,
+                    `${n}. ${t}.mp4`,
+                    `Himno ${n} - ${t}.mp4`,
+                    `Himno ${n} ${t}.mp4`
+                ].forEach(fn => {
+                    candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(fn)}`);
                 });
             });
-        }
+        });
+
+        // Variantes con prefijo Himno solo con número
+        numVariants.forEach(n => {
+            candidates.push(`${CLOUDFLARE_R2_URL}/${carpeta}/${encodeURIComponent(`Himno ${n}.mp4`)}`);
+        });
 
         return [...new Set(candidates)];
     }
@@ -3532,11 +3584,19 @@
         try {
             const headRes = await fetch(url, { method: 'HEAD', signal });
             if (headRes.ok) return true;
-            if (headRes.status === 404) return false;
+            if (headRes.status === 405 || headRes.status === 403) {
+                const rangeRes = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Range': 'bytes=0-1' },
+                    signal
+                });
+                if (rangeRes.ok || rangeRes.status === 206) return true;
+            }
+            return false;
         } catch (e) {
             if (e && e.name === 'AbortError') throw e;
+            return false;
         }
-        return false;
     }
 
     async function buscarPorPrefijoXmlR2(carpeta, numStr, numInt, signal = null) {
@@ -3567,26 +3627,42 @@
         const numInt = parseInt(h.num, 10);
         const candidates = getHymnCandidateUrls(h, isInst);
 
+        // 1. Verificar si alguna candidata ya está en IndexedDB local
         for (const cand of candidates) {
             if (savedUrlsSet.has(cand)) return cand;
         }
 
+        // 2. Probar la ruta principal / cacheada primero (1 sola petición rápida)
         const primaryUrl = candidates[0];
         if (await urlExisteEnServidor(primaryUrl, signal)) {
             return primaryUrl;
         }
 
-        const remaining = candidates.slice(1, 7);
-        if (remaining.length > 0) {
-            const results = await Promise.all(remaining.map(async (u) => ((await urlExisteEnServidor(u, signal)) ? u : null)));
-            const found = results.find(Boolean);
-            if (found) {
-                resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = found;
-                guardarResolvedUrlsCache();
-                return found;
+        // 3. Evaluar TODAS las variantes restantes en lotes paralelos (Promise.any responde en cuanto encuentra la primera 200 OK)
+        const remaining = candidates.slice(1);
+        const BATCH_SIZE = 12;
+        for (let i = 0; i < remaining.length; i += BATCH_SIZE) {
+            if (signal && signal.aborted) return null;
+            const batch = remaining.slice(i, i + BATCH_SIZE);
+            try {
+                const found = await Promise.any(
+                    batch.map(async (u) => {
+                        const ok = await urlExisteEnServidor(u, signal);
+                        if (ok) return u;
+                        throw new Error('404');
+                    })
+                );
+                if (found) {
+                    resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = found;
+                    guardarResolvedUrlsCache();
+                    return found;
+                }
+            } catch (aggErr) {
+                if (signal && signal.aborted) return null;
             }
         }
 
+        // 4. Respaldo final por listado XML si el bucket lo permite
         const xmlFound = await buscarPorPrefijoXmlR2(carpeta, h.num, numInt, signal);
         if (xmlFound) {
             resolvedUrlsCache[getResolvedCacheKey(h, isInst)] = xmlFound;
@@ -4377,13 +4453,11 @@
         mostrarToast('Himno quitado de la lista');
     }
 
-    /* --- MODALES DE LISTAS --- */
-    function abrirModalAgregarLista(hymnObj, e) {
+    function abrirModalAgregarLista(h, e) {
         if (e) e.stopPropagation();
-        modalTargetHymnNum = hymnObj.num;
-        document.getElementById('addToPlSubtitle').innerText = formatearTituloHimnoHeader(hymnObj);
-        document.getElementById('quickNewPlaylistName').value = '';
-        renderizarCheckboxesAgregarLista();
+        modalTargetHymnNum = h.num;
+        document.getElementById('addToPlSubtitle').innerText = formatearTituloHimnoHeader(h);
+        renderizarCheckboxesModalAgregar();
         document.getElementById('addToPlaylistModal').classList.add('active');
     }
 
@@ -4392,121 +4466,113 @@
         modalTargetHymnNum = null;
     }
 
-    function renderizarCheckboxesAgregarLista() {
+    function renderizarCheckboxesModalAgregar() {
         const container = document.getElementById('addToPlCheckboxes');
+        if (!container || !modalTargetHymnNum) return;
         container.innerHTML = '';
-        if (!modalTargetHymnNum) return;
 
+        const isFav = playlistsData.favorites.includes(modalTargetHymnNum);
         const favRow = document.createElement('div');
         favRow.className = 'pl-modal-row';
-        const isFav = playlistsData.favorites.includes(modalTargetHymnNum);
         favRow.innerHTML = `
             <label>
-                <input type="checkbox" ${isFav ? 'checked' : ''} onchange="toggleHimnoEnListaDesdeModal('favorites', this.checked)">
+                <input type="checkbox" ${isFav ? 'checked' : ''} onchange="alternarHimnoEnListaModal('favorites', this.checked)">
                 <span>Favoritos</span>
             </label>
             <span class="pl-count-pill">${playlistsData.favorites.length}</span>
         `;
         container.appendChild(favRow);
 
-        if (playlistsData.custom.length === 0) {
-            const emptyHint = document.createElement('div');
-            emptyHint.style.cssText = 'font-size:0.78rem; color:var(--text-muted); text-align:center; padding:8px;';
-            emptyHint.innerText = 'Aún no tienes listas personalizadas. Crea una abajo.';
-            container.appendChild(emptyHint);
-        } else {
-            playlistsData.custom.forEach(pl => {
-                const row = document.createElement('div');
-                row.className = 'pl-modal-row';
-                const checked = pl.hymns.includes(modalTargetHymnNum);
-                row.innerHTML = `
-                    <label>
-                        <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleHimnoEnListaDesdeModal('${pl.id}', this.checked)">
-                        <span>${escapeHtml(pl.name)}</span>
-                    </label>
-                    <span class="pl-count-pill">${pl.hymns.length}</span>
-                `;
-                container.appendChild(row);
-            });
-        }
+        playlistsData.custom.forEach(pl => {
+            const checked = pl.hymns.includes(modalTargetHymnNum);
+            const row = document.createElement('div');
+            row.className = 'pl-modal-row';
+            row.innerHTML = `
+                <label>
+                    <input type="checkbox" ${checked ? 'checked' : ''} onchange="alternarHimnoEnListaModal('${pl.id}', this.checked)">
+                    <span>${escapeHtml(pl.name)}</span>
+                </label>
+                <span class="pl-count-pill">${pl.hymns.length}</span>
+            `;
+            container.appendChild(row);
+        });
     }
 
-    function toggleHimnoEnListaDesdeModal(listId, isChecked) {
+    function alternarHimnoEnListaModal(listId, checked) {
         if (!modalTargetHymnNum) return;
         if (listId === 'favorites') {
-            if (isChecked && !playlistsData.favorites.includes(modalTargetHymnNum)) playlistsData.favorites.push(modalTargetHymnNum);
-            else if (!isChecked) playlistsData.favorites = playlistsData.favorites.filter(n => n !== modalTargetHymnNum);
+            if (checked && !playlistsData.favorites.includes(modalTargetHymnNum)) {
+                playlistsData.favorites.push(modalTargetHymnNum);
+            } else if (!checked) {
+                playlistsData.favorites = playlistsData.favorites.filter(n => n !== modalTargetHymnNum);
+            }
         } else {
             const pl = playlistsData.custom.find(p => p.id === listId);
             if (pl) {
-                if (isChecked && !pl.hymns.includes(modalTargetHymnNum)) pl.hymns.push(modalTargetHymnNum);
-                else if (!isChecked) pl.hymns = pl.hymns.filter(n => n !== modalTargetHymnNum);
+                if (checked && !pl.hymns.includes(modalTargetHymnNum)) {
+                    pl.hymns.push(modalTargetHymnNum);
+                } else if (!checked) {
+                    pl.hymns = pl.hymns.filter(n => n !== modalTargetHymnNum);
+                }
             }
         }
         guardarPlaylistsStorage();
-        renderizarCheckboxesAgregarLista();
+        renderizarCheckboxesModalAgregar();
         renderList(getFilteredList());
     }
 
     function crearListaRapidaDesdeModal() {
         const input = document.getElementById('quickNewPlaylistName');
         const name = input.value.trim();
-        if (!name) {
-            mostrarToast('Escribe un nombre para la lista');
-            return;
-        }
+        if (!name) return;
+
         const newId = 'pl_' + Date.now();
-        playlistsData.custom.push({ id: newId, name, hymns: modalTargetHymnNum ? [modalTargetHymnNum] : [] });
+        const initialHymns = modalTargetHymnNum ? [modalTargetHymnNum] : [];
+        playlistsData.custom.push({ id: newId, name: name, hymns: initialHymns });
         input.value = '';
         guardarPlaylistsStorage();
-        renderizarCheckboxesAgregarLista();
+        renderizarCheckboxesModalAgregar();
         renderList(getFilteredList());
         mostrarToast(`Lista "${name}" creada`);
     }
 
     function abrirModalGestionListas() {
-        document.getElementById('newPlaylistNameInput').value = '';
         renderizarGestionListas();
         document.getElementById('managePlaylistsModal').classList.add('active');
     }
 
-    function cerrarModalGestionListas() { document.getElementById('managePlaylistsModal').classList.remove('active'); }
+    function cerrarModalGestionListas() {
+        document.getElementById('managePlaylistsModal').classList.remove('active');
+    }
 
     function crearNuevaLista() {
         const input = document.getElementById('newPlaylistNameInput');
         const name = input.value.trim();
-        if (!name) {
-            mostrarToast('Escribe un nombre para la lista');
-            return;
-        }
+        if (!name) return;
+
         const newId = 'pl_' + Date.now();
-        playlistsData.custom.push({ id: newId, name, hymns: [] });
+        playlistsData.custom.push({ id: newId, name: name, hymns: [] });
         input.value = '';
-        currentViewId = newId;
-        activeCategoryId = null;
-        activeSubcategoryId = null;
         guardarPlaylistsStorage();
         renderizarGestionListas();
-        renderList(getFilteredList());
         mostrarToast(`Lista "${name}" creada`);
     }
 
     function renombrarLista(listId) {
         const pl = playlistsData.custom.find(p => p.id === listId);
         if (!pl) return;
-        const nuevoNombre = prompt('Nuevo nombre para la lista:', pl.name);
-        if (nuevoNombre && nuevoNombre.trim()) {
-            pl.name = nuevoNombre.trim();
+        const nuevo = prompt('Nuevo nombre para la lista:', pl.name);
+        if (nuevo && nuevo.trim()) {
+            pl.name = nuevo.trim();
             guardarPlaylistsStorage();
             renderizarGestionListas();
-            mostrarToast('Lista renombrada');
         }
     }
 
     function eliminarLista(listId) {
         const pl = playlistsData.custom.find(p => p.id === listId);
         if (!pl) return;
-        if (!confirm(`¿Eliminar la lista "${pl.name}"?`)) return;
+        if (!confirm(`¿Seguro que deseas eliminar la lista "${pl.name}"?`)) return;
 
         playlistsData.custom = playlistsData.custom.filter(p => p.id !== listId);
         if (currentViewId === listId) currentViewId = 'all';
@@ -4517,89 +4583,258 @@
         mostrarToast('Lista eliminada');
     }
 
-    function abrirVistaDesdeGestion(listId) {
-        currentViewId = listId;
-        activeCategoryId = null;
-        activeSubcategoryId = null;
-        actualizarSelectorListasUI();
-        renderList(getFilteredList());
-        cerrarModalGestionListas();
-    }
-
     function renderizarGestionListas() {
         const container = document.getElementById('managePlaylistsContainer');
+        if (!container) return;
         container.innerHTML = '';
 
-        const favDiv = document.createElement('div');
-        favDiv.className = 'pl-modal-row';
-        favDiv.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1;" onclick="abrirVistaDesdeGestion('favorites')">
-                <span><strong>Favoritos</strong></span>
-                <span class="pl-count-pill">${playlistsData.favorites.length} himnos</span>
-            </div>
-            <button class="btn-mini-pl" onclick="abrirVistaDesdeGestion('favorites')">Ver</button>
+        const favRow = document.createElement('div');
+        favRow.className = 'pl-modal-row';
+        favRow.innerHTML = `
+            <span style="font-weight:600;">Favoritos (${playlistsData.favorites.length})</span>
+            <button class="btn-mini-pl" onclick="cerrarModalGestionListas(); cambiarVistaLista('favorites');">Abrir</button>
         `;
-        container.appendChild(favDiv);
+        container.appendChild(favRow);
 
         if (playlistsData.custom.length === 0) {
-            const msg = document.createElement('div');
-            msg.style.cssText = 'font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px;';
-            msg.innerText = 'No has creado listas personalizadas todavía.';
-            container.appendChild(msg);
+            const empty = document.createElement('div');
+            empty.style.cssText = 'font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px;';
+            empty.innerText = 'Aún no has creado listas personalizadas. Crea una arriba (ej. "Culto Joven").';
+            container.appendChild(empty);
             return;
         }
 
         playlistsData.custom.forEach(pl => {
-            const div = document.createElement('div');
-            div.className = 'pl-modal-row';
-            div.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0;" onclick="abrirVistaDesdeGestion('${pl.id}')">
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><strong>${escapeHtml(pl.name)}</strong></span>
-                    <span class="pl-count-pill">${pl.hymns.length}</span>
-                </div>
+            const row = document.createElement('div');
+            row.className = 'pl-modal-row';
+            row.innerHTML = `
+                <span style="font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(pl.name)} <span style="color:var(--text-muted); font-size:0.75rem;">(${pl.hymns.length})</span></span>
                 <div style="display:flex; gap:4px; flex-shrink:0;">
-                    <button class="btn-mini-pl" onclick="abrirVistaDesdeGestion('${pl.id}')">Ver</button>
+                    <button class="btn-mini-pl" onclick="cerrarModalGestionListas(); cambiarVistaLista('${pl.id}');">Abrir</button>
                     <button class="btn-mini-pl" onclick="renombrarLista('${pl.id}')" title="Renombrar">Editar</button>
                     <button class="btn-mini-pl" style="background:var(--danger-bg); border-color:var(--danger-border); color:#fff;" onclick="eliminarLista('${pl.id}')" title="Eliminar">Borrar</button>
                 </div>
             `;
-            container.appendChild(div);
+            container.appendChild(row);
         });
     }
 
     function escapeHtml(str) {
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     }
 
-    /* --- VIDEO DOUBLE BUFFERING (VISUAL) --- */
-    let activeVidId = 'myMedia1';
-    function getActiveVideo() { return activeVidId === 'myMedia1' ? DOM.vid1 : DOM.vid2; }
-    function getInactiveVideo() { return activeVidId === 'myMedia1' ? DOM.vid2 : DOM.vid1; }
-    function swapActiveVideoPointers() { activeVidId = (activeVidId === 'myMedia1' ? 'myMedia2' : 'myMedia1'); }
-
-    function actualizarMetaTags(titulo, descripcion, imagen) {
-        const imgFinal = imagen || `${GITHUB_PAGES_BASE}/portada.jpg`;
-        const ogTitle = document.getElementById('ogTitle');
-        const ogDesc = document.getElementById('ogDesc');
-        const ogImage = document.getElementById('ogImage');
-        const twTitle = document.getElementById('twTitle');
-        const twDesc = document.getElementById('twDesc');
-        const twImage = document.getElementById('twImage');
-
-        if (ogTitle) ogTitle.setAttribute('content', titulo);
-        if (ogDesc) ogDesc.setAttribute('content', descripcion);
-        if (ogImage) ogImage.setAttribute('content', imgFinal);
-        if (twTitle) twTitle.setAttribute('content', titulo);
-        if (twDesc) twDesc.setAttribute('content', descripcion);
-        if (twImage) twImage.setAttribute('content', imgFinal);
+    /* =========================================================================
+       CARGA DE TÍTULOS Y PARÁMETROS INICIALES
+       ========================================================================= */
+    function poblarListaHimnosDesdeDiccionario(dict) {
+        titulosDiccionario = dict || {};
+        himnosList.length = 0;
+        for (let i = 1; i <= 613; i++) {
+            const numStr = String(i).padStart(3, '0');
+            const entry = titulosDiccionario[i] || titulosDiccionario[numStr];
+            const titleText = typeof entry === 'string' ? entry : (entry && entry.title ? entry.title : '');
+            himnosList.push({
+                num: numStr,
+                title: titleText,
+                searchKey: normalizarTexto(`${numStr} ${i} ${titleText}`)
+            });
+        }
     }
 
-    function abrirModalAyuda() { document.getElementById('helpModal').classList.add('active'); }
-    function cerrarModalAyuda() { document.getElementById('helpModal').classList.remove('active'); }
+    async function cargarTitulosYGenerarLista() {
+        let loaded = false;
+        try {
+            const cachedRaw = localStorage.getItem(TITLES_CACHE_KEY);
+            if (cachedRaw) {
+                const cachedJson = JSON.parse(cachedRaw);
+                if (cachedJson && Object.keys(cachedJson).length > 0) {
+                    poblarListaHimnosDesdeDiccionario(cachedJson);
+                    loaded = true;
+                }
+            }
+        } catch (e) {}
 
-    function compartirApp() {
-        document.getElementById('shareModal').classList.add('active');
-        if (currentViewId !== 'all' && currentViewId !== 'offline_saved' && obtenerHimnosDeLista(currentViewId).length > 0) {
+        try {
+            const respuesta = await fetch('./titulos.json');
+            if (respuesta.ok) {
+                const freshJson = await respuesta.json();
+                poblarListaHimnosDesdeDiccionario(freshJson);
+                loaded = true;
+                try {
+                    localStorage.setItem(TITLES_CACHE_KEY, JSON.stringify(freshJson));
+                } catch (e) {}
+            }
+        } catch (e) {}
+
+        if (!loaded) {
+            poblarListaHimnosDesdeDiccionario({});
+        }
+    }
+
+    function extraerTextoTitulo(entry) {
+        if (!entry) return '';
+        return typeof entry === 'string' ? entry : (entry.title || '');
+    }
+
+    function actualizarMetaTagsSociales() {
+        const params = new URLSearchParams(window.location.search);
+        const hParam = params.get('h');
+        const plParam = params.get('pl');
+        const modoParam = params.get('modo');
+
+        if (plParam) {
+            const decoded = decodeURIComponent(plParam);
+            const parts = decoded.split(':');
+            const plName = parts[0] || 'Lista de Reproducción';
+            const count = (parts[1] || '').split(',').filter(Boolean).length;
+            const title = `Lista: ${plName} (${count} himnos) - Himnario Adventista`;
+            const desc = `Escucha y proyecta esta lista personalizada del Himnario Adventista en Línea.`;
+            document.title = title;
+            document.getElementById('ogTitle')?.setAttribute('content', title);
+            document.getElementById('ogDesc')?.setAttribute('content', desc);
+            document.getElementById('twTitle')?.setAttribute('content', title);
+            document.getElementById('twDesc')?.setAttribute('content', desc);
+        } else if (hParam) {
+            const numInt = parseInt(hParam, 10);
+            if (numInt >= 1 && numInt <= 613) {
+                const numStr = String(numInt).padStart(3, '0');
+                const hTitle = extraerTextoTitulo(titulosDiccionario[numInt] || titulosDiccionario[numStr]);
+                const modoTexto = (modoParam && modoParam.toLowerCase() === 'instrumental') ? 'Instrumental' : 'Cantado';
+                const fullTitle = hTitle
+                    ? `${numInt}. ${hTitle} (${modoTexto}) - Himnario Adventista`
+                    : `${numInt} (${modoTexto}) - Himnario Adventista`;
+                const desc = `Escucha y proyecta el ${numInt} en modo ${modoTexto} del Himnario Adventista en Línea.`;
+                const portImg = `${GITHUB_PAGES_BASE}/portadas/${numStr}.jpg`;
+
+                document.title = fullTitle;
+                document.getElementById('ogTitle')?.setAttribute('content', fullTitle);
+                document.getElementById('ogDesc')?.setAttribute('content', desc);
+                document.getElementById('ogImage')?.setAttribute('content', portImg);
+                document.getElementById('twTitle')?.setAttribute('content', fullTitle);
+                document.getElementById('twDesc')?.setAttribute('content', desc);
+                document.getElementById('twImage')?.setAttribute('content', portImg);
+            }
+        }
+    }
+
+    function aplicarParametrosUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const hParam = params.get('h');
+        const plParam = params.get('pl');
+        const modoParam = params.get('modo');
+
+        if (modoParam && modoParam.toLowerCase() === 'instrumental') {
+            DOM.instrumentalCheckbox.checked = true;
+            DOM.modeBadge.innerText = 'Instrumental';
+        }
+
+        if (plParam) {
+            try {
+                const decoded = decodeURIComponent(plParam);
+                const colonIdx = decoded.indexOf(':');
+                if (colonIdx > 0) {
+                    const plName = decoded.slice(0, colonIdx).trim() || 'Lista compartida';
+                    const nums = decoded.slice(colonIdx + 1)
+                        .split(',')
+                        .map(n => parseInt(n.trim(), 10))
+                        .filter(n => n >= 1 && n <= 613)
+                        .map(n => String(n).padStart(3, '0'));
+
+                    if (nums.length > 0) {
+                        const sharedId = 'shared_' + Date.now();
+                        playlistsData.custom.unshift({ id: sharedId, name: plName, hymns: nums });
+                        guardarPlaylistsStorage();
+                        currentViewId = sharedId;
+                        activeQueuePlaylistId = sharedId;
+                        actualizarSelectorListasUI();
+                        renderList(getFilteredList());
+                        const firstHimno = himnosList.find(item => item.num === nums[0]);
+                        if (firstHimno) {
+                            seleccionarHimnoEnLista(firstHimno);
+                            setTimeout(() => reproducirHimno(firstHimno, false, true), 150);
+                        }
+                        mostrarToast(`Lista "${plName}" cargada (${nums.length} himnos)`);
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        if (hParam) {
+            const numInt = parseInt(hParam, 10);
+            if (numInt >= 1 && numInt <= 613) {
+                const targetNum = String(numInt).padStart(3, '0');
+                const found = himnosList.find(item => item.num === targetNum);
+                if (found) {
+                    seleccionarHimnoEnLista(found);
+                    setTimeout(() => reproducirHimno(found, false), 150);
+                }
+            }
+        }
+    }
+
+    /* =========================================================================
+       COMPLEMENTO DE COMPARTIR ENLACES CORTOS
+       ========================================================================= */
+    async function acortarUrlConWorker(longUrl) {
+        try {
+            const res = await fetch(`${WORKER_URL}/shorten`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: longUrl })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.shortUrl) return data.shortUrl;
+            }
+        } catch (e) {}
+        return longUrl;
+    }
+
+    async function compartirApp() {
+        const modal = document.getElementById('shareModal');
+        const urlInput = document.getElementById('shareUrlInput');
+        const isInst = DOM.instrumentalCheckbox.checked;
+        const modoStr = isInst ? 'instrumental' : 'cantado';
+
+        urlInput.value = 'Generando enlace corto...';
+        modal.classList.add('active');
+
+        const longMainUrl = `${GITHUB_PAGES_BASE}/`;
+        let longHymnUrl = longMainUrl;
+        if (currentHimno) {
+            longHymnUrl = `${GITHUB_PAGES_BASE}/?h=${parseInt(currentHimno.num, 10)}&modo=${modoStr}`;
+        }
+
+        let longPlaylistUrl = '';
+        const targetPlId = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories')
+            ? currentViewId
+            : activeQueuePlaylistId;
+        if (targetPlId) {
+            const plItems = obtenerHimnosDeLista(targetPlId);
+            if (plItems.length > 0) {
+                const plTitle = obtenerNombreLista(targetPlId);
+                const numsCsv = plItems.map(i => parseInt(i.num, 10)).join(',');
+                longPlaylistUrl = `${GITHUB_PAGES_BASE}/?pl=${encodeURIComponent(plTitle + ':' + numsCsv)}&modo=${modoStr}`;
+            }
+        }
+
+        const [shortMain, shortHymn, shortPl] = await Promise.all([
+            acortarUrlConWorker(longMainUrl),
+            currentHimno ? acortarUrlConWorker(longHymnUrl) : Promise.resolve(longMainUrl),
+            longPlaylistUrl ? acortarUrlConWorker(longPlaylistUrl) : Promise.resolve('')
+        ]);
+
+        currentShortMainUrl = shortMain;
+        currentShortHymnUrl = shortHymn;
+        currentShortPlaylistUrl = shortPl;
+
+        const tabHymn = document.getElementById('tabHymn');
+        const tabPl = document.getElementById('tabPlaylist');
+        tabHymn.style.display = currentHimno ? 'flex' : 'none';
+        tabPl.style.display = currentShortPlaylistUrl ? 'flex' : 'none';
+
+        if (currentShortPlaylistUrl && (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories')) {
             seleccionarTabCompartir('playlist');
         } else if (currentHimno) {
             seleccionarTabCompartir('hymn');
@@ -4608,408 +4843,184 @@
         }
     }
 
-    function cerrarModalCompartir() { document.getElementById('shareModal').classList.remove('active'); }
-
-    async function shortenUrl(longUrl) {
-        try {
-            const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
-            if (res.ok) {
-                const text = await res.text();
-                if (text && text.startsWith('http')) return text.trim();
-            }
-        } catch (e) {}
-        return longUrl;
-    }
-
-    async function seleccionarTabCompartir(type) {
+    function seleccionarTabCompartir(type) {
         currentShareType = type;
         const tabHymn = document.getElementById('tabHymn');
         const tabPlaylist = document.getElementById('tabPlaylist');
         const tabMain = document.getElementById('tabMain');
-        const titleEl = document.getElementById('sharePreviewTitle');
-        const subEl = document.getElementById('sharePreviewSubtitle');
+        const previewTitle = document.getElementById('sharePreviewTitle');
+        const previewSubtitle = document.getElementById('sharePreviewSubtitle');
         const urlInput = document.getElementById('shareUrlInput');
 
         tabHymn.classList.toggle('active', type === 'hymn');
         tabPlaylist.classList.toggle('active', type === 'playlist');
         tabMain.classList.toggle('active', type === 'main');
 
-        if (type === 'hymn') {
-            if (!currentHimno) {
-                titleEl.innerText = 'Ningún himno seleccionado';
-                subEl.innerText = 'Selecciona primero un himno de la lista';
-                urlInput.value = '';
-                return;
-            }
-            const isInst = DOM.instrumentalCheckbox.checked;
-            const modoText = isInst ? 'Instrumental' : 'Cantado';
-            const numSimple = parseInt(currentHimno.num, 10);
-            const tituloLimpio = formatearTituloHimnoHeader(currentHimno);
-            const fullDesc = `${tituloLimpio} (${modoText}) - Himnario Adventista`;
+        const isInst = DOM.instrumentalCheckbox.checked;
+        const modoText = isInst ? 'Instrumental' : 'Cantado';
 
-            titleEl.innerText = tituloLimpio;
-            subEl.innerText = `${modoText} • Himnario Adventista`;
-
-            const targetUrl = `${WORKER_URL}/?h=${numSimple}${isInst ? '&inst=1' : ''}`;
-            const numPadded = String(numSimple).padStart(3, '0');
-            actualizarMetaTags(tituloLimpio, fullDesc, `${GITHUB_PAGES_BASE}/portadas/${numPadded}.jpg`);
-
-            urlInput.value = 'Generando enlace corto...';
-            currentShortHymnUrl = await shortenUrl(targetUrl);
-            if (currentShareType === 'hymn') urlInput.value = currentShortHymnUrl;
-        } else if (type === 'playlist') {
-            const targetListId = (currentViewId !== 'all' && currentViewId !== 'offline_saved')
+        if (type === 'hymn' && currentHimno) {
+            previewTitle.innerText = formatearTituloHimnoHeader(currentHimno);
+            previewSubtitle.innerText = `Versión: ${modoText} • Himnario Adventista`;
+            urlInput.value = currentShortHymnUrl;
+        } else if (type === 'playlist' && currentShortPlaylistUrl) {
+            const targetPlId = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories')
                 ? currentViewId
-                : (activeQueuePlaylistId || 'favorites');
-            const items = obtenerHimnosDeLista(targetListId);
-            const listName = obtenerNombreLista(targetListId);
-
-            if (items.length === 0) {
-                titleEl.innerText = `Lista "${listName}" vacía`;
-                subEl.innerText = 'Agrega himnos a una lista para poder compartirla';
-                urlInput.value = '';
-                return;
-            }
-
-            const numsCsv = items.map(h => parseInt(h.num, 10)).join(',');
-            const isInst = DOM.instrumentalCheckbox.checked;
-            const modoText = isInst ? 'Instrumental' : 'Cantado';
-            const longUrl = `${GITHUB_PAGES_BASE}/?pl=${encodeURIComponent(numsCsv)}&pln=${encodeURIComponent(listName)}${isInst ? '&inst=1' : ''}`;
-
-            titleEl.innerText = `Lista: ${listName}`;
-            subEl.innerText = `${items.length} ${items.length === 1 ? 'himno' : 'himnos'} • ${modoText}`;
-
-            urlInput.value = 'Generando enlace corto...';
-            currentShortPlaylistUrl = await shortenUrl(longUrl);
-            if (currentShareType === 'playlist') urlInput.value = currentShortPlaylistUrl;
+                : activeQueuePlaylistId;
+            const count = obtenerHimnosDeLista(targetPlId).length;
+            previewTitle.innerText = `Lista: ${obtenerNombreLista(targetPlId)}`;
+            previewSubtitle.innerText = `${count} himnos • Modo ${modoText}`;
+            urlInput.value = currentShortPlaylistUrl;
         } else {
-            titleEl.innerText = 'Himnario Adventista en Línea';
-            subEl.innerText = 'Accede a la colección completa de 613 himnos';
-            actualizarMetaTags(
-                'Himnario Adventista en Línea',
-                'Accede, escucha y proyecta la colección completa de himnos cantados e instrumentales.',
-                `${GITHUB_PAGES_BASE}/portada.jpg`
-            );
-
-            if (!currentShortMainUrl) {
-                urlInput.value = 'Generando enlace corto...';
-                currentShortMainUrl = await shortenUrl(`${WORKER_URL}/`);
-            }
-            if (currentShareType === 'main') urlInput.value = currentShortMainUrl;
+            previewTitle.innerText = 'Himnario Adventista en Línea';
+            previewSubtitle.innerText = 'Colección completa de himnos cantados e instrumentales';
+            urlInput.value = currentShortMainUrl;
         }
     }
 
-    function obtenerTextoParaCompartir() {
-        const url = document.getElementById('shareUrlInput').value;
-        if (!url || url.startsWith('Generando')) return null;
+    function cerrarModalCompartir() { document.getElementById('shareModal').classList.remove('active'); }
+
+    function obtenerTextoCompartirActual() {
+        const isInst = DOM.instrumentalCheckbox.checked;
+        const modoText = isInst ? 'Instrumental' : 'Cantado';
 
         if (currentShareType === 'hymn' && currentHimno) {
-            const modoText = DOM.instrumentalCheckbox.checked ? 'Instrumental' : 'Cantado';
-            const tituloLimpio = formatearTituloHimnoHeader(currentHimno);
             return {
-                title: `${tituloLimpio} - Himnario Adventista`,
-                text: `${tituloLimpio} (${modoText}) - Himnario Adventista\n#adventistassv`,
-                url
+                title: `${formatearTituloHimnoHeader(currentHimno)} (${modoText})`,
+                text: `${formatearTituloHimnoHeader(currentHimno)} (${modoText}) - Himnario Adventista en Línea #adventistassv`,
+                url: currentShortHymnUrl
             };
         }
-        if (currentShareType === 'playlist') {
-            const title = document.getElementById('sharePreviewTitle').innerText;
-            const sub = document.getElementById('sharePreviewSubtitle').innerText;
+        if (currentShareType === 'playlist' && currentShortPlaylistUrl) {
+            const targetPlId = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories')
+                ? currentViewId
+                : activeQueuePlaylistId;
+            const plName = obtenerNombreLista(targetPlId);
             return {
-                title: `${title} - Himnario Adventista`,
-                text: `${title} (${sub}) - Himnario Adventista\n#adventistassv`,
-                url
+                title: `Lista: ${plName} - Himnario Adventista`,
+                text: `Lista "${plName}" (${modoText}) - Himnario Adventista en Línea #adventistassv`,
+                url: currentShortPlaylistUrl
             };
         }
         return {
             title: 'Himnario Adventista en Línea',
-            text: 'Himnario Adventista en Línea - Colección completa de himnos\n#adventistassv',
-            url
+            text: 'Himnario Adventista en Línea #adventistassv',
+            url: currentShortMainUrl
         };
     }
 
     function copiarEnlaceCompartir() {
-        const data = obtenerTextoParaCompartir();
-        if (!data) return;
-        navigator.clipboard.writeText(data.url);
-        mostrarToast('Enlace copiado al portapapeles');
-    }
-
-    async function compartirNativo() {
-        const data = obtenerTextoParaCompartir();
-        if (!data) return;
-
-        try { await navigator.clipboard.writeText(`${data.text}\n${data.url}`); } catch (e) {}
-
-        if (navigator.share) {
-            try {
-                await navigator.share({ title: data.title, text: data.text, url: data.url });
-            } catch (e) {}
-        } else {
-            mostrarToast('Texto con #adventistassv y enlace copiados');
-        }
-    }
-
-    function mostrarToast(mensaje) {
-        const toast = document.createElement('div');
-        toast.innerText = mensaje;
-        toast.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#281c13; color:#f4ece1; border:1px solid rgba(224,185,130,0.35); padding:9px 18px; border-radius:999px; z-index:9999; font-weight:600; font-size:0.84rem; box-shadow:0 8px 24px rgba(0,0,0,0.65); text-align:center; pointer-events:none;';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-    }
-
-    /* --- VELOCIDAD Y VOLUMEN --- */
-    function changeSpeed(delta) {
-        currentSpeed = Math.round(Math.max(0.5, Math.min(2.0, currentSpeed + delta)) * 100) / 100;
-        applySpeed();
-    }
-
-    function resetSpeed() {
-        currentSpeed = 1.0;
-        applySpeed();
-    }
-
-    function applySpeed() {
-        DOM.speedDisplay.innerText = currentSpeed.toFixed(2) + 'x';
-        masterAudio.playbackRate = currentSpeed;
-        DOM.vid1.playbackRate = currentSpeed;
-        DOM.vid2.playbackRate = currentSpeed;
-        syncChannel.postMessage({ type: 'SPEED', speed: currentSpeed });
-    }
-
-    function toggleMute() {
-        cancelarRampaVolumen();
-        needsAudioFadeIn = false;
-        isAudioMuted = !isAudioMuted;
-        masterAudio.muted = isAudioMuted;
-        DOM.muteBtn.innerHTML = isAudioMuted ? ICON_VOL_OFF : ICON_VOL_ON;
-    }
-
-    function setVolume(val) {
-        cancelarRampaVolumen();
-        needsAudioFadeIn = false;
-        const vol = val / 100;
-        currentVolume = vol;
-        isAudioMuted = (vol === 0);
-        masterAudio.volume = vol;
-        masterAudio.muted = isAudioMuted;
-        DOM.muteBtn.innerHTML = isAudioMuted ? ICON_VOL_OFF : ICON_VOL_ON;
-    }
-
-    function updateMediaSessionMetadata(h) {
-        if (!('mediaSession' in navigator) || !h) return;
-        const isInst = DOM.instrumentalCheckbox.checked;
-        const numSimple = parseInt(h.num, 10);
-        const numPadded = String(numSimple).padStart(3, '0');
-        const modoText = isInst ? 'Instrumental' : 'Cantado';
-        const tituloLimpio = formatearTituloHimnoHeader(h);
-        const coverUrl = `${GITHUB_PAGES_BASE}/portadas/${numPadded}.jpg`;
-
-        try {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: tituloLimpio,
-                artist: `Himnario Adventista (${modoText})`,
-                album: activeQueuePlaylistId ? obtenerNombreLista(activeQueuePlaylistId) : 'Himnario Adventista',
-                artwork: [
-                    { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
-                    { src: `${GITHUB_PAGES_BASE}/icon-192.png`, sizes: '192x192', type: 'image/png' }
-                ]
-            });
-        } catch (e) {}
-    }
-
-    function setupMediaSessionHandlers() {
-        if (!('mediaSession' in navigator)) return;
-        try {
-            navigator.mediaSession.setActionHandler('play', () => { if (isUserPaused) togglePlay(); });
-            navigator.mediaSession.setActionHandler('pause', () => { if (!isUserPaused) togglePlay(); });
-            navigator.mediaSession.setActionHandler('previoustrack', () => prevHymn());
-            navigator.mediaSession.setActionHandler('nexttrack', () => nextHymn());
-            navigator.mediaSession.setActionHandler('stop', () => stopHymn());
-            navigator.mediaSession.setActionHandler('seekto', (details) => {
-                if (details.seekTime != null && masterAudio.duration) {
-                    const pct = (details.seekTime / masterAudio.duration) * 100;
-                    userSeek(pct);
-                }
-            });
-        } catch (e) {}
-    }
-
-    function iniciarAudioSilenciosoMantenerVivo() {
-        if (!masterAudio.src || masterAudio.src === window.location.href || masterAudio.paused) {
-            masterAudio.loop = true;
-            masterAudio.src = SILENT_AUDIO_DATA_URI;
-            masterAudio.volume = 0.01;
-            masterAudio.play().catch(() => {});
-        }
-    }
-
-    function reanudarVideoVisualSinCorte(activeVid) {
-        if (!activeVid || document.hidden || soloAudioMode) return;
-        if (!currentHimno || !currentActivePlayUrl || isUserPaused) return;
-
-        configurarVideoSilencioso(activeVid);
-        DOM.posterOverlay.style.display = 'none';
-
-        const dur = masterAudio.duration;
-        const targetTime = masterAudio.currentTime;
-
-        if (activeVid.dataset.loadedUrl !== currentActivePlayUrl) {
-            activeVid.dataset.loadedUrl = currentActivePlayUrl;
-            activeVid.src = currentActivePlayUrl;
-            activeVid.playbackRate = currentSpeed;
-            activeVid.load();
-            activeVid.onloadeddata = () => {
-                activeVid.onloadeddata = null;
-                if (targetTime > 0.1 && activeVid.readyState >= 1) {
-                    try { activeVid.currentTime = targetTime; } catch (e) {}
-                }
-                if (!isUserPaused && !document.hidden && !soloAudioMode) {
-                    activeVid.play().catch(() => {});
-                }
-            };
-            return;
-        }
-
-        if (dur && !isNaN(dur) && targetTime > 0 && activeVid.readyState >= 1) {
-            const diff = Math.abs(activeVid.currentTime - targetTime);
-            if (diff > 0.35) {
-                videoSyncCooldownUntil = Date.now() + 900;
-                try { activeVid.currentTime = targetTime; } catch (e) {}
-            }
-        }
-
-        if (activeVid.paused && !isUserPaused && !document.hidden && !soloAudioMode) {
-            activeVid.play().catch(() => {});
-        }
-    }
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            if (visibilityResumeTimer) {
-                clearTimeout(visibilityResumeTimer);
-                visibilityResumeTimer = null;
-            }
-            DOM.vid1.pause();
-            DOM.vid2.pause();
-
-            if (!isUserPaused && currentHimno && masterAudio.paused) {
-                masterAudio.play().catch(() => {});
-            }
-        } else {
-            if (visibilityResumeTimer) clearTimeout(visibilityResumeTimer);
-            visibilityResumeTimer = setTimeout(() => {
-                visibilityResumeTimer = null;
-                if (!isUserPaused && currentHimno && !document.hidden) {
-                    if (masterAudio.paused) masterAudio.play().catch(() => {});
-                    if (!soloAudioMode) reanudarVideoVisualSinCorte(getActiveVideo());
-                }
-            }, 150);
-        }
-    });
-
-    /* --- CARGA DE HIMNOS --- */
-    async function cargarTitulosYGenerarLista() {
-        try {
-            const cachedTitulos = localStorage.getItem(TITLES_CACHE_KEY);
-            if (cachedTitulos) titulosDiccionario = JSON.parse(cachedTitulos);
-        } catch (e) {}
-
-        try {
-            const res = await fetch('titulos.json');
-            if (res.ok) {
-                titulosDiccionario = await res.json();
-                try { localStorage.setItem(TITLES_CACHE_KEY, JSON.stringify(titulosDiccionario)); } catch (e) {}
-            }
-        } catch (e) {
-            if (Object.keys(titulosDiccionario).length === 0) {
-                try {
-                    const resFallback = await fetch(`${GITHUB_PAGES_BASE}/titulos.json`);
-                    if (resFallback.ok) titulosDiccionario = await resFallback.json();
-                } catch (err) {}
-            }
-        }
-
-        himnosList.length = 0;
-        for (let i = 1; i <= 613; i++) {
-            const numStr = String(i).padStart(3, '0');
-            const rawEntry = titulosDiccionario[i] || titulosDiccionario[numStr];
-            const titleText = typeof rawEntry === 'string'
-                ? rawEntry
-                : (rawEntry && rawEntry.titulo ? rawEntry.titulo : '');
-            himnosList.push({ num: numStr, title: titleText });
-        }
-
-        actualizarSelectorListasUI();
-        renderList(getFilteredList());
-    }
-
-    function detectarPantallas() {
-        const select = DOM.screenSelect;
-        if ('getScreenDetails' in window) {
-            window.getScreenDetails().then(details => {
-                displaysList = details.screens;
-                llenarSelectPantallas();
-                details.onscreenschange = () => {
-                    displaysList = details.screens;
-                    llenarSelectPantallas();
-                };
-            }).catch(() => llenarSelectPantallasFallback());
-        } else {
-            llenarSelectPantallasFallback();
-        }
-    }
-
-    function llenarSelectPantallas() {
-        const select = DOM.screenSelect;
-        select.innerHTML = '';
-        displaysList.forEach((scr, idx) => {
-            const opt = document.createElement('option');
-            opt.value = idx;
-            const nombre = scr.label || `Pantalla ${idx + 1}`;
-            const tipo = scr.isPrimary ? ' (Principal)' : ' (Externa)';
-            opt.textContent = `${nombre}${tipo}`;
-            if (!scr.isPrimary && select.selectedIndex === -1) opt.selected = true;
-            select.appendChild(opt);
+        const urlInput = document.getElementById('shareUrlInput');
+        urlInput.select();
+        urlInput.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(urlInput.value).then(() => {
+            mostrarToast('Enlace acortado copiado');
         });
     }
 
-    function llenarSelectPantallasFallback() {
-        DOM.screenSelect.innerHTML = '<option value="ext">Proyector / Segunda pantalla</option>';
+    async function compartirNativo() {
+        const shareData = obtenerTextoCompartirActual();
+        const textoConUrl = `${shareData.text}\n${shareData.url}`;
+
+        try { await navigator.clipboard.writeText(textoConUrl); } catch (e) {}
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: shareData.title, text: shareData.text, url: shareData.url });
+            } catch (err) {}
+        } else {
+            mostrarToast('Texto y enlace copiados. ¡Pégalos donde quieras!');
+        }
     }
 
-    function alSeleccionarPantalla() {
+    /* =========================================================================
+       PANTALLA COMPLETA, PANTALLAS MÚLTIPLES Y PROYECCIÓN
+       ========================================================================= */
+    function togglePantallaCompleta() {
+        const wrapper = document.getElementById('hymn-player-wrapper');
+        if (!document.fullscreenElement) {
+            if (wrapper.requestFullscreen) wrapper.requestFullscreen().catch(() => {});
+            else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        const isFull = !!document.fullscreenElement;
+        if (isFull && screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => {});
+        } else if (!isFull && screen.orientation && screen.orientation.unlock) {
+            try { screen.orientation.unlock(); } catch (e) {}
+        }
+    });
+
+    async function detectarPantallas() {
+        const select = DOM.screenSelect;
+        if ('getScreenDetails' in window) {
+            try {
+                const screenDetails = await window.getScreenDetails();
+                displaysList = screenDetails.screens;
+                actualizarSelectPantallas(screenDetails.currentScreen);
+                screenDetails.onscreenschange = () => {
+                    displaysList = screenDetails.screens;
+                    actualizarSelectPantallas(screenDetails.currentScreen);
+                };
+                return;
+            } catch (err) {}
+        }
+        displaysList = [{ label: 'Pantalla Principal', left: 0, top: 0, width: window.screen.width, height: window.screen.height, isPrimary: true }];
+        select.innerHTML = `<option value="0">Pantalla Principal (${window.screen.width}x${window.screen.height})</option><option value="manual">Segunda Pantalla (Extender)</option>`;
+    }
+
+    function actualizarSelectPantallas(currentScreen) {
+        const select = DOM.screenSelect;
+        const prevVal = select.value;
+        select.innerHTML = '';
+
+        let defaultSecondaryIndex = -1;
+        displaysList.forEach((scr, idx) => {
+            const isCurrent = currentScreen && (scr.left === currentScreen.left && scr.top === currentScreen.top);
+            const name = scr.label || (scr.isPrimary ? 'Pantalla Principal' : `Pantalla Externa ${idx + 1}`);
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = `${name} (${scr.width}x${scr.height})${isCurrent ? ' [Actual]' : ''}`;
+            select.appendChild(opt);
+
+            if (!isCurrent && defaultSecondaryIndex === -1) defaultSecondaryIndex = idx;
+        });
+
+        if (prevVal !== "-1" && prevVal !== "" && select.querySelector(`option[value="${prevVal}"]`)) {
+            select.value = prevVal;
+        } else if (defaultSecondaryIndex !== -1) {
+            select.value = defaultSecondaryIndex;
+        } else {
+            select.value = 0;
+        }
+    }
+
+    async function alSeleccionarPantalla() {
+        if ('getScreenDetails' in window && displaysList.length <= 1) await detectarPantallas();
         if (DOM.secondaryScreenCheckbox.checked) {
-            abrirProyeccionEnPantallaSeleccionada();
+            if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
+            abrirVentanaProyeccion();
         }
     }
 
     function actualizarModoProyeccion() {
-        const isChecked = DOM.secondaryScreenCheckbox.checked;
-
-        if (isChecked) {
-            DOM.projectionStatusBadge.innerText = 'Proyectando';
-            DOM.projectionStatusBadge.style.color = '#e8b36d';
-            DOM.projectionStatusBadge.style.borderColor = 'rgba(216,144,62,0.4)';
-
-            if (document.fullscreenElement) salirPantallaCompletaSiActiva();
-
-            if ('getScreenDetails' in window && displaysList.length === 0) {
-                window.getScreenDetails().then(details => {
-                    displaysList = details.screens;
-                    llenarSelectPantallas();
-                    abrirProyeccionEnPantallaSeleccionada();
-                }).catch(() => {
-                    llenarSelectPantallasFallback();
-                    abrirProyeccionEnPantallaSeleccionada();
-                });
-            } else {
-                abrirProyeccionEnPantallaSeleccionada();
-            }
+        const useSecondary = DOM.secondaryScreenCheckbox.checked;
+        if (useSecondary) {
+            DOM.projectionStatusBadge.innerText = "Proyectando";
+            DOM.projectionStatusBadge.style.background = "var(--accent-gold-soft)";
+            DOM.projectionStatusBadge.style.color = "#e8b36d";
+            DOM.projectionStatusBadge.style.borderColor = "rgba(216, 144, 62, 0.35)";
+            abrirVentanaProyeccion();
         } else {
-            DOM.projectionStatusBadge.innerText = 'Pantalla única';
-            DOM.projectionStatusBadge.style.color = 'var(--text-secondary)';
-            DOM.projectionStatusBadge.style.borderColor = 'var(--border-subtle)';
+            DOM.projectionStatusBadge.innerText = "Pantalla única";
+            DOM.projectionStatusBadge.style.background = "var(--bg-elevated)";
+            DOM.projectionStatusBadge.style.color = "var(--text-secondary)";
+            DOM.projectionStatusBadge.style.borderColor = "var(--border-subtle)";
             if (projectionWindow && !projectionWindow.closed) {
                 projectionWindow.close();
                 projectionWindow = null;
@@ -5017,243 +5028,856 @@
         }
     }
 
-    function abrirProyeccionEnPantallaSeleccionada() {
-        const val = DOM.screenSelect.value;
+    function abrirVentanaProyeccion() {
+        if (projectionWindow && !projectionWindow.closed) {
+            projectionWindow.focus();
+            enviarEstadoProyeccion();
+            return;
+        }
+
+        const selVal = DOM.screenSelect.value;
         let left = window.screen.availWidth;
         let top = 0;
         let width = window.screen.availWidth;
         let height = window.screen.availHeight;
 
-        if (displaysList.length > 0 && val !== 'ext' && val !== '-1') {
-            const scr = displaysList[parseInt(val, 10)];
-            if (scr) {
-                left = scr.availLeft;
-                top = scr.availTop;
-                width = scr.availWidth;
-                height = scr.availHeight;
-            }
-        }
-
-        if (projectionWindow && !projectionWindow.closed) {
-            try {
-                projectionWindow.moveTo(left, top);
-                projectionWindow.resizeTo(width, height);
-                projectionWindow.focus();
-            } catch (e) {}
-            enviarEstadoAProyeccion();
-            return;
+        if (selVal !== 'manual' && displaysList[selVal]) {
+            const target = displaysList[selVal];
+            left = target.availLeft !== undefined ? target.availLeft : target.left;
+            top = target.availTop !== undefined ? target.availTop : target.top;
+            width = target.availWidth || target.width;
+            height = target.availHeight || target.height;
         }
 
         const features = `popup=yes,left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
         projectionWindow = window.open('', 'HimnarioProyeccion', features);
 
         if (!projectionWindow) {
-            alert("Permite las ventanas emergentes en tu navegador para proyectar en la segunda pantalla.");
+            alert("Por favor permite las ventanas emergentes en tu navegador para proyectar en la pantalla seleccionada.");
             DOM.secondaryScreenCheckbox.checked = false;
             actualizarModoProyeccion();
             return;
         }
 
-        const htmlProyeccion = `<!DOCTYPE html>
+        const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        const logoSrc = baseUrl + 'logo-adventista.webp';
+
+        const projHTML = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <title>Proyección - Himnario Adventista</title>
 <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body, html { width:100vw; height:100vh; background:#000; overflow:hidden; display:flex; justify-content:center; align-items:center; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; opacity:0; transition:opacity 0.25s ease-in-out; z-index:1; }
-    video.active { opacity:1; z-index:2; }
-    #poster { position:absolute; inset:0; background:radial-gradient(circle at 50% 42%, #4e2d12 0%, #261508 65%, #120903 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; z-index:10; padding:24px; }
-    #poster img { max-width:22vw; max-height:22vh; margin-bottom:20px; object-fit:contain; filter:drop-shadow(0 8px 24px rgba(0,0,0,0.65)); }
-    .t1 { font-size:clamp(1.2rem, 5vw, 3.8rem); font-weight:700; letter-spacing:4px; color:#f4ece1; text-shadow:0 3px 16px rgba(0,0,0,0.7); white-space:nowrap; }
-    #fsHint { position:fixed; bottom:22px; right:22px; background:rgba(30,21,14,0.88); color:#f4ece1; border:1px solid rgba(224,185,130,0.35); padding:10px 18px; border-radius:999px; font-size:0.9rem; font-weight:600; cursor:pointer; z-index:20; transition:opacity 0.3s; }
-    #fsHint:hover { background:#c68032; color:#160d05; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .proj-video {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: #000;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      z-index: 1;
+  }
+  .proj-video.active { opacity: 1; z-index: 2; }
+  .poster-screen {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 42%, #4e2d12 0%, #261508 65%, #120903 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      color: #f4ece1;
+      z-index: 10;
+  }
+  .poster-logo {
+      max-width: 170px;
+      max-height: 170px;
+      margin-bottom: 18px;
+      filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6));
+  }
+  .poster-title-main {
+      font-size: clamp(1.2rem, 3.8vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: 5px;
+      text-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+      white-space: nowrap;
+  }
+  #fsHint {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(21, 14, 9, 0.88);
+      color: #f4ece1;
+      border: 1px solid rgba(224, 185, 130, 0.3);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      z-index: 20;
+  }
 </style>
 </head>
 <body>
-    <div id="poster">
-        <img src="logo-adventista.webp" alt="Logo Adventista">
-        <div class="t1">HIMNARIO ADVENTISTA</div>
-    </div>
-    <video id="projVid1" class="active" muted preload="auto" playsinline></video>
-    <video id="projVid2" muted preload="auto" playsinline></video>
-    <button id="fsHint" onclick="document.documentElement.requestFullscreen().catch(()=>{})">Pantalla Completa</button>
-    <script>
-        const ch = new BroadcastChannel('hymn_projection_sync');
-        let activeProjId = 'projVid1';
-        const poster = document.getElementById('poster');
-        const fsHint = document.getElementById('fsHint');
+<div id="posterScreen" class="poster-screen">
+    <img src="${logoSrc}" alt="Logo Adventista" class="poster-logo">
+    <div class="poster-title-main">HIMNARIO ADVENTISTA</div>
+</div>
+<video id="projVid1" class="proj-video active" muted playsinline></video>
+<video id="projVid2" class="proj-video" muted playsinline></video>
+<button id="fsHint" onclick="goFullScreen()">Clic para Pantalla Completa</button>
 
-        function getActiveProj() { return document.getElementById(activeProjId); }
-        function getInactiveProj() { return document.getElementById(activeProjId === 'projVid1' ? 'projVid2' : 'projVid1'); }
+<script>
+  const channel = new BroadcastChannel('hymn_projection_sync');
+  const v1 = document.getElementById('projVid1');
+  const v2 = document.getElementById('projVid2');
+  const poster = document.getElementById('posterScreen');
+  const fsHint = document.getElementById('fsHint');
 
-        document.addEventListener('fullscreenchange', () => {
-            fsHint.style.display = document.fullscreenElement ? 'none' : 'block';
-        });
+  let activeProjVid = v1;
+  let standbyProjVid = v2;
+  let currentUrl = '';
 
-        document.body.addEventListener('dblclick', () => {
-            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-            else document.exitFullscreen().catch(()=>{});
-        });
+  function goFullScreen() {
+      if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().then(() => { fsHint.style.display = 'none'; }).catch(() => {});
+      }
+  }
+  document.addEventListener('dblclick', goFullScreen);
 
-        ch.onmessage = (e) => {
-            const msg = e.data;
-            if (msg.type === 'LOAD') {
-                poster.style.display = 'none';
-                const currentV = getActiveProj();
-                const nextV = getInactiveProj();
+  channel.onmessage = (e) => {
+      const data = e.data;
+      if (data.action === 'stop') {
+          v1.pause(); v1.removeAttribute('src'); v1.load();
+          v2.pause(); v2.removeAttribute('src'); v2.load();
+          currentUrl = '';
+          poster.style.display = 'flex';
+          return;
+      }
 
-                nextV.src = msg.url;
-                nextV.playbackRate = msg.speed || 1.0;
-                nextV.currentTime = msg.time || 0;
-                nextV.load();
+      if (data.url && data.url !== currentUrl) {
+          currentUrl = data.url;
+          poster.style.display = 'none';
 
-                nextV.oncanplay = () => {
-                    nextV.oncanplay = null;
-                    nextV.classList.add('active');
-                    currentV.classList.remove('active');
-                    currentV.pause();
-                    currentV.removeAttribute('src');
-                    activeProjId = nextV.id;
-                    if (msg.playing) nextV.play().catch(()=>{});
-                };
-            } else if (msg.type === 'PLAY') {
-                poster.style.display = 'none';
-                const v = getActiveProj();
-                if (msg.time !== undefined) v.currentTime = msg.time;
-                v.play().catch(()=>{});
-            } else if (msg.type === 'PAUSE') {
-                getActiveProj().pause();
-            } else if (msg.type === 'SEEK') {
-                getActiveProj().currentTime = msg.time;
-            } else if (msg.type === 'SPEED') {
-                getActiveProj().playbackRate = msg.speed;
-            } else if (msg.type === 'STOP') {
-                const v1 = document.getElementById('projVid1');
-                const v2 = document.getElementById('projVid2');
-                v1.pause(); v1.removeAttribute('src'); v1.load();
-                v2.pause(); v2.removeAttribute('src'); v2.load();
-                poster.style.display = 'flex';
-            }
-        };
-        ch.postMessage({ type: 'READY' });
-    <\/script>
+          standbyProjVid.src = data.url;
+          standbyProjVid.playbackRate = data.playbackRate || 1.0;
+          standbyProjVid.load();
+
+          standbyProjVid.onloadeddata = () => {
+              standbyProjVid.currentTime = data.currentTime || 0;
+              if (!data.paused) standbyProjVid.play().catch(() => {});
+
+              standbyProjVid.classList.add('active');
+              activeProjVid.classList.remove('active');
+              activeProjVid.pause();
+
+              const temp = activeProjVid;
+              activeProjVid = standbyProjVid;
+              standbyProjVid = temp;
+          };
+      } else if (data.url) {
+          poster.style.display = 'none';
+          if (data.playbackRate && activeProjVid.playbackRate !== data.playbackRate) {
+              activeProjVid.playbackRate = data.playbackRate;
+          }
+          if (Math.abs(activeProjVid.currentTime - data.currentTime) > 0.35) {
+              activeProjVid.currentTime = data.currentTime;
+          }
+          if (data.paused && !activeProjVid.paused) activeProjVid.pause();
+          else if (!data.paused && activeProjVid.paused) activeProjVid.play().catch(() => {});
+      }
+  };
+  channel.postMessage({ action: 'ready' });
+<\/script>
 </body>
 </html>`;
 
         projectionWindow.document.open();
-        projectionWindow.document.write(htmlProyeccion);
+        projectionWindow.document.write(projHTML);
         projectionWindow.document.close();
+
+        try {
+            projectionWindow.moveTo(left, top);
+            projectionWindow.resizeTo(width, height);
+        } catch (e) {}
 
         const checkClosed = setInterval(() => {
             if (!projectionWindow || projectionWindow.closed) {
                 clearInterval(checkClosed);
-                projectionWindow = null;
                 DOM.secondaryScreenCheckbox.checked = false;
-                DOM.projectionStatusBadge.innerText = 'Pantalla única';
-                DOM.projectionStatusBadge.style.color = 'var(--text-secondary)';
-                DOM.projectionStatusBadge.style.borderColor = 'var(--border-subtle)';
+                actualizarModoProyeccion();
             }
         }, 1000);
     }
 
-    syncChannel.onmessage = (e) => {
-        if (e.data && e.data.type === 'READY') enviarEstadoAProyeccion();
-    };
+    function enviarEstadoProyeccion(forceStop = false) {
+        if (!DOM.secondaryScreenCheckbox.checked) return;
 
-    function enviarEstadoAProyeccion() {
-        if (!projectionWindow || projectionWindow.closed || !currentHimno || !currentActivePlayUrl) return;
+        if (forceStop || !currentHimno) {
+            syncChannel.postMessage({ action: 'stop' });
+            return;
+        }
+
+        const remoteUrl = currentActivePlayUrl || getHymnVideoUrl(currentHimno, DOM.instrumentalCheckbox.checked);
         syncChannel.postMessage({
-            type: 'LOAD',
-            url: currentActivePlayUrl,
-            time: masterAudio.currentTime || 0,
-            playing: !isUserPaused,
-            speed: currentSpeed
+            action: 'sync',
+            url: remoteUrl,
+            currentTime: masterAudio.currentTime || 0,
+            paused: isUserPaused,
+            playbackRate: currentSpeed
         });
     }
 
-    function salirPantallaCompletaSiActiva() {
-        if (document.fullscreenElement) {
-            document.exitFullscreen().catch(() => {});
-        }
-    }
+    syncChannel.onmessage = (e) => {
+        if (e.data && e.data.action === 'ready') enviarEstadoProyeccion();
+    };
 
-    function togglePantallaCompleta() {
-        const wrapper = document.getElementById('hymn-player-wrapper');
-        if (!document.fullscreenElement) {
-            if (wrapper.requestFullscreen) wrapper.requestFullscreen().catch(() => {});
-            else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
-        } else {
-            salirPantallaCompletaSiActiva();
-        }
-    }
-
-    document.addEventListener('fullscreenchange', actualizarBotonFull);
-    function actualizarBotonFull() {
-        const btn = document.getElementById('fullscreenBtn');
-        if (document.fullscreenElement) {
-            btn.innerHTML = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg><span>Salir</span>';
-        } else {
-            btn.innerHTML = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><span>Full</span>';
-        }
-    }
-
-    function removeAccents(str) {
-        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    /* =========================================================================
+       MOTOR DE REPRODUCCIÓN, BÚSQUEDA Y LISTAS
+       ========================================================================= */
+    function normalizarTexto(texto) {
+        return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
 
     function getFilteredList() {
-        const query = removeAccents(DOM.searchInput.value.trim());
+        const query = normalizarTexto(DOM.searchInput.value.trim());
 
-        let baseList;
-        if (currentViewId === 'all') {
-            baseList = himnosList;
-        } else if (currentViewId === 'categories') {
-            baseList = activeCategoryId ? obtenerHimnosDeCategoriaActiva() : (query ? himnosList : []);
-        } else {
+        if (currentViewId === 'categories' && !activeCategoryId && !query) {
+            return [];
+        }
+
+        let baseList = himnosList;
+        if (currentViewId === 'categories') {
+            baseList = activeCategoryId ? obtenerHimnosDeCategoriaActiva() : himnosList;
+        } else if (currentViewId !== 'all') {
             baseList = obtenerHimnosDeLista(currentViewId);
         }
 
         if (!query) return baseList;
-        return baseList.filter(h => {
-            const numMatch = h.num.includes(query) || String(parseInt(h.num, 10)).includes(query);
-            const titleMatch = removeAccents(h.title).includes(query);
-            return numMatch || titleMatch;
-        });
+        return baseList.filter(h => h.searchKey.includes(query));
     }
 
     function filtrarHimnos() {
         renderList(getFilteredList());
     }
 
-    function manejarTeclaBusqueda(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            const filtered = getFilteredList();
-            if (filtered.length > 0) {
-                activeQueuePlaylistId = null;
-                actualizarBadgeColaActiva();
-                reproducirHimno(filtered[0], true);
+    function manejarTeclaBusqueda(e) {
+        if (e.key === 'Enter') {
+            const filtrados = getFilteredList();
+            if (filtrados.length > 0) {
+                if (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories') {
+                    activeQueuePlaylistId = currentViewId;
+                    actualizarBadgeColaActiva();
+                } else {
+                    activeQueuePlaylistId = null;
+                    actualizarBadgeColaActiva();
+                }
+                reproducirHimno(filtrados[0], true, Boolean(activeQueuePlaylistId));
                 DOM.searchInput.blur();
             }
         }
     }
 
-    /* =========================================================================
-       RENDERIZADO RÁPIDO DE LISTA Y CATEGORÍAS
-       ========================================================================= */
-    function actualizarEstadoFilasLista() {
-        const activeNum = currentHimno ? currentHimno.num : null;
-        const rows = DOM.playlist.querySelectorAll('.playlist-item');
-        rows.forEach(row => {
-            const rowNum = row.dataset.num;
-            row.classList.toggle('active', rowNum === activeNum);
-            row.classList.toggle('selected', rowNum === selectedHymnNum && rowNum !== activeNum);
+    function cambiarModoContinuo() {
+        const isContinuous = DOM.autoPlayAllCheckbox.checked;
+        if (isContinuous) {
+            if (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories') {
+                activeQueuePlaylistId = currentViewId;
+            }
+        } else {
+            activeQueuePlaylistId = null;
+        }
+        actualizarBadgeColaActiva();
+        mostrarToast(isContinuous ? 'Reproducción continua activada' : 'Detener al finalizar cada himno');
+    }
+
+    function actualizarBotonPlay(isPlaying) {
+        DOM.playBtn.innerHTML = isPlaying
+            ? `${ICON_PAUSE}<span>Pausar</span>`
+            : `${ICON_PLAY}<span>Repr.</span>`;
+    }
+
+    function actualizarBotonMute(muted) {
+        DOM.muteBtn.innerHTML = muted ? ICON_VOL_OFF : ICON_VOL_ON;
+    }
+
+    function setVolume(val) {
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
+        currentVolume = val / 100;
+        isAudioMuted = (currentVolume === 0);
+        masterAudio.volume = currentVolume;
+        masterAudio.muted = isAudioMuted;
+        actualizarBotonMute(isAudioMuted);
+    }
+
+    function toggleMute() {
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
+        isAudioMuted = !isAudioMuted;
+        masterAudio.muted = isAudioMuted;
+        if (!isAudioMuted && currentVolume === 0) {
+            currentVolume = 0.5;
+            DOM.volumeSlider.value = 50;
+        }
+        masterAudio.volume = isAudioMuted ? 0 : currentVolume;
+        actualizarBotonMute(isAudioMuted);
+    }
+
+    function changeSpeed(delta) {
+        let newSpeed = Math.round((currentSpeed + delta) * 100) / 100;
+        if (newSpeed < 0.50) newSpeed = 0.50;
+        if (newSpeed > 2.00) newSpeed = 2.00;
+        applySpeed(newSpeed);
+    }
+
+    function resetSpeed() { applySpeed(1.00); }
+
+    function applySpeed(speed) {
+        currentSpeed = speed;
+        DOM.speedDisplay.innerText = currentSpeed.toFixed(2) + 'x';
+        masterAudio.playbackRate = currentSpeed;
+        DOM.vid1.playbackRate = currentSpeed;
+        DOM.vid2.playbackRate = currentSpeed;
+        enviarEstadoProyeccion();
+    }
+
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0) return "00:00";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+
+    function getActiveVideo() { return DOM.vid1.classList.contains('active') ? DOM.vid1 : DOM.vid2; }
+    function getStandbyVideo() { return DOM.vid1.classList.contains('active') ? DOM.vid2 : DOM.vid1; }
+
+    function userSeek(val) {
+        if (!isNaN(masterAudio.duration) && masterAudio.duration > 0) {
+            const targetTime = (val / 100) * masterAudio.duration;
+            videoSyncCooldownUntil = Date.now() + 900;
+            masterAudio.currentTime = targetTime;
+            if (!soloAudioMode && !document.hidden) {
+                const activeVid = getActiveVideo();
+                if (activeVid.readyState >= 1) activeVid.currentTime = targetTime;
+            }
+            DOM.timeCurrent.innerText = formatTime(targetTime);
+            enviarEstadoProyeccion();
+        }
+    }
+
+    masterAudio.ontimeupdate = () => {
+        if (masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+        if (!isSeeking && !isNaN(masterAudio.duration) && masterAudio.duration > 0) {
+            const pct = (masterAudio.currentTime / masterAudio.duration) * 100;
+            DOM.progressSlider.value = pct;
+            DOM.timeCurrent.innerText = formatTime(masterAudio.currentTime);
+            DOM.timeTotal.innerText = formatTime(masterAudio.duration);
+
+            if ((masterAudio.duration - masterAudio.currentTime) <= 10) {
+                preResolverSiguienteHimno();
+            }
+        }
+
+        if (!soloAudioMode && !document.hidden && !masterAudio.paused && Date.now() > videoSyncCooldownUntil) {
+            const activeVid = getActiveVideo();
+            if (activeVid.readyState >= 2) {
+                const diff = activeVid.currentTime - masterAudio.currentTime;
+                if (Math.abs(diff) > 0.65) {
+                    videoSyncCooldownUntil = Date.now() + 1200;
+                    activeVid.currentTime = masterAudio.currentTime;
+                }
+            }
+        }
+    };
+
+    function handleMediaEnded() {
+        const shouldContinue = Boolean(activeQueuePlaylistId) || DOM.autoPlayAllCheckbox.checked;
+        if (shouldContinue) {
+            nextHymn(true);
+        } else {
+            isUserPaused = true;
+            cancelarRampaVolumen();
+            needsAudioFadeIn = false;
+            actualizarBotonPlay(false);
+            DOM.vid1.pause();
+            DOM.vid2.pause();
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            enviarEstadoProyeccion();
+        }
+    }
+
+    function obtenerSiguienteHimnoEnCola(fromAutoEnd = false) {
+        if (activeQueuePlaylistId) {
+            const queueItems = obtenerHimnosDeLista(activeQueuePlaylistId);
+            if (queueItems.length > 0 && currentHimno) {
+                const idxInQueue = queueItems.findIndex(item => item.num === currentHimno.num);
+                if (idxInQueue !== -1 && idxInQueue + 1 < queueItems.length) {
+                    return { nextHimno: queueItems[idxInQueue + 1], keepQueue: true };
+                } else if (idxInQueue !== -1 && repeatPlaylist) {
+                    return { nextHimno: queueItems[0], keepQueue: true };
+                } else {
+                    if (fromAutoEnd) {
+                        activeQueuePlaylistId = null;
+                        actualizarBadgeColaActiva();
+                        mostrarToast('Lista de reproducción finalizada');
+                    }
+                    return { nextHimno: null, keepQueue: false };
+                }
+            }
+        }
+
+        if (currentIndex + 1 < himnosList.length) {
+            return { nextHimno: himnosList[currentIndex + 1], keepQueue: false };
+        }
+        return { nextHimno: null, keepQueue: false };
+    }
+
+    async function preResolverSiguienteHimno() {
+        const shouldContinue = Boolean(activeQueuePlaylistId) || DOM.autoPlayAllCheckbox.checked;
+        if (!shouldContinue) return;
+        const { nextHimno } = obtenerSiguienteHimnoEnCola(true);
+        if (!nextHimno) return;
+
+        const isInst = DOM.instrumentalCheckbox.checked;
+        const key = getResolvedCacheKey(nextHimno, isInst);
+        if (preResolvedNextKey === key) return;
+        preResolvedNextKey = key;
+
+        try {
+            const validUrl = await resolverUrlHimnoValida(nextHimno, isInst);
+            if (validUrl) {
+                obtenerUrlAudioPuro(validUrl, isInst).catch(() => {});
+            }
+        } catch (e) {}
+    }
+
+    function actualizarMediaSession(h) {
+        if (!('mediaSession' in navigator) || !h) return;
+        const isInst = DOM.instrumentalCheckbox.checked;
+        const modoStr = isInst ? 'Instrumental' : 'Cantado';
+        const portImg = `${GITHUB_PAGES_BASE}/portadas/${h.num}.jpg`;
+
+        try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: formatearTituloHimnoHeader(h),
+                artist: `Himnario Adventista (${modoStr})`,
+                album: activeQueuePlaylistId ? obtenerNombreLista(activeQueuePlaylistId) : 'Himnario Adventista',
+                artwork: [
+                    { src: portImg, sizes: '512x512', type: 'image/jpeg' },
+                    { src: `${GITHUB_PAGES_BASE}/icon-192.png`, sizes: '192x192', type: 'image/png' }
+                ]
+            });
+
+            navigator.mediaSession.setActionHandler('play', () => {
+                if (isUserPaused) togglePlay();
+            });
+            navigator.mediaSession.setActionHandler('pause', () => {
+                if (!isUserPaused) togglePlay();
+            });
+            navigator.mediaSession.setActionHandler('previoustrack', () => prevHymn());
+            navigator.mediaSession.setActionHandler('nexttrack', () => nextHymn());
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.seekTime !== undefined && !isNaN(masterAudio.duration)) {
+                    videoSyncCooldownUntil = Date.now() + 900;
+                    masterAudio.currentTime = details.seekTime;
+                    if (!soloAudioMode && !document.hidden) {
+                        const activeVid = getActiveVideo();
+                        if (activeVid.readyState >= 1) activeVid.currentTime = details.seekTime;
+                    }
+                }
+            });
+        } catch (err) {}
+    }
+
+    function togglePlay() {
+        if (!currentHimno) {
+            const lista = getFilteredList();
+            if (lista.length > 0) reproducirHimno(lista[0], true);
+            return;
+        }
+
+        const activeVid = getActiveVideo();
+        if (masterAudio.paused) {
+            isUserPaused = false;
+            needsAudioFadeIn = true;
+            masterAudio.play().catch(() => {});
+            if (!soloAudioMode && !document.hidden) {
+                configurarVideoSilencioso(activeVid);
+                if (activeVid.readyState >= 1) activeVid.currentTime = masterAudio.currentTime;
+                activeVid.play().catch(() => {});
+            }
+            actualizarBotonPlay(true);
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        } else {
+            isUserPaused = true;
+            cancelarRampaVolumen();
+            needsAudioFadeIn = false;
+            masterAudio.pause();
+            activeVid.pause();
+            actualizarBotonPlay(false);
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        }
+        enviarEstadoProyeccion();
+    }
+
+    function stopHymn() {
+        currentPlayRequestId++;
+        isUserPaused = true;
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
+        masterAudio.pause();
+        masterAudio.loop = false;
+        masterAudio.removeAttribute('src');
+        masterAudio.load();
+
+        DOM.vid1.pause(); DOM.vid1.removeAttribute('src'); DOM.vid1.removeAttribute('data-loaded-url'); DOM.vid1.load();
+        DOM.vid2.pause(); DOM.vid2.removeAttribute('src'); DOM.vid2.removeAttribute('data-loaded-url'); DOM.vid2.load();
+
+        DOM.progressSlider.value = 0;
+        DOM.timeCurrent.innerText = "00:00";
+        DOM.timeTotal.innerText = "00:00";
+        actualizarBotonPlay(false);
+        DOM.posterOverlay.style.display = "flex";
+        DOM.localPlaybackBadge.style.display = "none";
+
+        currentHimno = null;
+        currentActivePlayUrl = '';
+        actualizarPortadaSoloAudio(null);
+        activeQueuePlaylistId = null;
+        actualizarBadgeColaActiva();
+        DOM.playerCurrentTitle.innerText = "Seleccione un himno para comenzar";
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+        renderList(getFilteredList());
+        enviarEstadoProyeccion(true);
+    }
+
+    function prevHymn() {
+        if (activeQueuePlaylistId) {
+            const queueItems = obtenerHimnosDeLista(activeQueuePlaylistId);
+            if (queueItems.length > 0 && currentHimno) {
+                const idxInQueue = queueItems.findIndex(item => item.num === currentHimno.num);
+                if (idxInQueue > 0) {
+                    reproducirHimno(queueItems[idxInQueue - 1], true, true);
+                    return;
+                } else if (repeatPlaylist) {
+                    reproducirHimno(queueItems[queueItems.length - 1], true, true);
+                    return;
+                }
+            }
+        }
+        if (currentIndex > 0) reproducirHimno(himnosList[currentIndex - 1], true);
+    }
+
+    function nextHymn(fromAutoEnd = false) {
+        const { nextHimno, keepQueue } = obtenerSiguienteHimnoEnCola(fromAutoEnd);
+        if (nextHimno) {
+            reproducirHimno(nextHimno, true, keepQueue);
+        } else if (fromAutoEnd) {
+            isUserPaused = true;
+            cancelarRampaVolumen();
+            needsAudioFadeIn = false;
+            actualizarBotonPlay(false);
+            DOM.vid1.pause();
+            DOM.vid2.pause();
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            enviarEstadoProyeccion();
+        }
+    }
+
+    function cambiarModoAudio() {
+        const isInst = DOM.instrumentalCheckbox.checked;
+        DOM.modeBadge.innerText = isInst ? "Instrumental" : "Cantado";
+        actualizarSelectorListasUI();
+        renderList(getFilteredList());
+
+        if (currentHimno) {
+            const tiempoActual = masterAudio.currentTime || 0;
+            const estabaPausado = isUserPaused;
+            reproducirHimno(currentHimno, !estabaPausado, Boolean(activeQueuePlaylistId), tiempoActual);
+        }
+    }
+
+    function seleccionarHimnoEnLista(h) {
+        selectedHymnNum = h.num;
+        const items = DOM.playlist.querySelectorAll('.playlist-item');
+        items.forEach(li => {
+            li.classList.toggle('selected', li.dataset.num === h.num);
         });
     }
 
-    function renderCategoriasGrid(ul) {
+    async function reproducirHimno(h, autoPlay = true, preserveQueue = false, startTime = 0) {
+        const reqId = ++currentPlayRequestId;
+
+        if (!preserveQueue) {
+            activeQueuePlaylistId = null;
+            actualizarBadgeColaActiva();
+        }
+
+        currentHimno = h;
+        selectedHymnNum = h.num;
+        currentIndex = himnosList.findIndex(item => item.num === h.num);
+        const isInst = DOM.instrumentalCheckbox.checked;
+
+        DOM.playerCurrentTitle.innerText = formatearTituloHimnoHeader(h);
+        actualizarBadgeColaActiva();
+        actualizarMediaSession(h);
+
+        actualizarPortadaSoloAudio(h);
+        DOM.posterOverlay.style.display = soloAudioMode ? "flex" : "none";
+
+        isUserPaused = !autoPlay;
+        actualizarBotonPlay(autoPlay);
+
+        renderList(getFilteredList());
+        const activeLi = DOM.playlist.querySelector('.playlist-item.active');
+        if (activeLi) activeLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        await fadeOutMasterAudio(28);
+        if (reqId !== currentPlayRequestId) return;
+
+        masterAudio.pause();
+        DOM.vid1.pause();
+        DOM.vid2.pause();
+
+        if (autoPlay && !document.hidden) {
+            try {
+                masterAudio.loop = true;
+                masterAudio.volume = 0;
+                masterAudio.src = SILENT_AUDIO_DATA_URI;
+                await masterAudio.play();
+            } catch (e) {}
+            if (reqId !== currentPlayRequestId) return;
+        }
+
+        let playUrl = '';
+        let isLocal = false;
+
+        if (esPC && pcOfflineHandle && pcOfflineSavedKeys.has(claveHimnoPC(h.num, isInst))) {
+            const pcFile = await obtenerBlobDesdeCarpetaOfflinePC(h.num, isInst);
+            if (reqId !== currentPlayRequestId) return;
+            if (pcFile) {
+                const pcKey = `pc_${claveHimnoPC(h.num, isInst)}`;
+                if (activeBlobUrls.has(pcKey)) {
+                    playUrl = activeBlobUrls.get(pcKey);
+                } else {
+                    playUrl = URL.createObjectURL(pcFile);
+                    activeBlobUrls.set(pcKey, playUrl);
+                }
+                isLocal = true;
+            }
+        }
+
+        if (!playUrl) {
+            const savedLocalRemoteUrl = obtenerUrlGuardadaEnLocal(h, isInst);
+            if (savedLocalRemoteUrl) {
+                const blobUrl = await obtenerBlobUrlLocal(savedLocalRemoteUrl);
+                if (reqId !== currentPlayRequestId) return;
+                if (blobUrl) {
+                    playUrl = blobUrl;
+                    isLocal = true;
+                }
+            }
+        }
+
+        if (!playUrl) {
+            const validRemoteUrl = await resolverUrlHimnoValida(h, isInst);
+            if (reqId !== currentPlayRequestId) return;
+            if (!validRemoteUrl) {
+                masterAudio.pause();
+                masterAudio.loop = false;
+                DOM.localPlaybackBadge.style.display = "none";
+                mostrarToast(`El número ${parseInt(h.num, 10)} no se encuentra en modo ${isInst ? 'Instrumental' : 'Cantado'}.`);
+                return;
+            }
+            playUrl = validRemoteUrl;
+        }
+
+        currentCandidateUrls = [playUrl];
+        currentCandidateIndex = 0;
+        currentActivePlayUrl = playUrl;
+        DOM.localPlaybackBadge.style.display = isLocal ? "inline-block" : "none";
+
+        // Extraer y aislar la pista de audio correspondiente (Pista 2 para Cantado si el MP4 tiene doble pista como el 19)
+        let audioSrcForMaster = playUrl;
+        if (isLocal) {
+            try {
+                const respLocal = await fetch(playUrl);
+                const bufLocal = await respLocal.arrayBuffer();
+                const parsedLocalBlob = stripVideoTrackFromMp4(bufLocal, isInst);
+                if (parsedLocalBlob) {
+                    audioSrcForMaster = URL.createObjectURL(parsedLocalBlob);
+                }
+            } catch (e) {}
+        } else {
+            const audioRes = await obtenerUrlAudioPuro(playUrl, isInst);
+            if (reqId !== currentPlayRequestId) return;
+            if (audioRes && audioRes.ok && audioRes.url) {
+                audioSrcForMaster = audioRes.url;
+            }
+        }
+
+        if (reqId !== currentPlayRequestId) return;
+
+        masterAudio.pause();
+        masterAudio.loop = false;
+        masterAudio.volume = 0;
+        masterAudio.muted = isAudioMuted;
+        masterAudio.src = audioSrcForMaster;
+        masterAudio.playbackRate = currentSpeed;
+        masterAudio.load();
+
+        masterAudio.onloadedmetadata = () => {
+            if (reqId !== currentPlayRequestId) return;
+            if (startTime > 0 && masterAudio.duration > startTime) {
+                masterAudio.currentTime = startTime;
+            }
+            DOM.timeTotal.innerText = formatTime(masterAudio.duration);
+        };
+
+        if (autoPlay) {
+            needsAudioFadeIn = true;
+            masterAudio.play().then(() => {
+                if (reqId !== currentPlayRequestId) return;
+                actualizarBotonPlay(true);
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+            }).catch(() => {
+                if (reqId !== currentPlayRequestId) return;
+                cancelarRampaVolumen();
+                needsAudioFadeIn = false;
+                masterAudio.volume = isAudioMuted ? 0 : currentVolume;
+                isUserPaused = true;
+                actualizarBotonPlay(false);
+            });
+        } else {
+            cancelarRampaVolumen();
+            needsAudioFadeIn = false;
+            masterAudio.volume = isAudioMuted ? 0 : currentVolume;
+        }
+
+        const activeVid = getActiveVideo();
+        const standbyVid = getStandbyVideo();
+
+        if (soloAudioMode || document.hidden) {
+            activeVid.pause();
+            standbyVid.pause();
+            activeVid.dataset.loadedUrl = '';
+            standbyVid.dataset.loadedUrl = '';
+        } else {
+            configurarVideoSilencioso(standbyVid);
+            standbyVid.dataset.loadedUrl = playUrl;
+            standbyVid.src = playUrl;
+            standbyVid.playbackRate = currentSpeed;
+            standbyVid.load();
+
+            standbyVid.onloadeddata = () => {
+                if (reqId !== currentPlayRequestId) return;
+                standbyVid.onloadeddata = null;
+
+                if (soloAudioMode || document.hidden) {
+                    standbyVid.pause();
+                    return;
+                }
+
+                standbyVid.currentTime = masterAudio.currentTime || startTime || 0;
+                if (autoPlay && !isUserPaused) standbyVid.play().catch(() => {});
+
+                standbyVid.classList.add('active');
+                activeVid.classList.remove('active');
+                activeVid.pause();
+                activeVid.removeAttribute('src');
+                activeVid.removeAttribute('data-loaded-url');
+                activeVid.load();
+
+                enviarEstadoProyeccion();
+            };
+        }
+
+        if (autoCacheEnabled && !isLocal && navigator.onLine) {
+            setTimeout(() => {
+                if (currentHimno && currentHimno.num === h.num && !estaHimnoGuardadoEnLocal(h, isInst)) {
+                    guardarHimnoEnLocal(h, isInst, null, true);
+                }
+            }, 3500);
+        }
+
+        enviarEstadoProyeccion();
+    }
+
+    function reanudarVideoVisualSinCorte(activeVid) {
+        if (soloAudioMode || !activeVid || !currentActivePlayUrl) return;
+        configurarVideoSilencioso(activeVid);
+
+        const targetTime = masterAudio.currentTime || 0;
+        const sameSource = (activeVid.dataset.loadedUrl === currentActivePlayUrl) && activeVid.readyState >= 2;
+
+        if (sameSource) {
+            if (Math.abs(activeVid.currentTime - targetTime) > 0.35) {
+                videoSyncCooldownUntil = Date.now() + 900;
+                try { activeVid.currentTime = targetTime; } catch (e) {}
+            }
+            activeVid.playbackRate = currentSpeed;
+            if (!isUserPaused && activeVid.paused) {
+                activeVid.play().catch(() => {});
+            }
+            return;
+        }
+
+        activeVid.dataset.loadedUrl = currentActivePlayUrl;
+        activeVid.src = currentActivePlayUrl;
+        activeVid.playbackRate = currentSpeed;
+        activeVid.load();
+
+        activeVid.onloadeddata = () => {
+            activeVid.onloadeddata = null;
+            if (document.hidden || soloAudioMode) return;
+            videoSyncCooldownUntil = Date.now() + 900;
+            try { activeVid.currentTime = masterAudio.currentTime || 0; } catch (e) {}
+            if (!isUserPaused) activeVid.play().catch(() => {});
+        };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (visibilityResumeTimer) {
+            clearTimeout(visibilityResumeTimer);
+            visibilityResumeTimer = null;
+        }
+
+        if (document.hidden) {
+            DOM.vid1.pause();
+            DOM.vid2.pause();
+        } else {
+            if (!isUserPaused && masterAudio.paused && currentHimno) {
+                masterAudio.play().catch(() => {});
+            }
+            if (!soloAudioMode && currentHimno && currentActivePlayUrl) {
+                visibilityResumeTimer = setTimeout(() => {
+                    visibilityResumeTimer = null;
+                    if (!document.hidden && !soloAudioMode && currentHimno && currentActivePlayUrl) {
+                        reanudarVideoVisualSinCorte(getActiveVideo());
+                    }
+                }, 140);
+            }
+        }
+    });
+
+    /* =========================================================================
+       RENDERIZADO DE LA LISTA DE HIMNOS Y CATEGORÍAS TEMÁTICAS
+       ========================================================================= */
+    function renderCategoriesDashboard(container) {
         const grid = document.createElement('div');
         grid.className = 'cat-grid';
 
@@ -5262,889 +5886,365 @@
             card.className = 'cat-card';
             card.onclick = () => seleccionarCategoria(cat.id, null);
 
-            const header = document.createElement('div');
-            header.className = 'cat-card-header';
-            header.innerHTML = `
-                <span class="cat-card-title">${escapeHtml(cat.title)}</span>
-                <span class="cat-card-range">${cat.start} - ${cat.end}</span>
+            const chipsHtml = cat.subcategories.map(sub => `
+                <button type="button" class="cat-chip-mini" onclick="event.stopPropagation(); seleccionarCategoria('${cat.id}', '${sub.id}')">
+                    ${escapeHtml(sub.title)} (${sub.start}–${sub.end})
+                </button>
+            `).join('');
+
+            card.innerHTML = `
+                <div class="cat-card-header">
+                    <span class="cat-card-title">${escapeHtml(cat.title)}</span>
+                    <span class="cat-card-range">Himnos ${cat.start} – ${cat.end}</span>
+                </div>
+                <div class="cat-chips-preview">${chipsHtml}</div>
             `;
-            card.appendChild(header);
-
-            if (cat.subcategories && cat.subcategories.length > 1) {
-                const chipsWrap = document.createElement('div');
-                chipsWrap.className = 'cat-chips-preview';
-                cat.subcategories.forEach(sub => {
-                    const chip = document.createElement('button');
-                    chip.type = 'button';
-                    chip.className = 'cat-chip-mini';
-                    chip.textContent = `${sub.title} (${sub.start}-${sub.end})`;
-                    chip.onclick = (e) => {
-                        e.stopPropagation();
-                        seleccionarCategoria(cat.id, sub.id);
-                    };
-                    chipsWrap.appendChild(chip);
-                });
-                card.appendChild(chipsWrap);
-            }
-
             grid.appendChild(card);
         });
 
-        ul.appendChild(grid);
+        container.appendChild(grid);
     }
 
-    function renderPanelCategoriaActiva(ul, filteredCount) {
+    function renderActiveCategoryBanner(container) {
         const cat = HYMN_CATEGORIES.find(c => c.id === activeCategoryId);
         if (!cat) return;
 
         const panel = document.createElement('div');
         panel.className = 'cat-active-panel';
 
-        const topRow = document.createElement('div');
-        topRow.className = 'cat-active-top';
-        topRow.innerHTML = `
-            <button type="button" class="cat-back-btn" onclick="volverACategorias()">← Categorías</button>
-            <strong style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(cat.title)}</strong>
-            <span class="pl-count-pill">${filteredCount} himnos</span>
+        const allPill = `<button type="button" class="cat-sub-pill ${!activeSubcategoryId ? 'active' : ''}" onclick="seleccionarSubcategoria(null)">Todos (${cat.start}–${cat.end})</button>`;
+        const subPills = cat.subcategories.map(sub => `
+            <button type="button" class="cat-sub-pill ${activeSubcategoryId === sub.id ? 'active' : ''}" onclick="seleccionarSubcategoria('${sub.id}')">
+                ${escapeHtml(sub.title)} (${sub.start}–${sub.end})
+            </button>
+        `).join('');
+
+        panel.innerHTML = `
+            <div class="cat-active-top">
+                <span style="font-weight:700; color:#f4ece1;">${escapeHtml(cat.title)}</span>
+                <button type="button" class="cat-back-btn" onclick="volverACategorias()">← Todas las categorías</button>
+            </div>
+            <div class="cat-sub-bar">
+                ${allPill}
+                ${subPills}
+            </div>
         `;
-        panel.appendChild(topRow);
-
-        if (cat.subcategories && cat.subcategories.length > 1) {
-            const subBar = document.createElement('div');
-            subBar.className = 'cat-sub-bar';
-
-            const allPill = document.createElement('button');
-            allPill.type = 'button';
-            allPill.className = 'cat-sub-pill' + (!activeSubcategoryId ? ' active' : '');
-            allPill.textContent = `Todos (${cat.start}-${cat.end})`;
-            allPill.onclick = () => seleccionarSubcategoria(null);
-            subBar.appendChild(allPill);
-
-            cat.subcategories.forEach(sub => {
-                const pill = document.createElement('button');
-                pill.type = 'button';
-                pill.className = 'cat-sub-pill' + (activeSubcategoryId === sub.id ? ' active' : '');
-                pill.textContent = `${sub.title} (${sub.start}-${sub.end})`;
-                pill.onclick = () => seleccionarSubcategoria(sub.id);
-                subBar.appendChild(pill);
-            });
-
-            panel.appendChild(subBar);
-        }
-
-        ul.appendChild(panel);
+        container.appendChild(panel);
     }
 
     function renderList(items) {
         const ul = DOM.playlist;
+        const prevScroll = ul.scrollTop;
         ul.innerHTML = '';
-        const isInst = DOM.instrumentalCheckbox.checked;
-        const query = DOM.searchInput.value.trim();
 
-        // Vista de cuadrícula de Categorías cuando no hay una categoría seleccionada ni búsqueda activa
-        if (currentViewId === 'categories' && !activeCategoryId && !query) {
-            renderCategoriasGrid(ul);
+        if (currentViewId === 'categories' && !activeCategoryId && !DOM.searchInput.value.trim()) {
+            renderCategoriesDashboard(ul);
+            ul.scrollTop = 0;
             return;
         }
 
-        const frag = document.createDocumentFragment();
-
         if (currentViewId === 'categories' && activeCategoryId) {
-            renderPanelCategoriaActiva(frag, items.length);
+            renderActiveCategoryBanner(ul);
         }
 
         if (items.length === 0) {
             const emptyLi = document.createElement('li');
-            emptyLi.style.cssText = 'padding:28px 16px; text-align:center; color:var(--text-muted); font-size:0.85rem;';
-            if (currentViewId === 'favorites') {
-                emptyLi.innerText = 'No tienes himnos en Favoritos todavía. Usa el botón de estrella en cualquier himno para agregarlo.';
-            } else if (currentViewId === 'offline_saved') {
-                emptyLi.innerText = `No tienes himnos guardados en local en modo ${isInst ? 'Instrumental' : 'Cantado'}. Usa el botón de descarga junto a cada himno.`;
+            emptyLi.style.cssText = "padding: 26px 14px; text-align: center; color: var(--text-muted); font-size: 0.85rem; line-height: 1.5;";
+            if (currentViewId === 'offline_saved') {
+                const modeLabel = DOM.instrumentalCheckbox.checked ? 'Instrumental' : 'Cantado';
+                emptyLi.innerHTML = `No tienes himnos guardados en modo <strong>${modeLabel}</strong>.<br>Pulsa el botón <strong>↓</strong> en cualquier himno o abre <strong>Local</strong> para descargar en lote.`;
             } else if (currentViewId !== 'all' && currentViewId !== 'categories') {
-                emptyLi.innerText = 'Esta lista está vacía. Usa el botón + en cualquier himno para añadirlo aquí.';
+                emptyLi.innerHTML = 'Esta lista está vacía.<br>Usa el botón <strong>+</strong> en cualquier himno para agregarlo aquí.';
             } else {
-                emptyLi.innerText = 'No se encontraron himnos con ese criterio.';
+                emptyLi.innerText = 'No se encontraron himnos con esa búsqueda.';
             }
-            frag.appendChild(emptyLi);
-            ul.appendChild(frag);
+            ul.appendChild(emptyLi);
             return;
         }
 
-        const isCustomPlaylistView = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories');
-        const isSearching = query.length > 0;
+        const isCustomOrFavView = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories') && !DOM.searchInput.value.trim();
+        const isInstMode = DOM.instrumentalCheckbox.checked;
+        const frag = document.createDocumentFragment();
 
         items.forEach((h, idx) => {
             const li = document.createElement('li');
             li.className = 'playlist-item';
             li.dataset.num = h.num;
-            if (currentHimno && currentHimno.num === h.num) {
-                li.classList.add('active');
-            } else if (selectedHymnNum === h.num) {
-                li.classList.add('selected');
-            }
+            if (currentHimno && currentHimno.num === h.num) li.classList.add('active');
+            if (selectedHymnNum === h.num) li.classList.add('selected');
 
-            const playCircle = document.createElement('span');
-            playCircle.className = 'play-bullet';
-            playCircle.title = 'Reproducir este himno';
-            playCircle.onclick = (e) => {
+            const isFav = playlistsData.favorites.includes(h.num);
+            const isSavedLocal = estaHimnoGuardadoEnLocal(h, isInstMode);
+            const isDownloadingLocal = estaHimnoDescargandoEnLocal(h, isInstMode);
+            const numSimple = parseInt(h.num, 10);
+
+            const bullet = document.createElement('span');
+            bullet.className = 'play-bullet';
+            bullet.title = `Reproducir ${numSimple}`;
+            bullet.onclick = (e) => {
                 e.stopPropagation();
-                selectedHymnNum = h.num;
-                if (isCustomPlaylistView) {
+                const inList = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories');
+                if (inList) {
                     activeQueuePlaylistId = currentViewId;
-                    actualizarBadgeColaActiva();
-                } else if (currentViewId === 'categories' && activeCategoryId && activeQueuePlaylistId === 'categories') {
                     actualizarBadgeColaActiva();
                 } else {
                     activeQueuePlaylistId = null;
                     actualizarBadgeColaActiva();
                 }
-                reproducirHimno(h, true);
+                reproducirHimno(h, true, inList);
             };
-            li.appendChild(playCircle);
 
-            const numSpan = document.createElement('span');
-            numSpan.className = 'hymn-num-tag';
-            numSpan.textContent = parseInt(h.num, 10);
-            li.appendChild(numSpan);
+            const numTag = document.createElement('span');
+            numTag.className = 'hymn-num-tag';
+            numTag.textContent = numSimple;
 
             const titleSpan = document.createElement('span');
             titleSpan.className = 'hymn-item-title';
-            titleSpan.textContent = h.title || '';
-            li.appendChild(titleSpan);
+            titleSpan.textContent = h.title || `Himno ${numSimple}`;
 
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'hymn-item-actions';
+            const actionsWrap = document.createElement('div');
+            actionsWrap.className = 'hymn-item-actions';
 
-            const isSaved = estaHimnoGuardadoEnLocal(h, isInst);
-            const isDownloading = estaHimnoDescargandoEnLocal(h, isInst);
-
-            const localBtn = document.createElement('button');
-            localBtn.type = 'button';
-            localBtn.className = 'btn-item-icon' + (isSaved ? ' saved-local' : (isDownloading ? ' downloading-local' : ''));
-            localBtn.innerHTML = isSaved ? ICON_CHECK : ICON_DOWNLOAD;
-            localBtn.title = isSaved
-                ? (esPC && pcOfflineHandle ? `Guardado en carpeta oculta de "${pcOfflineHandle.name}" (Clic para eliminar)` : 'Guardado en el dispositivo (Clic para eliminar)')
-                : (isDownloading ? 'Descargando en local...' : (esPC && pcOfflineHandle ? `Guardar en carpeta oculta de "${pcOfflineHandle.name}"` : 'Guardar para reproducir sin internet'));
-            localBtn.onclick = (e) => manejarClicBotonLocal(h, e);
-            actionsDiv.appendChild(localBtn);
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'btn-item-icon' + (isSavedLocal ? ' saved-local' : '') + (isDownloadingLocal ? ' downloading-local' : '');
+            dlBtn.innerHTML = isSavedLocal ? ICON_CHECK : ICON_DOWNLOAD;
+            dlBtn.title = isSavedLocal
+                ? (esPC && pcOfflineHandle ? 'Guardado en carpeta PC (clic para eliminar)' : 'Guardado en local (clic para eliminar)')
+                : (isDownloadingLocal ? 'Descargando...' : 'Guardar para reproducción sin conexión');
+            dlBtn.onclick = (e) => manejarClicBotonLocal(h, e);
+            actionsWrap.appendChild(dlBtn);
 
             const mp4Btn = document.createElement('button');
             mp4Btn.type = 'button';
             mp4Btn.className = 'btn-dl-mp4';
             mp4Btn.innerHTML = ICON_MP4;
-            mp4Btn.title = esPC && pcMp4Handle
-                ? `Guardar video MP4 en "${pcMp4Handle.name}"`
-                : 'Descargar archivo de video MP4 para compartir';
+            mp4Btn.title = 'Descargar video MP4 para compartir o guardar en USB';
             mp4Btn.onclick = (e) => descargarHimnoMp4(h, e);
-            actionsDiv.appendChild(mp4Btn);
+            actionsWrap.appendChild(mp4Btn);
 
-            if (isCustomPlaylistView && !isSearching) {
+            if (isCustomOrFavView) {
                 const upBtn = document.createElement('button');
-                upBtn.type = 'button';
                 upBtn.className = 'btn-item-icon';
                 upBtn.innerHTML = ICON_UP;
-                upBtn.title = 'Subir';
-                upBtn.disabled = (idx === 0);
-                upBtn.style.opacity = idx === 0 ? '0.3' : '1';
+                upBtn.title = 'Subir posición';
+                upBtn.style.visibility = idx === 0 ? 'hidden' : 'visible';
                 upBtn.onclick = (e) => moverHimnoEnLista(currentViewId, idx, -1, e);
-                actionsDiv.appendChild(upBtn);
 
                 const downBtn = document.createElement('button');
-                downBtn.type = 'button';
                 downBtn.className = 'btn-item-icon';
                 downBtn.innerHTML = ICON_DOWN;
-                downBtn.title = 'Bajar';
-                downBtn.disabled = (idx === items.length - 1);
-                downBtn.style.opacity = idx === items.length - 1 ? '0.3' : '1';
+                downBtn.title = 'Bajar posición';
+                downBtn.style.visibility = idx === items.length - 1 ? 'hidden' : 'visible';
                 downBtn.onclick = (e) => moverHimnoEnLista(currentViewId, idx, 1, e);
-                actionsDiv.appendChild(downBtn);
 
                 const remBtn = document.createElement('button');
-                remBtn.type = 'button';
                 remBtn.className = 'btn-item-icon danger';
                 remBtn.innerHTML = ICON_CLOSE;
                 remBtn.title = 'Quitar de esta lista';
                 remBtn.onclick = (e) => quitarHimnoDeLista(currentViewId, h.num, e);
-                actionsDiv.appendChild(remBtn);
+
+                actionsWrap.appendChild(upBtn);
+                actionsWrap.appendChild(downBtn);
+                actionsWrap.appendChild(remBtn);
             } else {
-                const isFav = playlistsData.favorites.includes(h.num);
                 const favBtn = document.createElement('button');
-                favBtn.type = 'button';
                 favBtn.className = 'btn-item-icon' + (isFav ? ' fav-active' : '');
                 favBtn.innerHTML = isFav ? ICON_STAR_FILLED : ICON_STAR_OUTLINE;
                 favBtn.title = isFav ? 'Quitar de Favoritos' : 'Añadir a Favoritos';
                 favBtn.onclick = (e) => toggleFavorito(h.num, e);
-                actionsDiv.appendChild(favBtn);
 
                 const addBtn = document.createElement('button');
-                addBtn.type = 'button';
                 addBtn.className = 'btn-item-icon';
                 addBtn.innerHTML = ICON_PLUS;
-                addBtn.title = 'Agregar a una lista de reproducción';
+                addBtn.title = 'Agregar a lista de reproducción';
                 addBtn.onclick = (e) => abrirModalAgregarLista(h, e);
-                actionsDiv.appendChild(addBtn);
+
+                actionsWrap.appendChild(favBtn);
+                actionsWrap.appendChild(addBtn);
             }
 
-            li.appendChild(actionsDiv);
+            li.appendChild(bullet);
+            li.appendChild(numTag);
+            li.appendChild(titleSpan);
+            li.appendChild(actionsWrap);
 
-            li.onclick = () => {
-                if (clickTimer) clearTimeout(clickTimer);
-                clickTimer = setTimeout(() => {
-                    clickTimer = null;
-                    selectedHymnNum = h.num;
-                    actualizarEstadoFilasLista();
-                }, 220);
-            };
+            li.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                clearTimeout(clickTimer);
+                clickTimer = setTimeout(() => seleccionarHimnoEnLista(h), 180);
+            });
 
-            li.ondblclick = () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                }
-                selectedHymnNum = h.num;
-                if (isCustomPlaylistView) {
+            li.addEventListener('dblclick', (e) => {
+                if (e.target.closest('button')) return;
+                clearTimeout(clickTimer);
+                const inList = (currentViewId !== 'all' && currentViewId !== 'offline_saved' && currentViewId !== 'categories');
+                if (inList) {
                     activeQueuePlaylistId = currentViewId;
                     actualizarBadgeColaActiva();
                 } else {
                     activeQueuePlaylistId = null;
                     actualizarBadgeColaActiva();
                 }
-                reproducirHimno(h, true);
-            };
+                reproducirHimno(h, true, inList);
+            });
 
             frag.appendChild(li);
         });
 
         ul.appendChild(frag);
+        ul.scrollTop = prevScroll;
     }
 
-    function cambiarModoContinuo() {
-        const isAutoAll = DOM.autoPlayAllCheckbox.checked;
-        if (isAutoAll) {
-            mostrarToast('Reproducción continua activada');
-        } else {
-            activeQueuePlaylistId = null;
-            actualizarBadgeColaActiva();
-            mostrarToast('Modo culto: se detendrá al terminar el himno');
+    /* =========================================================================
+       MODAL DE AYUDA Y UTILIDADES GENERALES
+       ========================================================================= */
+    function abrirModalAyuda() { document.getElementById('helpModal').classList.add('active'); }
+    function cerrarModalAyuda() { document.getElementById('helpModal').classList.remove('active'); }
+
+    function mostrarToast(msg) {
+        let toast = document.getElementById('hymnToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'hymnToast';
+            toast.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(21,14,9,0.95); color:#f4ece1; border:1px solid rgba(224,185,130,0.3); padding:8px 16px; border-radius:999px; font-size:0.82rem; font-weight:500; z-index:999999; box-shadow:0 6px 20px rgba(0,0,0,0.65); transition:opacity 0.25s; pointer-events:none; text-align:center; max-width:90vw;';
+            document.body.appendChild(toast);
         }
+        toast.innerText = msg;
+        toast.style.opacity = '1';
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2600);
     }
 
-    function cambiarModoAudio() {
-        const isInst = DOM.instrumentalCheckbox.checked;
-        DOM.modeBadge.innerText = isInst ? 'Instrumental' : 'Cantado';
-        actualizarSelectorListasUI();
-        renderList(getFilteredList());
-        if (currentHimno) {
-            const wasPlaying = !isUserPaused;
-            const savedTime = masterAudio.currentTime || 0;
-            reproducirHimno(currentHimno, wasPlaying, false, savedTime);
-        }
-    }
-
-    function scrollActiveIntoView() {
-        const activeEl = DOM.playlist.querySelector('.playlist-item.active');
-        if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-
-    function preResolverSiguienteHimno() {
-        if (!currentHimno) return;
-        const isAutoAll = DOM.autoPlayAllCheckbox.checked;
-        if (!activeQueuePlaylistId && !isAutoAll) return;
-
-        let nextH = null;
-        if (activeQueuePlaylistId) {
-            const queueHymns = obtenerHimnosDeLista(activeQueuePlaylistId);
-            const pos = queueHymns.findIndex(h => h.num === currentHimno.num);
-            if (pos >= 0 && pos + 1 < queueHymns.length) nextH = queueHymns[pos + 1];
-            else if (repeatPlaylist && queueHymns.length > 0) nextH = queueHymns[0];
-        } else if (isAutoAll && currentIndex >= 0 && currentIndex + 1 < himnosList.length) {
-            nextH = himnosList[currentIndex + 1];
-        }
-
-        if (!nextH) return;
-        const isInst = DOM.instrumentalCheckbox.checked;
-        const key = `${nextH.num}|${isInst ? 1 : 0}`;
-        if (preResolvedNextKey === key) return;
-        preResolvedNextKey = key;
-
-        if (!estaHimnoGuardadoEnLocal(nextH, isInst)) {
-            resolverUrlHimnoValida(nextH, isInst).catch(() => {});
-        }
-    }
-
-    async function reproducirHimno(h, autoPlay = true, forceFullScreen = false, startTime = 0) {
-        const reqId = ++currentPlayRequestId;
-        const isInst = DOM.instrumentalCheckbox.checked;
-        const numSimple = parseInt(h.num, 10);
-        const numPadded = String(numSimple).padStart(3, '0');
-        const modoText = isInst ? 'Instrumental' : 'Cantado';
-
-        // 1. ACTUALIZACIÓN INSTANTÁNEA DE INTERFAZ (0 ms)
-        currentHimno = h;
-        selectedHymnNum = h.num;
-        currentIndex = himnosList.findIndex(item => item.num === h.num);
-        isUserPaused = !autoPlay;
-
-        DOM.playerCurrentTitle.innerText = formatearTituloHimnoHeader(h);
-        DOM.playBtn.innerHTML = autoPlay ? `${ICON_PAUSE}<span>Pausa</span>` : `${ICON_PLAY}<span>Repr.</span>`;
-        actualizarEstadoFilasLista();
-        scrollActiveIntoView();
-        actualizarBadgeColaActiva();
-        actualizarPortadaSoloAudio(h);
-        updateMediaSessionMetadata(h);
-
-        if ('mediaSession' in navigator) {
-            try { navigator.mediaSession.playbackState = autoPlay ? 'playing' : 'paused'; } catch (e) {}
-        }
-
-        const tituloLimpio = formatearTituloHimnoHeader(h);
-        actualizarMetaTags(
-            tituloLimpio,
-            `${tituloLimpio} (${modoText}) - Himnario Adventista`,
-            `${GITHUB_PAGES_BASE}/portadas/${numPadded}.jpg`
-        );
-
-        // Desvanecimiento rápido de audio previo sin bloquear la carga
-        const fadePromise = fadeOutMasterAudio(24);
-
-        const activeVid = getActiveVideo();
-        const inactiveVid = getInactiveVideo();
-
-        activeVid.pause();
-        inactiveVid.pause();
-        inactiveVid.removeAttribute('src');
-        inactiveVid.load();
-
-        if (autoPlay && !soloAudioMode) {
-            iniciarAudioSilenciosoMantenerVivo();
-        }
-
-        // 2. RESOLUCIÓN DE FUENTE (PC OFFLINE -> INDEXEDDB -> R2)
-        const candidateUrls = getHymnCandidateUrls(h, isInst);
-        currentCandidateUrls = candidateUrls;
-        currentCandidateIndex = 0;
-
-        let remoteUrl = getHymnVideoUrl(h, isInst);
-        let playUrl = remoteUrl;
-        let isPlayingFromLocal = false;
-
-        if (esPC && pcOfflineSavedKeys.has(claveHimnoPC(h.num, isInst))) {
-            const pcBlob = await obtenerBlobDesdeCarpetaOfflinePC(h.num, isInst);
-            if (reqId !== currentPlayRequestId) return;
-            if (pcBlob) {
-                const pcKey = `pc_${claveHimnoPC(h.num, isInst)}`;
-                let pcObjUrl = activeBlobUrls.get(pcKey);
-                if (!pcObjUrl) {
-                    pcObjUrl = URL.createObjectURL(pcBlob);
-                    activeBlobUrls.set(pcKey, pcObjUrl);
-                }
-                playUrl = pcObjUrl;
-                isPlayingFromLocal = true;
-            }
-        }
-
-        if (!isPlayingFromLocal) {
-            const savedLocalUrl = obtenerUrlGuardadaEnLocal(h, isInst);
-            if (savedLocalUrl) {
-                remoteUrl = savedLocalUrl;
-                const localBlobUrl = await obtenerBlobUrlLocal(savedLocalUrl);
-                if (reqId !== currentPlayRequestId) return;
-                if (localBlobUrl) {
-                    playUrl = localBlobUrl;
-                    isPlayingFromLocal = true;
-                }
-            }
-        }
-
-        if (!isPlayingFromLocal) {
-            const resolvedUrl = await resolverUrlHimnoValida(h, isInst);
-            if (reqId !== currentPlayRequestId) return;
-            if (!resolvedUrl) {
-                cancelarRampaVolumen();
-                masterAudio.pause();
-                masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-                DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-                isUserPaused = true;
-                mostrarToast(`El número ${numSimple} (${modoText}) aún no está disponible en el servidor.`);
-                return;
-            }
-            remoteUrl = resolvedUrl;
-            playUrl = resolvedUrl;
-            const foundIdx = currentCandidateUrls.indexOf(resolvedUrl);
-            if (foundIdx >= 0) currentCandidateIndex = foundIdx;
-        }
-
-        await fadePromise;
-        if (reqId !== currentPlayRequestId) return;
-
-        currentActivePlayUrl = playUrl;
-
-        if (DOM.localPlaybackBadge) {
-            DOM.localPlaybackBadge.style.display = isPlayingFromLocal ? 'inline-block' : 'none';
-        }
-
-        if (!isPlayingFromLocal && autoCacheEnabled && !estaHimnoDescargandoEnLocal(h, isInst)) {
-            guardarHimnoEnLocal(h, isInst, null, true);
-        }
-
-        // 3. EXTRAER PISTA DE AUDIO PURA PARA REPRODUCCIÓN EN SEGUNDO PLANO EN MÓVIL
-        let audioSrcForMaster = playUrl;
-        if (isPlayingFromLocal) {
-            const pureAudioRes = await obtenerUrlAudioPuro(playUrl, isInst);
-            if (reqId !== currentPlayRequestId) return;
-            if (pureAudioRes && pureAudioRes.ok && pureAudioRes.url) {
-                audioSrcForMaster = pureAudioRes.url;
-            }
-        } else {
-            const fastRes = await Promise.race([
-                obtenerUrlAudioPuro(playUrl, isInst),
-                new Promise(resolve => setTimeout(() => resolve({ url: playUrl, ok: true, directFallback: true }), 1200))
-            ]);
-            if (reqId !== currentPlayRequestId) return;
-            if (fastRes && fastRes.ok && fastRes.url) {
-                audioSrcForMaster = fastRes.url;
-            }
-        }
-
-        masterAudio.loop = false;
-        masterAudio.src = audioSrcForMaster;
-        masterAudio.playbackRate = currentSpeed;
-        masterAudio.muted = isAudioMuted;
-
-        if (autoPlay && !isAudioMuted && currentVolume > 0.01) {
-            needsAudioFadeIn = true;
-            masterAudio.volume = 0;
-        } else {
-            needsAudioFadeIn = false;
-            masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-        }
-
-        if (startTime > 0) masterAudio.currentTime = startTime;
-        masterAudio.load();
-
-        // 4. PREPARAR VIDEO VISUAL (OMITIDO EN MODO SOLO AUDIO PARA AHORRO DE DATOS)
-        if (!soloAudioMode) {
-            DOM.posterOverlay.style.display = 'none';
-            configurarVideoSilencioso(activeVid);
-            activeVid.dataset.loadedUrl = playUrl;
-            activeVid.src = playUrl;
-            activeVid.playbackRate = currentSpeed;
-            if (startTime > 0) activeVid.currentTime = startTime;
-            activeVid.load();
-            activeVid.classList.add('active');
-            inactiveVid.classList.remove('active');
-        } else {
-            activeVid.removeAttribute('src');
-            activeVid.dataset.loadedUrl = '';
-            activeVid.load();
-        }
-
-        if (DOM.secondaryScreenCheckbox.checked && projectionWindow && !projectionWindow.closed) {
-            syncChannel.postMessage({ type: 'LOAD', url: playUrl, time: startTime, playing: autoPlay, speed: currentSpeed });
-        }
-
-        if (autoPlay) {
-            const playPromise = masterAudio.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    if (reqId !== currentPlayRequestId) return;
-                    if (!soloAudioMode && !document.hidden) {
-                        activeVid.play().catch(() => {});
-                    }
-                }).catch(e => {
-                    if (reqId !== currentPlayRequestId) return;
-                    if (e.name !== 'AbortError') {
-                        cancelarRampaVolumen();
-                        needsAudioFadeIn = false;
-                        masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-                        isUserPaused = true;
-                        DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-                    }
-                });
-            }
-        } else {
-            cancelarRampaVolumen();
-            needsAudioFadeIn = false;
-            masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-            masterAudio.pause();
-            activeVid.pause();
-        }
-
-        if (forceFullScreen && !DOM.secondaryScreenCheckbox.checked) {
-            const wrapper = document.getElementById('hymn-player-wrapper');
-            if (!document.fullscreenElement && wrapper.requestFullscreen) {
-                wrapper.requestFullscreen().catch(() => {});
-            }
-        }
-    }
-
-    function togglePlay() {
-        if (!currentHimno) {
-            const filtered = getFilteredList();
-            if (filtered.length > 0) {
-                reproducirHimno(filtered[0], true);
-            } else if (himnosList.length > 0) {
-                reproducirHimno(himnosList[0], true);
-            }
-            return;
-        }
-
-        const activeVid = getActiveVideo();
-        if (masterAudio.paused) {
-            isUserPaused = false;
-            if (!isAudioMuted && currentVolume > 0.01) {
-                needsAudioFadeIn = true;
-                masterAudio.volume = 0;
-            }
-            masterAudio.play().catch(() => {});
-            if (!soloAudioMode && !document.hidden) {
-                reanudarVideoVisualSinCorte(activeVid);
-            }
-            DOM.playBtn.innerHTML = `${ICON_PAUSE}<span>Pausa</span>`;
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-            if (DOM.secondaryScreenCheckbox.checked && projectionWindow && !projectionWindow.closed) {
-                syncChannel.postMessage({ type: 'PLAY', time: masterAudio.currentTime });
-            }
-        } else {
-            isUserPaused = true;
-            DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-            activeVid.pause();
-            if (DOM.secondaryScreenCheckbox.checked && projectionWindow && !projectionWindow.closed) {
-                syncChannel.postMessage({ type: 'PAUSE' });
-            }
-            fadeOutMasterAudio(24).then(() => {
-                if (isUserPaused) {
-                    masterAudio.pause();
-                    masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-                }
-            });
-        }
-    }
-
-    function stopHymn() {
-        currentPlayRequestId++;
-        isUserPaused = true;
-        activeQueuePlaylistId = null;
-        actualizarBadgeColaActiva();
-
-        const stopCleanup = () => {
-            masterAudio.pause();
-            masterAudio.loop = false;
-            masterAudio.removeAttribute('src');
-            masterAudio.load();
-            masterAudio.volume = isAudioMuted ? 0 : currentVolume;
-        };
-
-        fadeOutMasterAudio(24).then(stopCleanup);
-
-        [DOM.vid1, DOM.vid2].forEach(v => {
-            v.pause();
-            v.removeAttribute('src');
-            v.dataset.loadedUrl = '';
-            v.load();
-        });
-
-        if (DOM.localPlaybackBadge) DOM.localPlaybackBadge.style.display = 'none';
-        DOM.posterOverlay.style.display = 'flex';
-        actualizarPortadaSoloAudio(null);
-        DOM.progressSlider.value = 0;
-        DOM.timeCurrent.innerText = '00:00';
-        DOM.timeTotal.innerText = '00:00';
-        DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
-
-        if (DOM.secondaryScreenCheckbox.checked && projectionWindow && !projectionWindow.closed) {
-            syncChannel.postMessage({ type: 'STOP' });
-        }
-    }
-
-    function prevHymn() {
-        if (activeQueuePlaylistId) {
-            const queueHymns = obtenerHimnosDeLista(activeQueuePlaylistId);
-            if (queueHymns.length > 0) {
-                const pos = currentHimno ? queueHymns.findIndex(h => h.num === currentHimno.num) : 0;
-                const prevPos = pos > 0 ? pos - 1 : queueHymns.length - 1;
-                reproducirHimno(queueHymns[prevPos], true);
-                return;
-            }
-        }
-        if (currentIndex > 0) {
-            reproducirHimno(himnosList[currentIndex - 1], true);
-        } else if (himnosList.length > 0) {
-            reproducirHimno(himnosList[0], true);
-        }
-    }
-
-    function nextHymn() {
-        if (activeQueuePlaylistId) {
-            const queueHymns = obtenerHimnosDeLista(activeQueuePlaylistId);
-            if (queueHymns.length > 0) {
-                const pos = currentHimno ? queueHymns.findIndex(h => h.num === currentHimno.num) : -1;
-                if (pos >= 0 && pos + 1 < queueHymns.length) {
-                    reproducirHimno(queueHymns[pos + 1], true);
-                    return;
-                } else if (repeatPlaylist) {
-                    reproducirHimno(queueHymns[0], true);
-                    return;
-                }
-            }
-        }
-        if (currentIndex >= 0 && currentIndex + 1 < himnosList.length) {
-            reproducirHimno(himnosList[currentIndex + 1], true);
-        }
-    }
-
-    function formatTime(secs) {
-        if (isNaN(secs) || secs < 0) return '00:00';
-        const m = Math.floor(secs / 60);
-        const s = Math.floor(secs % 60);
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    function handleMediaEnded() {
-        if (activeQueuePlaylistId) {
-            const queueHymns = obtenerHimnosDeLista(activeQueuePlaylistId);
-            const pos = currentHimno ? queueHymns.findIndex(h => h.num === currentHimno.num) : -1;
-
-            if (pos >= 0 && pos + 1 < queueHymns.length) {
-                reproducirHimno(queueHymns[pos + 1], true);
-                return;
-            } else if (repeatPlaylist && queueHymns.length > 0) {
-                reproducirHimno(queueHymns[0], true);
-                return;
-            } else {
-                const finishedName = obtenerNombreLista(activeQueuePlaylistId);
-                activeQueuePlaylistId = null;
-                actualizarBadgeColaActiva();
-                isUserPaused = true;
-                DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-                mostrarToast(`Lista "${finishedName}" finalizada`);
-                return;
-            }
-        }
-
-        const isAutoAll = DOM.autoPlayAllCheckbox.checked;
-        if (isAutoAll && currentIndex >= 0 && currentIndex + 1 < himnosList.length) {
-            reproducirHimno(himnosList[currentIndex + 1], true);
-        } else {
-            isUserPaused = true;
-            DOM.playBtn.innerHTML = `${ICON_PLAY}<span>Repr.</span>`;
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-        }
-    }
-
-    masterAudio.ontimeupdate = () => {
-        if (masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
-
-        const dur = masterAudio.duration;
-        const cur = masterAudio.currentTime;
-
-        if (!isSeeking && dur && !isNaN(dur)) {
-            DOM.progressSlider.value = (cur / dur) * 100;
-            DOM.timeCurrent.innerText = formatTime(cur);
-            DOM.timeTotal.innerText = formatTime(dur);
-
-            if (dur - cur < 18 && dur > 20) {
-                preResolverSiguienteHimno();
-            }
-        }
-
-        if (!soloAudioMode && !document.hidden && !isUserPaused && !masterAudio.paused && dur && !isNaN(dur) && Date.now() > videoSyncCooldownUntil) {
-            const activeVid = getActiveVideo();
-            if (activeVid && activeVid.dataset.loadedUrl === currentActivePlayUrl && activeVid.readyState >= 2) {
-                if (activeVid.paused) {
-                    activeVid.play().catch(() => {});
-                } else {
-                    const drift = Math.abs(activeVid.currentTime - cur);
-                    if (drift > 0.45) {
-                        videoSyncCooldownUntil = Date.now() + 900;
-                        try { activeVid.currentTime = cur; } catch (e) {}
-                    }
-                }
-            }
-        }
-    };
-
-    function userSeek(val) {
-        const dur = masterAudio.duration;
-        if (!dur || isNaN(dur)) return;
-
-        const newTime = (val / 100) * dur;
-        masterAudio.currentTime = newTime;
-        DOM.timeCurrent.innerText = formatTime(newTime);
-
-        if (!soloAudioMode) {
-            const activeVid = getActiveVideo();
-            if (activeVid && activeVid.readyState >= 1) {
-                videoSyncCooldownUntil = Date.now() + 700;
-                try { activeVid.currentTime = newTime; } catch (e) {}
-            }
-        }
-
-        if (DOM.secondaryScreenCheckbox.checked && projectionWindow && !projectionWindow.closed) {
-            syncChannel.postMessage({ type: 'SEEK', time: newTime });
-        }
-    }
-
-    /* --- CERRAR MODALES AL HACER CLIC FUERA --- */
-    ['shareModal', 'addToPlaylistModal', 'managePlaylistsModal', 'offlineModal', 'auditModal', 'helpModal', 'pcFoldersModal', 'deletePcOfflineModal', 'exitConfirmModal'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', (e) => {
-                if (e.target.id === id) {
-                    if (id === 'exitConfirmModal') cancelarSalidaApp();
-                    else el.classList.remove('active');
-                }
-            });
-        }
-    });
-
-    /* --- INTERCEPTOR DEL BOTÓN ATRÁS EN MÓVIL --- */
-    let exitConfirmedByUser = false;
-
-    function cancelarSalidaApp() {
-        const modal = document.getElementById('exitConfirmModal');
-        if (modal) modal.classList.remove('active');
-    }
-
-    function confirmarSalidaApp() {
-        const modal = document.getElementById('exitConfirmModal');
-        if (modal) modal.classList.remove('active');
-        exitConfirmedByUser = true;
-        window.history.back();
-        setTimeout(() => {
-            try { window.close(); } catch (e) {}
-        }, 120);
-    }
-
-    function inicializarProteccionBotonAtras() {
-        if (window.history && window.history.pushState) {
-            window.history.pushState({ himnarioGuard: true }, '', window.location.href);
-
-            window.addEventListener('popstate', () => {
-                if (exitConfirmedByUser) return;
-
-                if (document.fullscreenElement) {
-                    salirPantallaCompletaSiActiva();
-                    window.history.pushState({ himnarioGuard: true }, '', window.location.href);
-                    return;
-                }
-
-                const openModals = document.querySelectorAll('.modal-overlay.active, #pcFoldersModal.active, #deletePcOfflineModal.active');
-                if (openModals.length > 0) {
-                    openModals.forEach(m => m.classList.remove('active'));
-                    window.history.pushState({ himnarioGuard: true }, '', window.location.href);
-                    return;
-                }
-
-                window.history.pushState({ himnarioGuard: true }, '', window.location.href);
-                const exitModal = document.getElementById('exitConfirmModal');
-                if (exitModal) exitModal.classList.add('active');
-            });
-        }
-    }
-
-    window.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            ['shareModal', 'addToPlaylistModal', 'managePlaylistsModal', 'offlineModal', 'auditModal', 'helpModal', 'pcFoldersModal', 'deletePcOfflineModal', 'exitConfirmModal'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.classList.remove('active');
-            });
+            cerrarModalAyuda();
+            cerrarModalCompartir();
+            cerrarModalAgregarLista();
+            cerrarModalGestionListas();
+            cerrarModalOffline();
+            cerrarModalAuditoriaR2();
+            cerrarModalCarpetasPC();
+            cerrarModalBorrarPC();
+            cancelarSalidaApp();
         }
     });
 
-    /* --- INSTALACIÓN PWA Y SERVICE WORKER --- */
+    document.getElementById('helpModal').addEventListener('click', (e) => { if (e.target.id === 'helpModal') cerrarModalAyuda(); });
+    document.getElementById('shareModal').addEventListener('click', (e) => { if (e.target.id === 'shareModal') cerrarModalCompartir(); });
+    document.getElementById('addToPlaylistModal').addEventListener('click', (e) => { if (e.target.id === 'addToPlaylistModal') cerrarModalAgregarLista(); });
+    document.getElementById('managePlaylistsModal').addEventListener('click', (e) => { if (e.target.id === 'managePlaylistsModal') cerrarModalGestionListas(); });
+    document.getElementById('offlineModal').addEventListener('click', (e) => { if (e.target.id === 'offlineModal') cerrarModalOffline(); });
+    document.getElementById('auditModal').addEventListener('click', (e) => { if (e.target.id === 'auditModal') cerrarModalAuditoriaR2(); });
+    document.getElementById('pcFoldersModal').addEventListener('click', (e) => { if (e.target.id === 'pcFoldersModal') cerrarModalCarpetasPC(); });
+    document.getElementById('deletePcOfflineModal').addEventListener('click', (e) => { if (e.target.id === 'deletePcOfflineModal') cerrarModalBorrarPC(); });
+
+    /* =========================================================================
+       PWA SERVICE WORKER, INSTALACIÓN Y CONFIRMACIÓN DE SALIDA EN MÓVIL
+       ========================================================================= */
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+                reg.update();
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    refreshing = true;
+                    window.location.reload();
+                });
+            }).catch(() => {});
+        });
+    }
+
     let deferredInstallPrompt = null;
+    const installAppBtn = document.getElementById('installAppBtn');
 
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredInstallPrompt = e;
-        const installBtn = document.getElementById('installAppBtn');
-        if (installBtn) installBtn.style.display = 'inline-flex';
-    });
-
-    window.addEventListener('appinstalled', () => {
-        deferredInstallPrompt = null;
-        const installBtn = document.getElementById('installAppBtn');
-        if (installBtn) installBtn.style.display = 'none';
-        mostrarToast('Himnario Adventista instalado en tu dispositivo');
+        if (installAppBtn) installAppBtn.style.display = 'inline-flex';
     });
 
     async function instalarAppPwa() {
         if (!deferredInstallPrompt) return;
         deferredInstallPrompt.prompt();
-        const choice = await deferredInstallPrompt.userChoice;
-        if (choice && choice.outcome === 'accepted') {
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
             deferredInstallPrompt = null;
-            const installBtn = document.getElementById('installAppBtn');
-            if (installBtn) installBtn.style.display = 'none';
+            if (installAppBtn) installAppBtn.style.display = 'none';
+            mostrarToast('Instalando aplicación...');
         }
     }
 
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').catch(() => {});
-        });
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        if (installAppBtn) installAppBtn.style.display = 'none';
+        mostrarToast('Aplicación instalada en tu dispositivo');
+    });
+
+    let exitGuardInitialized = false;
+    let permitirSalidaReal = false;
+    const esDispositivoMovil = /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        window.matchMedia('(display-mode: standalone)').matches;
+
+    function inicializarProteccionAtras() {
+        if (exitGuardInitialized || !esDispositivoMovil) return;
+        exitGuardInitialized = true;
+        try {
+            history.replaceState({ himnarioRoot: true }, '');
+            history.pushState({ himnarioGuard: true }, '');
+        } catch (err) {}
     }
 
-    /* --- ARRANQUE INICIAL --- */
+    function cancelarSalidaApp() {
+        const modal = document.getElementById('exitConfirmModal');
+        if (modal) modal.classList.remove('active');
+        try { history.pushState({ himnarioGuard: true }, ''); } catch (err) {}
+    }
+
+    function confirmarSalidaApp() {
+        permitirSalidaReal = true;
+        const modal = document.getElementById('exitConfirmModal');
+        if (modal) modal.classList.remove('active');
+        history.go(-2);
+    }
+
+    window.addEventListener('popstate', () => {
+        if (permitirSalidaReal) return;
+
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+            try { history.pushState({ himnarioGuard: true }, ''); } catch (err) {}
+            return;
+        }
+
+        const openModals = document.querySelectorAll('.modal-overlay.active');
+        if (openModals.length > 0) {
+            openModals.forEach(m => m.classList.remove('active'));
+            try { history.pushState({ himnarioGuard: true }, ''); } catch (err) {}
+            return;
+        }
+
+        const exitModal = document.getElementById('exitConfirmModal');
+        if (exitModal) exitModal.classList.add('active');
+    });
+
+    window.addEventListener('pointerdown', inicializarProteccionAtras, { once: true });
+    window.addEventListener('keydown', inicializarProteccionAtras, { once: true });
+
     window.addEventListener('DOMContentLoaded', async () => {
-        cargarPreferenciaSoloAudio();
-        inicializarProteccionBotonAtras();
-        setupMediaSessionHandlers();
-        cargarPlaylistsStorage();
-        await Promise.all([cargarIndiceOffline(), inicializarCarpetasPC()]);
-        await cargarTitulosYGenerarLista();
-        detectarPantallas();
-
         DOM.autoPlayAllCheckbox.checked = false;
-
-        const params = new URLSearchParams(window.location.search);
-        const hParam = params.get('h');
-        const plParam = params.get('pl');
-        const plNameParam = params.get('pln');
-        const instParam = params.get('inst');
-
-        if (instParam === '1') {
-            DOM.instrumentalCheckbox.checked = true;
-            DOM.modeBadge.innerText = 'Instrumental';
-        }
-
-        if (plParam) {
-            const rawNums = plParam.split(',')
-                .map(s => parseInt(s.trim(), 10))
-                .filter(n => !isNaN(n) && n >= 1 && n <= 613)
-                .map(n => String(n).padStart(3, '0'));
-
-            if (rawNums.length > 0) {
-                const sharedName = (plNameParam && plNameParam.trim()) ? plNameParam.trim() : 'Lista Compartida';
-                const sharedId = 'pl_shared_' + Date.now();
-                playlistsData.custom.unshift({ id: sharedId, name: sharedName, hymns: rawNums });
-                currentViewId = sharedId;
-                guardarPlaylistsStorage();
-                renderList(getFilteredList());
-
-                const firstH = himnosList.find(item => item.num === rawNums[0]);
-                if (firstH) {
-                    activeQueuePlaylistId = sharedId;
-                    actualizarBadgeColaActiva();
-                    reproducirHimno(firstH, false, false);
-                    mostrarToast(`Lista "${sharedName}" cargada (${rawNums.length} himnos)`);
-                }
-            }
-        } else if (hParam) {
-            const numBuscado = parseInt(hParam, 10);
-            if (!isNaN(numBuscado) && numBuscado >= 1 && numBuscado <= 613) {
-                const numStr = String(numBuscado).padStart(3, '0');
-                const found = himnosList.find(item => item.num === numStr);
-                if (found) {
-                    reproducirHimno(found, false, false);
-                }
-            }
-        }
+        cargarPreferenciaSoloAudio();
+        cargarPlaylistsStorage();
+        await cargarTitulosYGenerarLista();
+        await cargarIndiceOffline();
+        await inicializarCarpetasPC();
+        actualizarUIAlmacenamientoLocal();
+        actualizarMetaTagsSociales();
+        detectarPantallas();
+        renderList(himnosList);
+        aplicarParametrosUrl();
     });
 </script>
+
 </body>
 </html>
