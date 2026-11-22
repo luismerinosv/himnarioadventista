@@ -6625,7 +6625,6 @@
         }
 
         renderList(getFilteredList());
-        scrollToActive();
     }
 
     function updatePlayButtonUI(playing) {
@@ -7279,6 +7278,7 @@
     /* --- RENDERIZADO DE LISTA DE HIMNOS --- */
     function renderList(items) {
         const ul = document.getElementById('playlist');
+        const prevScrollTop = ul.scrollTop;
         ul.innerHTML = '';
 
         const queryRaw = document.getElementById('searchInput') ? document.getElementById('searchInput').value.trim() : '';
@@ -7542,6 +7542,7 @@
 
             ul.appendChild(li);
         });
+        ul.scrollTop = prevScrollTop;
     }
 
     function getFilteredList() {
