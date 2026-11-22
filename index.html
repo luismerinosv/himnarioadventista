@@ -3881,6 +3881,87 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
        MOTOR DE AUDIO MAESTRO (PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL)
        ========================================================================= */
     const masterAudio = document.getElementById('masterAudio');
+    let masterAudioUnlocked = false;
+    let volumeRampId = 0;
+    let needsAudioFadeIn = false;
+
+    function cancelarRampaVolumen() {
+        volumeRampId++;
+    }
+
+    function fadeOutMasterAudio(durationMs = 45) {
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
+
+        if (
+            useVideoAudioFallback ||
+            masterAudio.paused ||
+            masterAudio.muted ||
+            masterAudio.volume <= 0.01 ||
+            !masterAudio.src ||
+            masterAudio.src === SILENT_AUDIO_DATA_URI
+        ) {
+            masterAudio.volume = 0;
+            return Promise.resolve();
+        }
+
+        const rampId = volumeRampId;
+        const startVol = masterAudio.volume;
+        const startTime = performance.now();
+
+        return new Promise((resolve) => {
+            function step(now) {
+                if (rampId !== volumeRampId) {
+                    resolve();
+                    return;
+                }
+                const progress = Math.min(1, (now - startTime) / durationMs);
+                const ease = 1 - progress;
+                masterAudio.volume = Math.max(0, startVol * (ease * ease));
+                if (progress < 1 && !masterAudio.paused) {
+                    requestAnimationFrame(step);
+                } else {
+                    masterAudio.volume = 0;
+                    resolve();
+                }
+            }
+            requestAnimationFrame(step);
+        });
+    }
+
+    function iniciarFadeInAudio(durationMs = 140) {
+        if (!needsAudioFadeIn) return;
+        needsAudioFadeIn = false;
+        cancelarRampaVolumen();
+
+        if (isAudioMuted || currentVolume <= 0.01) {
+            masterAudio.volume = isAudioMuted ? 0 : currentVolume;
+            return;
+        }
+
+        const rampId = volumeRampId;
+        const startTime = performance.now();
+        masterAudio.volume = 0;
+
+        function step(now) {
+            if (rampId !== volumeRampId) return;
+            const target = isAudioMuted ? 0 : currentVolume;
+            const progress = Math.min(1, (now - startTime) / durationMs);
+            masterAudio.volume = target * (progress * progress);
+            if (progress < 1 && !masterAudio.paused) {
+                requestAnimationFrame(step);
+            } else {
+                masterAudio.volume = target;
+            }
+        }
+        requestAnimationFrame(step);
+    }
+
+    masterAudio.onplaying = () => {
+        if (useVideoAudioFallback || masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+        iniciarFadeInAudio(140);
+    };
+
     masterAudio.onended = () => {
         if (masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
         handleMediaEnded();
@@ -4609,10 +4690,15 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         document.getElementById('offlineModal').classList.remove('active');
     }
 
-    function verSoloGuardadosLocal() {
+    function cerrarVistaCategorias() {
         vistaCategoriasActiva = false;
         categoriaSeleccionada = null;
+        subcategoriaSeleccionada = null;
         document.getElementById('btnTabCategorias')?.classList.remove('active');
+    }
+
+    function verSoloGuardadosLocal() {
+        cerrarVistaCategorias();
 
         currentViewId = 'offline_saved';
         actualizarSelectorListasUI();
@@ -5021,9 +5107,7 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     }
 
     function cambiarVistaLista(viewId) {
-        vistaCategoriasActiva = false;
-        categoriaSeleccionada = null;
-        document.getElementById('btnTabCategorias')?.classList.remove('active');
+        cerrarVistaCategorias();
 
         currentViewId = viewId;
         actualizarSelectorListasUI();
@@ -5249,10 +5333,7 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     }
 
     function abrirVistaDesdeGestion(listId) {
-        vistaCategoriasActiva = false;
-        categoriaSeleccionada = null;
-        subcategoriaSeleccionada = null;
-        document.getElementById('btnTabCategorias')?.classList.remove('active');
+        cerrarVistaCategorias();
 
         currentViewId = listId;
         actualizarSelectorListasUI();
@@ -5756,6 +5837,12 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
 
         const mainVideo = getActiveVideo();
         const engine = getPrimaryAudioEngine();
+        cancelarRampaVolumen();
+        needsAudioFadeIn = true;
+        if (!useVideoAudioFallback) {
+            masterAudio.volume = 0;
+            masterAudio.muted = isAudioMuted;
+        }
         applyPlaybackSpeedToAll();
         engine.play().catch(() => {});
         if (!useVideoAudioFallback && mainVideo && !document.hidden) {
@@ -5773,11 +5860,16 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     function pauseCurrentMedia() {
         const engine = getPrimaryAudioEngine();
         const mainVideo = getActiveVideo();
-        engine.pause();
-        if (mainVideo) mainVideo.pause();
         isUserPaused = true;
         updatePlayPauseUI(true);
-        syncSecondary();
+        if (mainVideo) mainVideo.pause();
+        fadeOutMasterAudio(35).then(() => {
+            if (isUserPaused) {
+                engine.pause();
+                masterAudio.volume = isAudioMuted ? 0 : currentVolume;
+                syncSecondary();
+            }
+        });
     }
 
     function togglePlay() {
@@ -5894,6 +5986,9 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
 
     masterAudio.ontimeupdate = () => {
         if (useVideoAudioFallback || masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+        if (needsAudioFadeIn && masterAudio.currentTime > 0) {
+            iniciarFadeInAudio(140);
+        }
         actualizarBarraProgreso(masterAudio);
 
         const dur = masterAudio.duration || 0;
@@ -5925,6 +6020,11 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
 
     masterAudio.onplay = () => {
         if (useVideoAudioFallback || masterAudio.loop || masterAudio.src === SILENT_AUDIO_DATA_URI) return;
+        masterAudioUnlocked = true;
+        if (currentHimno) {
+            selectedHimno = currentHimno;
+            actualizarSeleccionVisualLista();
+        }
         updatePlayPauseUI(false);
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         syncSecondary();
@@ -5976,6 +6076,8 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     }
 
     function setVolume(val) {
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
         currentVolume = val / 100;
         isAudioMuted = (currentVolume === 0);
         masterAudio.volume = currentVolume;
@@ -5995,8 +6097,12 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     }
 
     function toggleMute() {
+        cancelarRampaVolumen();
         isAudioMuted = !isAudioMuted;
         masterAudio.muted = isAudioMuted;
+        if (!isAudioMuted && !needsAudioFadeIn) {
+            masterAudio.volume = currentVolume;
+        }
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
         if (useVideoAudioFallback) {
@@ -6368,8 +6474,31 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         }
     }
 
+    let lastPlayTriggerNum = null;
+    let lastPlayTriggerAuto = null;
+    let lastPlayTriggerInst = null;
+    let lastPlayTriggerStart = 0;
+    let lastPlayTriggerTs = 0;
+
     async function reproducirHimno(h, autoPlay = true, preserveQueue = false, startTime = 0) {
         if (!h) return;
+
+        const isInst = document.getElementById('instrumentalCheckbox').checked;
+        const nowTs = Date.now();
+        if (
+            h.num === lastPlayTriggerNum &&
+            autoPlay === lastPlayTriggerAuto &&
+            isInst === lastPlayTriggerInst &&
+            Math.abs(startTime - lastPlayTriggerStart) < 0.01 &&
+            (nowTs - lastPlayTriggerTs < 300)
+        ) {
+            return;
+        }
+        lastPlayTriggerNum = h.num;
+        lastPlayTriggerAuto = autoPlay;
+        lastPlayTriggerInst = isInst;
+        lastPlayTriggerStart = startTime;
+        lastPlayTriggerTs = nowTs;
 
         if (!preserveQueue && activeQueuePlaylistId) {
             activeQueuePlaylistId = null;
@@ -6377,8 +6506,22 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
         }
 
         const requestId = ++currentPlayRequestId;
-        const isInst = document.getElementById('instrumentalCheckbox').checked;
         const localBadge = document.getElementById('localPlaybackBadge');
+
+        // Desvanecer suavemente el himno anterior en paralelo mientras se prepara el nuevo (evita el golpecito de corte)
+        const fadeOutPromise = (!masterAudio.paused && masterAudio.src && masterAudio.src !== SILENT_AUDIO_DATA_URI)
+            ? fadeOutMasterAudio(45)
+            : Promise.resolve();
+
+        // Desbloquear reproducción automática en móvil solo la primera vez en silencio absoluto
+        if (autoPlay && !masterAudioUnlocked && masterAudio.paused && !masterAudio.currentSrc) {
+            masterAudioUnlocked = true;
+            masterAudio.muted = true;
+            masterAudio.volume = 0;
+            masterAudio.loop = false;
+            masterAudio.src = SILENT_AUDIO_DATA_URI;
+            masterAudio.play().catch(() => {});
+        }
 
         currentCandidateUrls = getHymnCandidateUrls(h, isInst);
         currentCandidateIndex = 0;
@@ -6435,17 +6578,7 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
 
         updateMediaSessionMetadata(h);
 
-        if (autoPlay) {
-            isUserPaused = false;
-            masterAudio.loop = false;
-            masterAudio.volume = currentVolume;
-            masterAudio.muted = isAudioMuted;
-            masterAudio.playbackRate = currentSpeed;
-            masterAudio.src = SILENT_AUDIO_DATA_URI;
-            masterAudio.play().catch(() => {});
-        } else {
-            isUserPaused = true;
-        }
+        isUserPaused = !autoPlay;
 
         let audioResult = { url: playUrl, ok: true };
         if (isPlayingFromLocal) {
@@ -6457,17 +6590,20 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             ]);
             audioResult = fastRes;
         }
+        await fadeOutPromise;
         if (requestId !== currentPlayRequestId) return;
 
         useVideoAudioFallback = false;
         currentAudioOnlyBlobUrl = audioResult.url;
 
+        cancelarRampaVolumen();
+        needsAudioFadeIn = autoPlay;
         masterAudio.pause();
         masterAudio.loop = false;
-        masterAudio.src = audioResult.url;
-        masterAudio.volume = currentVolume;
+        masterAudio.volume = 0;
         masterAudio.muted = isAudioMuted;
         masterAudio.playbackRate = currentSpeed;
+        masterAudio.src = audioResult.url;
         if (startTime > 0) {
             try { masterAudio.currentTime = startTime; } catch (e) {}
         }
@@ -6562,10 +6698,14 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     function stopHymn() {
         currentPlayRequestId++;
         isUserPaused = true;
+        cancelarRampaVolumen();
+        needsAudioFadeIn = false;
+        masterAudio.volume = 0;
         masterAudio.pause();
         masterAudio.loop = false;
         masterAudio.removeAttribute('src');
         masterAudio.load();
+        masterAudio.volume = isAudioMuted ? 0 : currentVolume;
 
         const v1 = document.getElementById('myMedia1');
         const v2 = document.getElementById('myMedia2');
@@ -6814,9 +6954,8 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
     let lastTapHimnoTime = 0;
 
     function hayHimnoReproduciendo() {
-        const audioEl = document.querySelector('audio');
-        const videoEl = document.querySelector('video');
-        const audioActivo = audioEl && !audioEl.paused && !audioEl.ended && audioEl.currentTime > 0;
+        const videoEl = getActiveVideo();
+        const audioActivo = masterAudio && !masterAudio.paused && !masterAudio.ended && masterAudio.currentTime > 0;
         const videoActivo = videoEl && !videoEl.paused && !videoEl.ended && videoEl.currentTime > 0;
         return Boolean(audioActivo || videoActivo);
     }
@@ -6838,18 +6977,6 @@ body.solo-audio-mode.has-hymn-cover div:has(> img[alt="Logo Adventista"]) {
             }
         }
     }, true);
-
-    (function sincronizarSeleccionAlReproducir() {
-        const audioEl = document.querySelector('audio');
-        if (audioEl) {
-            audioEl.addEventListener('play', () => {
-                if (typeof currentHimno !== 'undefined' && currentHimno) {
-                    selectedHimno = currentHimno;
-                    actualizarSeleccionVisualLista();
-                }
-            });
-        }
-    })();
 
 function renderList(items) {
         const playlistEl = document.getElementById('playlist');
@@ -7349,25 +7476,7 @@ function confirmarSalidaApp() {
         const exitModal = document.getElementById('exitConfirmModal');
         if (exitModal) exitModal.classList.remove('active');
 
-        // 1. Acciona el botón "Detener" propio de tu reproductor para reiniciar su estado
-        const btnDetener = Array.from(document.querySelectorAll('button')).find(
-            b => b.textContent.trim().toLowerCase().includes('detener')
-        );
-        if (btnDetener) {
-            btnDetener.click();
-        }
-
-        // 2. Pausa y descarga todos los elementos de video y audio activos
-        document.querySelectorAll('video, audio').forEach(media => {
-            media.pause();
-            media.currentTime = 0;
-            media.removeAttribute('src');
-            media.load();
-        });
-
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'none';
-        }
+        stopHymn();
 
         try { window.close(); } catch (e) {}
         window.history.back();
@@ -7421,24 +7530,8 @@ function confirmarSalidaApp() {
     }
 
     cargarDatosYArrancar();
-        function obtenerBaseServidor() {
-        const mediaEl = document.querySelector('audio') || document.querySelector('video');
-        const rawSrc = (mediaEl && (mediaEl.currentSrc || mediaEl.src)) || '';
-        const matchBase = rawSrc.match(/^(https?:\/\/.+?)\/(?:Cantado|Instrumental)\//i);
-        if (matchBase) {
-            try { localStorage.setItem('himnario_server_base', matchBase[1]); } catch (e) {}
-            return matchBase[1];
-        }
-        try {
-            const saved = localStorage.getItem('himnario_server_base');
-            if (saved) return saved;
-        } catch (e) {}
-        const scripts = document.querySelectorAll('script');
-        for (const s of scripts) {
-            const m = s.textContent.match(/https:\/\/[a-zA-Z0-9.-]+\.r2\.dev/);
-            if (m) return m[0];
-        }
-        return '';
+    function obtenerBaseServidor() {
+        return CLOUDFLARE_R2_URL || '';
     }
 
     function obtenerElementoPortada() {
@@ -7466,7 +7559,7 @@ function confirmarSalidaApp() {
         const coverImg = obtenerElementoPortada();
         if (!coverImg) return;
 
-        const audioSrc = document.querySelector('audio')?.src || '';
+        const audioSrc = masterAudio?.src || '';
         const numRaw = (typeof currentHimno !== 'undefined' && currentHimno)
             ? currentHimno.num
             : (audioSrc.match(/\/(\d{1,3})\.mp4/i)?.[1] || '');
@@ -7543,9 +7636,8 @@ function confirmarSalidaApp() {
     }
 
     (function iniciarSoloAudio() {
-        const audioEl = document.querySelector('audio');
-        if (audioEl) {
-            audioEl.addEventListener('loadstart', actualizarPortadaSoloAudio);
+        if (masterAudio) {
+            masterAudio.addEventListener('loadstart', actualizarPortadaSoloAudio);
         }
         try {
             if (localStorage.getItem('himnario_solo_audio') === '1') {
@@ -7555,80 +7647,6 @@ function confirmarSalidaApp() {
                 actualizarPortadaSoloAudio();
             }
         } catch (e) {}
-    })();
-        (function suavizarInicioHimnos() {
-        const audioEl = document.querySelector('audio');
-        if (!audioEl) return;
-
-        let rampFrame = null;
-        let enRamp = false;
-        let volumenObjetivo = audioEl.volume || 1;
-
-        const volSlider = document.querySelector('input[type="range"][max="1"]');
-        if (volSlider) {
-            volSlider.addEventListener('input', () => {
-                if (rampFrame) {
-                    cancelAnimationFrame(rampFrame);
-                    rampFrame = null;
-                }
-                enRamp = false;
-                volumenObjetivo = parseFloat(volSlider.value);
-            });
-        }
-
-        audioEl.addEventListener('volumechange', () => {
-            if (!enRamp && audioEl.volume > 0.02) {
-                volumenObjetivo = audioEl.volume;
-            }
-        });
-
-        function aplicarEntradaSuave() {
-            if (audioEl.currentTime > 0.25) return;
-            if (rampFrame) cancelAnimationFrame(rampFrame);
-
-            const target = volSlider ? parseFloat(volSlider.value) : volumenObjetivo;
-            if (target <= 0.02) return;
-
-            enRamp = true;
-            audioEl.volume = 0;
-            const inicio = performance.now();
-            const duracion = 150;
-
-            function paso(ahora) {
-                const progreso = Math.min(1, (ahora - inicio) / duracion);
-                audioEl.volume = target * (progreso * progreso);
-                if (progreso < 1 && !audioEl.paused) {
-                    rampFrame = requestAnimationFrame(paso);
-                } else {
-                    audioEl.volume = target;
-                    enRamp = false;
-                    rampFrame = null;
-                }
-            }
-
-            rampFrame = requestAnimationFrame(paso);
-        }
-
-        audioEl.addEventListener('play', aplicarEntradaSuave);
-
-        if (typeof window.reproducirHimno === 'function') {
-            const origReproducir = window.reproducirHimno;
-            let ultimoNum = null;
-            let ultimoAuto = null;
-            let ultimoTs = 0;
-
-            window.reproducirHimno = function(himno, autoPlay, useQueue) {
-                const ahora = Date.now();
-                const num = himno && himno.num;
-                if (num && num === ultimoNum && autoPlay === ultimoAuto && (ahora - ultimoTs < 350)) {
-                    return;
-                }
-                ultimoNum = num;
-                ultimoAuto = autoPlay;
-                ultimoTs = ahora;
-                return origReproducir.apply(this, arguments);
-            };
-        }
     })();
 
 
