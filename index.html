@@ -2155,12 +2155,12 @@
                 height: 3px !important;
             }
         }
-        /* === CATEGORÍAS TEMÁTICAS DEL HIMNARIO === */
+/* === CATEGORÍAS TEMÁTICAS DEL HIMNARIO === */
 .cat-grid {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 6px 2px;
+    padding: 8px;
 }
 .cat-card {
     display: flex;
@@ -2168,16 +2168,17 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px 14px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    transition: background 0.18s, border-color 0.18s, transform 0.12s;
+    transition: background 0.16s, border-color 0.16s, transform 0.1s;
 }
 .cat-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(230, 168, 58, 0.55);
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
 }
 .cat-card:active {
     transform: scale(0.99);
@@ -2189,23 +2190,24 @@
 }
 .cat-card-title {
     font-weight: 700;
-    font-size: 0.95rem;
-    color: inherit;
+    font-size: 0.94rem;
+    color: var(--text-primary);
 }
 .cat-card-sub {
     font-size: 0.78rem;
-    opacity: 0.72;
+    color: var(--text-secondary);
     line-height: 1.35;
 }
 .cat-card-range {
     flex-shrink: 0;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 700;
     padding: 4px 10px;
     border-radius: 999px;
-    background: rgba(230, 168, 58, 0.16);
-    color: #e6a83a;
-    border: 1px solid rgba(230, 168, 58, 0.35);
+    background: var(--accent-gold-soft);
+    color: #e8b36d;
+    border: 1px solid rgba(216, 144, 62, 0.35);
+    font-variant-numeric: tabular-nums;
 }
 .cat-active-bar {
     display: flex;
@@ -2213,29 +2215,33 @@
     justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
-    margin-bottom: 8px;
-    border-radius: 10px;
-    background: rgba(230, 168, 58, 0.14);
-    border: 1px solid rgba(230, 168, 58, 0.35);
-    font-size: 0.85rem;
+    margin: 6px 8px 4px;
+    border-radius: 9px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    font-size: 0.84rem;
 }
 .cat-back-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: inherit;
+    background: var(--accent-gold-soft);
+    border: 1px solid rgba(216, 144, 62, 0.35);
+    color: #e8b36d;
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     padding: 5px 10px;
-    border-radius: 8px;
+    border-radius: 7px;
     cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
 }
 .cat-back-btn:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: var(--accent-gold);
+    color: #160d05;
 }
 .btn-mini-pl.active {
-    border-color: #e6a83a;
-    color: #e6a83a;
-    background: rgba(230, 168, 58, 0.14);
+    border-color: var(--accent-gold);
+    color: #e8b36d;
+    background: var(--accent-gold-soft);
 }
     </style>
 </head>
