@@ -5494,7 +5494,7 @@
         }[s]));
     }
 
-    /* --- CARGA DE TÍTULOS DESDE R2 CON RESPALDO EN CACHÉ LOCAL --- */
+/* --- CARGA DE TÍTULOS DESDE R2 CON RESPALDO EN CACHÉ LOCAL --- */
     async function cargarTitulosDesdeR2() {
         try {
             const cachedRaw = localStorage.getItem(TITLES_CACHE_KEY);
@@ -5506,26 +5506,46 @@
             }
         } catch (e) {}
 
-        try {
-            const response = await fetch(`${CLOUDFLARE_R2_URL}/titulos.json?v=${Date.now()}`, { cache: "no-store" });
-            if (response.ok) {
-                const data = await response.json();
-                if (data && typeof data === 'object') {
-                    titulosDiccionario = data;
-                    try {
-                        localStorage.setItem(TITLES_CACHE_KEY, JSON.stringify(data));
-                    } catch (e) {}
+        const urlsTitulos = [
+            `${CLOUDFLARE_R2_URL}/titulos.json?v=${Date.now()}`,
+            `${CLOUDFLARE_R2_URL}/titulos.json`,
+            `titulos.json?v=${Date.now()}`
+        ];
+
+        for (const urlTitulos of urlsTitulos) {
+            try {
+                const response = await fetch(urlTitulos);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && typeof data === 'object') {
+                        if (Array.isArray(data)) {
+                            const mapObj = {};
+                            data.forEach((item, idx) => {
+                                const n = item && (item.num || item.numero || item.id)
+                                    ? parseInt(item.num || item.numero || item.id, 10)
+                                    : (idx + 1);
+                                mapObj[n] = item;
+                            });
+                            titulosDiccionario = mapObj;
+                        } else {
+                            titulosDiccionario = data;
+                        }
+                        try {
+                            localStorage.setItem(TITLES_CACHE_KEY, JSON.stringify(titulosDiccionario));
+                        } catch (e) {}
+                        break;
+                    }
                 }
-            }
-        } catch (err) {
-            console.warn("No se pudo conectar para actualizar titulos.json, usando caché local:", err);
+            } catch (err) {}
         }
 
         himnosList.length = 0;
         for (let i = 1; i <= 613; i++) {
             const numStr = String(i).padStart(3, '0');
             const entry = titulosDiccionario[i] || titulosDiccionario[numStr] || titulosDiccionario[String(i)];
-            const titleText = (typeof entry === 'string') ? entry : (entry && entry.titulo ? entry.titulo : '');
+            const titleText = (typeof entry === 'string')
+                ? entry
+                : (entry && (entry.titulo || entry.title || entry.nombre) ? (entry.titulo || entry.title || entry.nombre) : '');
             himnosList.push({
                 num: numStr,
                 title: titleText,
@@ -5533,7 +5553,6 @@
             });
         }
     }
-
     function removeAccents(str) {
         return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     }
