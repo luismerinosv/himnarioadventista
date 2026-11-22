@@ -6702,6 +6702,8 @@
         categoriaSeleccionada = cat;
         subcategoriaSeleccionada = sub;
         renderList(getFilteredList());
+        const playlistEl = document.getElementById('playlist');
+        if (playlistEl) playlistEl.scrollTop = 0;
     }
 
     function getFilteredList() {
