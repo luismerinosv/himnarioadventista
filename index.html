@@ -6872,10 +6872,10 @@ function toggleSoloAudio() {
         renderList(getFilteredList());
     
         const engine = getPrimaryAudioEngine();
-        const isPlaying = engine && !engine.paused;
+        const estaDetenido = !currentHimno || !engine || engine.ended || (engine.paused && engine.currentTime === 0);
     
-        // Si hay un himno sonando, no lo interrumpe; el cambio aplicará al abrir el siguiente
-        if (isPlaying) return;
+        // Si está reproduciéndose o en pausa, no interrumpe el himno actual
+        if (!estaDetenido) return;
     
         if (currentHimno) {
             reproducirHimno(currentHimno, false, Boolean(activeQueuePlaylistId));
