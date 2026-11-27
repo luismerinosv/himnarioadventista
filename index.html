@@ -5618,7 +5618,7 @@
                 promptBtn.style.display = document.fullscreenElement ? 'none' : 'block';
             });
 
-            document.body.addEventListener('dblclick', goFullScreen);
+            document.body.addEventListener('click', goFullScreen);
 
             channel.onmessage = (event) => {
                 const data = event.data;
@@ -6925,42 +6925,44 @@
 
             salirFullPantallaPrincipal();
 
-            if (select.value === 'ask') {
-                await detectarPantallas(true);
-            }
-
-            let left = window.screen.availWidth || 1000;
-            let top = 0;
-            let width = window.screen.availWidth || 1280;
-            let height = window.screen.availHeight || 720;
-
-            const screenIdx = parseInt(select.value, 10);
-            if (!isNaN(screenIdx) && displaysList[screenIdx]) {
-                const targetScr = displaysList[screenIdx];
-                left = targetScr.availLeft;
-                top = targetScr.availTop;
-                width = targetScr.availWidth;
-                height = targetScr.availHeight;
-            }
-
-            const features = `popup=yes,left=${left},top=${top},width=${width},height=${height}`;
-
-            if (!projectionWindow || projectionWindow.closed) {
-                projectionWindow = window.open('', 'HimnarioProyeccion', features);
-                if (!projectionWindow) {
-                    alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio en la barra de direcciones.");
-                    checkbox.checked = false;
-                    return;
-                }
-                projectionWindow.document.open();
-                projectionWindow.document.write(projectionHtmlContent);
-                projectionWindow.document.close();
-            } else {
-                try {
-                    projectionWindow.moveTo(left, top);
-                    projectionWindow.resizeTo(width, height);
-                } catch (e) {}
-            }
+             let left = window.screen.availWidth || 1000;
+             let top = 0;
+             let width = window.screen.availWidth || 1280;
+             let height = window.screen.availHeight || 720;
+    
+             const screenIdx = parseInt(select.value, 10);
+             if (!isNaN(screenIdx) && displaysList[screenIdx]) {
+                 const targetScr = displaysList[screenIdx];
+                 left = targetScr.availLeft;
+                 top = targetScr.availTop;
+                 width = targetScr.availWidth;
+                 height = targetScr.availHeight;
+             }
+    
+             const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
+    
+             if (!projectionWindow || projectionWindow.closed) {
+                 projectionWindow = window.open('', 'HimnarioProyeccion', features);
+                 if (!projectionWindow) {
+                     alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio en la barra de direcciones.");
+                     checkbox.checked = false;
+                     return;
+                 }
+                 projectionWindow.document.open();
+                 projectionWindow.document.write(projectionHtmlContent);
+                 projectionWindow.document.close();
+                 projectionWindow.focus();
+                 try {
+                     projectionWindow.document.documentElement.requestFullscreen().catch(() => {});
+                 } catch (e) {}
+             } else {
+                 try {
+                     projectionWindow.moveTo(left, top);
+                     projectionWindow.resizeTo(width, height);
+                     projectionWindow.focus();
+                     projectionWindow.document.documentElement.requestFullscreen().catch(() => {});
+                 } catch (e) {}
+             }
 
             badge.innerText = "Proyectando";
 
