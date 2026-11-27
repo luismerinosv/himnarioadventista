@@ -2517,6 +2517,16 @@
 <!-- AUDIO MAESTRO (PISTA DE AUDIO PURA PARA SEGUNDO PLANO EN MÓVIL) -->
 <audio id="masterAudio" preload="auto" playsinline></audio>
 
+<!-- ESCENARIO DE PROYECCIÓN NATIVA EN PANTALLA COMPLETA (SIN VENTANA POPUP NI BARRA DE TÍTULO) -->
+<div id="nativeProjectionStage" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; background:#000; z-index:999999; overflow:hidden; align-items:center; justify-content:center;">
+    <div id="nativeProjPoster" style="position:absolute; inset:0; background:radial-gradient(circle at 50% 42%, #4e2d12 0%, #261508 65%, #120903 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; z-index:10; padding:20px;">
+        <img src="logo-adventista.webp" alt="Logo Adventista" style="max-width:190px; max-height:190px; margin-bottom:18px; object-fit:contain; filter:drop-shadow(0 8px 24px rgba(0,0,0,0.65));">
+        <div style="font-size:clamp(1.3rem, 3.8vw, 3.2rem); font-weight:700; letter-spacing:3px; color:#f4ece1; text-shadow:0 3px 16px rgba(0,0,0,0.7); white-space:nowrap;">HIMNARIO ADVENTISTA</div>
+    </div>
+    <video id="nativeProjVideo1" muted preload="auto" playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; opacity:0; transition:opacity 0.22s ease-in-out; z-index:1;"></video>
+    <video id="nativeProjVideo2" muted preload="auto" playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; opacity:0; transition:opacity 0.22s ease-in-out; z-index:1;"></video>
+</div>
+    
 <div id="hymn-player-wrapper">
     <div id="playerContainer">
         <!-- REPRODUCTOR DE VIDEO (VISUAL SILENCIADO; AUDIO EN masterAudio) -->
@@ -6367,7 +6377,7 @@
         }
     });
 
-    /* --- REPRODUCCIÓN --- */
+/* --- REPRODUCCIÓN --- */
     async function reproducirHimno(h, autoPlay = true, preserveQueue = false) {
         const requestId = ++currentPlayRequestId;
         isUserPaused = !autoPlay;
@@ -6655,7 +6665,7 @@
             }
         }
 
-        if (document.getElementById('secondaryScreenCheckbox').checked && !esPantallaPrincipalSeleccionada() && !noHayMasPantallas() && projectionWindow && !projectionWindow.closed) {
+        if (isSecondScreen) {
             syncChannel.postMessage({
                 type: 'LOAD_AND_PLAY',
                 url: playUrl,
@@ -6865,28 +6875,125 @@
         }
     }
 
-    /* --- SINCRONIZACIÓN DE VENTANA PROYECTOR --- */
+    /* --- PROYECCIÓN NATIVA EN SEGUNDA PANTALLA (SIN POPUP NI BARRA DE TÍTULO) --- */
+    let activeNativeProjIdx = 1;
+    let currentNativeProjUrl = '';
+    let nativeProjectionActive = false;
+
+    function getActiveNativeProjVideo() {
+        return document.getElementById(activeNativeProjIdx === 1 ? 'nativeProjVideo1' : 'nativeProjVideo2');
+    }
+
+    function getInactiveNativeProjVideo() {
+        return document.getElementById(activeNativeProjIdx === 1 ? 'nativeProjVideo2' : 'nativeProjVideo1');
+    }
+
+    function actualizarStageProyeccionNativa(data) {
+        const poster = document.getElementById('nativeProjPoster');
+        const v1 = document.getElementById('nativeProjVideo1');
+        const v2 = document.getElementById('nativeProjVideo2');
+        if (!poster || !v1 || !v2) return;
+
+        if (data.type === 'LOAD_AND_PLAY') {
+            poster.style.display = 'none';
+            const rate = data.playbackRate || 1.0;
+
+            if (currentNativeProjUrl !== data.url) {
+                currentNativeProjUrl = data.url;
+                const activeV = getActiveNativeProjVideo();
+                const nextV = getInactiveNativeProjVideo();
+                let swapped = false;
+
+                nextV.muted = true;
+                nextV.src = data.url;
+                nextV.playbackRate = rate;
+                nextV.load();
+
+                nextV.onloadeddata = () => {
+                    if (swapped || currentNativeProjUrl !== data.url) return;
+                    swapped = true;
+                    if (data.currentTime && !isNaN(data.currentTime) && data.currentTime > 0.05) {
+                        try { nextV.currentTime = data.currentTime; } catch (e) {}
+                    }
+                    if (data.isPlaying) nextV.play().catch(() => {});
+                    else nextV.pause();
+
+                    requestAnimationFrame(() => {
+                        nextV.style.opacity = '1';
+                        nextV.style.zIndex = '2';
+                        activeV.style.opacity = '0';
+                        activeV.style.zIndex = '1';
+                        activeNativeProjIdx = (activeNativeProjIdx === 1) ? 2 : 1;
+                        setTimeout(() => {
+                            activeV.pause();
+                            activeV.removeAttribute('src');
+                            activeV.load();
+                        }, 250);
+                    });
+                };
+            } else {
+                const activeV = getActiveNativeProjVideo();
+                activeV.playbackRate = rate;
+                if (data.currentTime && !isNaN(data.currentTime) && Math.abs(activeV.currentTime - data.currentTime) > 1.2) {
+                    activeV.currentTime = data.currentTime;
+                }
+                if (data.isPlaying) activeV.play().catch(() => {});
+                else activeV.pause();
+            }
+        } else if (data.type === 'PLAY') {
+            const activeV = getActiveNativeProjVideo();
+            if (data.playbackRate) activeV.playbackRate = data.playbackRate;
+            activeV.play().catch(() => {});
+        } else if (data.type === 'PAUSE') {
+            getActiveNativeProjVideo().pause();
+        } else if (data.type === 'RATE_CHANGE') {
+            getActiveNativeProjVideo().playbackRate = data.playbackRate || 1.0;
+        } else if (data.type === 'STOP') {
+            poster.style.display = 'flex';
+            currentNativeProjUrl = '';
+            v1.pause(); v1.removeAttribute('src'); v1.load(); v1.style.opacity = '0';
+            v2.pause(); v2.removeAttribute('src'); v2.load(); v2.style.opacity = '0';
+        } else if (data.type === 'SYNC_TIME') {
+            const activeV = getActiveNativeProjVideo();
+            if (data.playbackRate) activeV.playbackRate = data.playbackRate;
+            if (!activeV.paused && Math.abs(activeV.currentTime - data.currentTime) > 1.5) {
+                activeV.currentTime = data.currentTime;
+            }
+        }
+    }
+
     function enviarEstadoProyeccion() {
         const isSecondScreen = document.getElementById('secondaryScreenCheckbox').checked;
-        if (!isSecondScreen || esPantallaPrincipalSeleccionada() || noHayMasPantallas() || !projectionWindow || projectionWindow.closed) return;
+        if (!isSecondScreen || esPantallaPrincipalSeleccionada() || noHayMasPantallas()) return;
 
         const engine = getPrimaryAudioEngine();
         const urlToProject = obtenerUrlActivaParaProyeccion();
 
-        if (currentHimno && urlToProject) {
-            syncChannel.postMessage({
+        const payload = (currentHimno && urlToProject)
+            ? {
                 type: 'LOAD_AND_PLAY',
                 url: urlToProject,
                 currentTime: engine ? engine.currentTime : 0,
                 isPlaying: isCurrentlyPlaying,
                 playbackRate: currentSpeed
-            });
-        } else {
-            syncChannel.postMessage({ type: 'STOP' });
-        }
+            }
+            : { type: 'STOP' };
+
+        actualizarStageProyeccionNativa(payload);
+        syncChannel.postMessage(payload);
     }
 
     function cerrarVentanaProyeccion() {
+        nativeProjectionActive = false;
+        const stage = document.getElementById('nativeProjectionStage');
+        if (stage) {
+            if (document.fullscreenElement === stage && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+            stage.style.display = 'none';
+        }
+        actualizarStageProyeccionNativa({ type: 'STOP' });
+
         if (projectionWindow && !projectionWindow.closed) {
             syncChannel.postMessage({ type: 'CLOSE' });
             projectionWindow.close();
@@ -6924,13 +7031,13 @@
         const select = document.getElementById('screenSelect');
 
         if (checkbox.checked) {
-            const teniaVentanaExterna = Boolean(projectionWindow && !projectionWindow.closed);
+            const teniaProyeccionExterna = nativeProjectionActive || Boolean(projectionWindow && !projectionWindow.closed);
 
             if (esPantallaPrincipalSeleccionada() || noHayMasPantallas()) {
                 document.body.classList.remove('projecting-external');
                 cerrarVentanaProyeccion();
                 entrarFullPantallaPrincipal();
-                if (teniaVentanaExterna) {
+                if (teniaProyeccionExterna) {
                     await restaurarVideoLocalSiEstabaPausado();
                 }
                 return;
@@ -6938,7 +7045,7 @@
 
             salirFullPantallaPrincipal();
 
-            // 1. IGUAL QUE EL BOTÓN "SOLO AUDIO": capturar portada antes de tocar los videos
+            // 1. Mostrar portada del himno en la pantalla principal (igual que "Solo audio")
             document.body.classList.add('projecting-external');
             if (currentHimno) {
                 document.body.classList.add('has-active-hymn');
@@ -6954,92 +7061,47 @@
                 if (poster) poster.style.display = 'flex';
             }
 
-            // 2. Obtener pantalla destino
-            let targetScr = null;
-            let left = window.screen.availWidth || 1000;
-            let top = 0;
-            let width = window.screen.availWidth || 1280;
-            let height = window.screen.availHeight || 720;
+            // 2. Asegurar permiso de Window Management para obtener el objeto Screen destino
+            if (displaysList.length === 0 && 'getScreenDetails' in window) {
+                await detectarPantallas(true);
+            }
 
             const screenIdx = parseInt(select.value, 10);
-            if (!isNaN(screenIdx) && displaysList[screenIdx]) {
-                targetScr = displaysList[screenIdx];
-                left = targetScr.availLeft;
-                top = targetScr.availTop;
-                width = targetScr.availWidth;
-                height = targetScr.availHeight;
-            }
+            const targetScr = (!isNaN(screenIdx) && displaysList[screenIdx])
+                ? displaysList[screenIdx]
+                : displaysList.find(s => !s.isPrimary);
 
-            // 3. Abrir ventana en el monitor secundario con fullscreen=yes
-            const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
+            const stage = document.getElementById('nativeProjectionStage');
 
-            if (!projectionWindow || projectionWindow.closed) {
-                projectionWindow = window.open('', 'HimnarioProyeccion', features);
-                if (!projectionWindow) {
-                    alert("El navegador bloqueó la ventana emergente. Permite las ventanas emergentes en la barra de direcciones.");
-                    checkbox.checked = false;
-                    document.body.classList.remove('projecting-external');
-                    return;
-                }
-                projectionWindow.document.open();
-                projectionWindow.document.write(projectionHtmlContent);
-                projectionWindow.document.close();
-
-                const checkProjClosed = setInterval(() => {
-                    if (!projectionWindow || projectionWindow.closed) {
-                        clearInterval(checkProjClosed);
-                        if (checkbox.checked && !esPantallaPrincipalSeleccionada()) {
-                            checkbox.checked = false;
-                            document.body.classList.remove('projecting-external');
-                            badge.innerText = "Pantalla única";
-                            restaurarVideoLocalSiEstabaPausado();
-                        }
-                    }
-                }, 800);
-            } else {
+            // 3. Proyectar en pantalla completa nativa (sin ventana popup ni barra de título)
+            if (targetScr && stage && stage.requestFullscreen) {
                 try {
-                    projectionWindow.moveTo(left, top);
-                    projectionWindow.resizeTo(width, height);
-                } catch (e) {}
-            }
+                    stage.style.display = 'flex';
+                    await stage.requestFullscreen({ screen: targetScr });
+                    nativeProjectionActive = true;
+                    badge.innerText = "Proyectando";
 
-            // 4. Forzar Pantalla Completa real en la ventana hija usando el gesto del clic actual
-            try {
-                projectionWindow.focus();
-                const projEl = projectionWindow.document.documentElement;
-                if (projEl && projEl.requestFullscreen) {
-                    const fsOpts = targetScr ? { screen: targetScr } : undefined;
-                    projEl.requestFullscreen(fsOpts).catch(() => {
-                        projEl.requestFullscreen().catch(() => {});
-                    });
-                }
-            } catch (e) {}
-
-            // Si aún no había permiso de Window Management, pedirlo para futuras proyecciones
-            if (displaysList.length === 0 && 'getScreenDetails' in window) {
-                detectarPantallas(true).then(() => {
-                    const idxActual = parseInt(select.value, 10);
-                    if (!isNaN(idxActual) && displaysList[idxActual] && projectionWindow && !projectionWindow.closed) {
-                        const scr = displaysList[idxActual];
-                        try {
-                            projectionWindow.moveTo(scr.availLeft, scr.availTop);
-                            projectionWindow.resizeTo(scr.availWidth, scr.availHeight);
-                            projectionWindow.document.documentElement.requestFullscreen({ screen: scr }).catch(() => {});
-                        } catch (e) {}
+                    if (!useVideoAudioFallback) {
+                        const v1 = document.getElementById('myMedia1');
+                        const v2 = document.getElementById('myMedia2');
+                        if (v1) { v1.pause(); v1.removeAttribute('src'); v1.dataset.loadedUrl = ''; v1.load(); }
+                        if (v2) { v2.pause(); v2.removeAttribute('src'); v2.dataset.loadedUrl = ''; v2.load(); }
                     }
-                });
+
+                    enviarEstadoProyeccion();
+                    return;
+                } catch (err) {
+                    stage.style.display = 'none';
+                    nativeProjectionActive = false;
+                }
             }
 
-            badge.innerText = "Proyectando";
-
-            if (!useVideoAudioFallback) {
-                const v1 = document.getElementById('myMedia1');
-                const v2 = document.getElementById('myMedia2');
-                if (v1) { v1.pause(); v1.removeAttribute('src'); v1.dataset.loadedUrl = ''; v1.load(); }
-                if (v2) { v2.pause(); v2.removeAttribute('src'); v2.dataset.loadedUrl = ''; v2.load(); }
-            }
-
-            setTimeout(enviarEstadoProyeccion, 250);
+            // Respaldo si el navegador no soporta requestFullscreen({ screen })
+            alert("Tu navegador no permitió la pantalla completa nativa en el monitor secundario. Verifica el permiso 'Administración de ventanas' en el candado de la barra de direcciones.");
+            checkbox.checked = false;
+            document.body.classList.remove('projecting-external');
+            badge.innerText = "Pantalla única";
+            await restaurarVideoLocalSiEstabaPausado();
         } else {
             document.body.classList.remove('projecting-external');
             cerrarVentanaProyeccion();
@@ -7049,16 +7111,32 @@
         }
     }
 
-    syncChannel.onmessage = (event) => {
-        if (event.data && event.data.type === 'PROJECTOR_READY') {
-            enviarEstadoProyeccion();
+    // Interceptar mensajes de reproducción para reflejarlos también en el escenario nativo
+    const _origPostMessage = syncChannel.postMessage.bind(syncChannel);
+    syncChannel.postMessage = (msg) => {
+        if (nativeProjectionActive && msg && msg.type) {
+            actualizarStageProyeccionNativa(msg);
         }
+        _origPostMessage(msg);
     };
 
-    window.addEventListener('beforeunload', () => {
-        if (projectionWindow && !projectionWindow.closed) projectionWindow.close();
+    // Si se sale de pantalla completa en el monitor secundario (ej. con ESC), restaurar estado
+    document.addEventListener('fullscreenchange', () => {
+        const stage = document.getElementById('nativeProjectionStage');
+        const checkbox = document.getElementById('secondaryScreenCheckbox');
+        const badge = document.getElementById('projectionStatusBadge');
+        if (nativeProjectionActive && document.fullscreenElement !== stage) {
+            nativeProjectionActive = false;
+            if (stage) stage.style.display = 'none';
+            actualizarStageProyeccionNativa({ type: 'STOP' });
+            if (checkbox && checkbox.checked) {
+                checkbox.checked = false;
+                document.body.classList.remove('projecting-external');
+                if (badge) badge.innerText = "Pantalla única";
+                restaurarVideoLocalSiEstabaPausado();
+            }
+        }
     });
-
     /* --- CATEGORÍAS Y SUBCATEGORÍAS DEL HIMNARIO --- */
     const CATEGORIAS_HIMNARIO = [
         {
