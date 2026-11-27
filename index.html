@@ -2476,7 +2476,8 @@
             text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
             line-height: 1.25;
         }
-        body.solo-audio-mode .video-element {
+        body.solo-audio-mode .video-element,
+        body.projecting-external .video-element {
             opacity: 0 !important;
             visibility: hidden !important;
             pointer-events: none !important;
@@ -5608,16 +5609,22 @@
 
             function goFullScreen() {
                 if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().then(() => {
-                        promptBtn.style.display = 'none';
-                    }).catch(() => {});
+                    const elem = document.documentElement;
+                    const req = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
+                    if (req) {
+                        req.call(elem).then(() => {
+                            promptBtn.style.display = 'none';
+                        }).catch(() => {
+                            promptBtn.style.display = 'block';
+                        });
+                    }
                 }
             }
 
+            window.addEventListener('load', goFullScreen);
             document.addEventListener('fullscreenchange', () => {
                 promptBtn.style.display = document.fullscreenElement ? 'none' : 'block';
             });
-
             document.body.addEventListener('click', goFullScreen);
 
             channel.onmessage = (event) => {
@@ -6906,15 +6913,20 @@
         }
     }
 
-    async function actualizarModoProyeccion() {
+async function actualizarModoProyeccion() {
         const checkbox = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
         const select = document.getElementById('screenSelect');
 
         if (checkbox.checked) {
+            if (displaysList.length === 0 && 'getScreenDetails' in window) {
+                await detectarPantallas(true);
+            }
+
             const teniaVentanaExterna = Boolean(projectionWindow && !projectionWindow.closed);
 
             if (esPantallaPrincipalSeleccionada() || noHayMasPantallas()) {
+                document.body.classList.remove('projecting-external');
                 cerrarVentanaProyeccion();
                 entrarFullPantallaPrincipal();
                 if (teniaVentanaExterna) {
@@ -6925,44 +6937,71 @@
 
             salirFullPantallaPrincipal();
 
-             let left = window.screen.availWidth || 1000;
-             let top = 0;
-             let width = window.screen.availWidth || 1280;
-             let height = window.screen.availHeight || 720;
-    
-             const screenIdx = parseInt(select.value, 10);
-             if (!isNaN(screenIdx) && displaysList[screenIdx]) {
-                 const targetScr = displaysList[screenIdx];
-                 left = targetScr.availLeft;
-                 top = targetScr.availTop;
-                 width = targetScr.availWidth;
-                 height = targetScr.availHeight;
-             }
-    
-             const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
-    
-             if (!projectionWindow || projectionWindow.closed) {
-                 projectionWindow = window.open('', 'HimnarioProyeccion', features);
-                 if (!projectionWindow) {
-                     alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio en la barra de direcciones.");
-                     checkbox.checked = false;
-                     return;
-                 }
-                 projectionWindow.document.open();
-                 projectionWindow.document.write(projectionHtmlContent);
-                 projectionWindow.document.close();
-                 projectionWindow.focus();
-                 try {
-                     projectionWindow.document.documentElement.requestFullscreen().catch(() => {});
-                 } catch (e) {}
-             } else {
-                 try {
-                     projectionWindow.moveTo(left, top);
-                     projectionWindow.resizeTo(width, height);
-                     projectionWindow.focus();
-                     projectionWindow.document.documentElement.requestFullscreen().catch(() => {});
-                 } catch (e) {}
-             }
+            let left = window.screen.availWidth || 1000;
+            let top = 0;
+            let width = window.screen.availWidth || 1280;
+            let height = window.screen.availHeight || 720;
+
+            const screenIdx = parseInt(select.value, 10);
+            if (!isNaN(screenIdx) && displaysList[screenIdx]) {
+                const targetScr = displaysList[screenIdx];
+                left = targetScr.availLeft;
+                top = targetScr.availTop;
+                width = targetScr.availWidth;
+                height = targetScr.availHeight;
+            }
+
+            const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
+
+            if (!projectionWindow || projectionWindow.closed) {
+                projectionWindow = window.open('', 'HimnarioProyeccion', features);
+                if (!projectionWindow) {
+                    alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio en la barra de direcciones.");
+                    checkbox.checked = false;
+                    document.body.classList.remove('projecting-external');
+                    return;
+                }
+                projectionWindow.document.open();
+                projectionWindow.document.write(projectionHtmlContent);
+                projectionWindow.document.close();
+                projectionWindow.focus();
+
+                const checkProjClosed = setInterval(() => {
+                    if (!projectionWindow || projectionWindow.closed) {
+                        clearInterval(checkProjClosed);
+                        if (checkbox.checked && !esPantallaPrincipalSeleccionada()) {
+                            checkbox.checked = false;
+                            document.body.classList.remove('projecting-external');
+                            badge.innerText = "Pantalla única";
+                            restaurarVideoLocalSiEstabaPausado();
+                        }
+                    }
+                }, 800);
+            } else {
+                try {
+                    projectionWindow.moveTo(left, top);
+                    projectionWindow.resizeTo(width, height);
+                    projectionWindow.focus();
+                } catch (e) {}
+            }
+
+            try {
+                const projDocEl = projectionWindow.document.documentElement;
+                if (projDocEl && projDocEl.requestFullscreen) {
+                    projDocEl.requestFullscreen().catch(() => {});
+                }
+            } catch (e) {}
+
+            document.body.classList.add('projecting-external');
+            if (currentHimno) {
+                document.body.classList.add('has-active-hymn');
+                const poster = document.getElementById('posterOverlay');
+                if (poster) poster.style.display = 'none';
+                if (!hymnCoverCache.has(currentHimno.num)) {
+                    capturarFramePortadaDesdeVideo(currentHimno.num);
+                }
+                cargarPortadaHimno(currentHimno);
+            }
 
             badge.innerText = "Proyectando";
 
@@ -6975,6 +7014,7 @@
 
             setTimeout(enviarEstadoProyeccion, 250);
         } else {
+            document.body.classList.remove('projecting-external');
             cerrarVentanaProyeccion();
             salirFullPantallaPrincipal();
             badge.innerText = "Pantalla única";
