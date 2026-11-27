@@ -2478,17 +2478,21 @@
         }
         body.solo-audio-mode .video-element,
         body.projecting-external .video-element {
+            display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
             pointer-events: none !important;
         }
-        body.solo-audio-mode.has-active-hymn #soloAudioCoverBox {
+        body.solo-audio-mode.has-active-hymn #soloAudioCoverBox,
+        body.projecting-external.has-active-hymn #soloAudioCoverBox {
             display: flex !important;
         }
-        body.solo-audio-mode.has-active-hymn #posterOverlay {
+        body.solo-audio-mode.has-active-hymn #posterOverlay,
+        body.projecting-external.has-active-hymn #posterOverlay {
             display: none !important;
         }
-        body.solo-audio-mode:not(.has-active-hymn) #posterOverlay {
+        body.solo-audio-mode:not(.has-active-hymn) #posterOverlay,
+        body.projecting-external:not(.has-active-hymn) #posterOverlay {
             display: flex !important;
             opacity: 1 !important;
             visibility: visible !important;
@@ -6914,7 +6918,7 @@
         }
     }
 
-async function actualizarModoProyeccion() {
+    async function actualizarModoProyeccion() {
         const checkbox = document.getElementById('secondaryScreenCheckbox');
         const badge = document.getElementById('projectionStatusBadge');
         const select = document.getElementById('screenSelect');
@@ -6934,7 +6938,7 @@ async function actualizarModoProyeccion() {
 
             salirFullPantallaPrincipal();
 
-            // 1. CAPTURAR PORTADA ANTES DE BORRAR EL VIDEO LOCAL
+            // 1. IGUAL QUE EL BOTÓN "SOLO AUDIO": capturar portada antes de tocar los videos
             document.body.classList.add('projecting-external');
             if (currentHimno) {
                 document.body.classList.add('has-active-hymn');
@@ -6950,7 +6954,8 @@ async function actualizarModoProyeccion() {
                 if (poster) poster.style.display = 'flex';
             }
 
-            // 2. COORDENADAS DEL MONITOR SECUNDARIO (SIN AWAIT PREVIO PARA NO PERDER EL GESTO DEL USUARIO)
+            // 2. Obtener pantalla destino
+            let targetScr = null;
             let left = window.screen.availWidth || 1000;
             let top = 0;
             let width = window.screen.availWidth || 1280;
@@ -6958,16 +6963,16 @@ async function actualizarModoProyeccion() {
 
             const screenIdx = parseInt(select.value, 10);
             if (!isNaN(screenIdx) && displaysList[screenIdx]) {
-                const targetScr = displaysList[screenIdx];
+                targetScr = displaysList[screenIdx];
                 left = targetScr.availLeft;
                 top = targetScr.availTop;
                 width = targetScr.availWidth;
                 height = targetScr.availHeight;
             }
 
-            const features = `popup=yes,left=${left},top=${top},width=${width},height=${height}`;
+            // 3. Abrir ventana en el monitor secundario con fullscreen=yes
+            const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
 
-            // 3. ABRIR VENTANA Y PEDIR FULLSCREEN INMEDIATAMENTE DENTRO DEL CLIC
             if (!projectionWindow || projectionWindow.closed) {
                 projectionWindow = window.open('', 'HimnarioProyeccion', features);
                 if (!projectionWindow) {
@@ -6998,15 +7003,19 @@ async function actualizarModoProyeccion() {
                 } catch (e) {}
             }
 
+            // 4. Forzar Pantalla Completa real en la ventana hija usando el gesto del clic actual
             try {
                 projectionWindow.focus();
-                const projDoc = projectionWindow.document.documentElement;
-                if (projDoc && projDoc.requestFullscreen) {
-                    projDoc.requestFullscreen().catch(() => {});
+                const projEl = projectionWindow.document.documentElement;
+                if (projEl && projEl.requestFullscreen) {
+                    const fsOpts = targetScr ? { screen: targetScr } : undefined;
+                    projEl.requestFullscreen(fsOpts).catch(() => {
+                        projEl.requestFullscreen().catch(() => {});
+                    });
                 }
             } catch (e) {}
 
-            // Si no se habían detectado las pantallas con permiso, pedirlo DESPUÉS de abrir y reubicar si es necesario
+            // Si aún no había permiso de Window Management, pedirlo para futuras proyecciones
             if (displaysList.length === 0 && 'getScreenDetails' in window) {
                 detectarPantallas(true).then(() => {
                     const idxActual = parseInt(select.value, 10);
@@ -7015,6 +7024,7 @@ async function actualizarModoProyeccion() {
                         try {
                             projectionWindow.moveTo(scr.availLeft, scr.availTop);
                             projectionWindow.resizeTo(scr.availWidth, scr.availHeight);
+                            projectionWindow.document.documentElement.requestFullscreen({ screen: scr }).catch(() => {});
                         } catch (e) {}
                     }
                 });
@@ -7022,7 +7032,6 @@ async function actualizarModoProyeccion() {
 
             badge.innerText = "Proyectando";
 
-            // 4. AHORA SÍ LIMPIAR LOS VIDEOS LOCALES PARA AHORRAR RECURSOS
             if (!useVideoAudioFallback) {
                 const v1 = document.getElementById('myMedia1');
                 const v2 = document.getElementById('myMedia2');
