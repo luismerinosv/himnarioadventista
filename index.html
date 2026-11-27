@@ -6482,6 +6482,7 @@
         }
 
         const isSecondScreen = document.getElementById('secondaryScreenCheckbox').checked && !esPantallaPrincipalSeleccionada() && !noHayMasPantallas();
+        document.body.classList.toggle('projecting-external', isSecondScreen);
         const activeVid = getActiveVideo();
         const nextVid = getInactiveVideo();
 
@@ -6919,10 +6920,6 @@ async function actualizarModoProyeccion() {
         const select = document.getElementById('screenSelect');
 
         if (checkbox.checked) {
-            if (displaysList.length === 0 && 'getScreenDetails' in window) {
-                await detectarPantallas(true);
-            }
-
             const teniaVentanaExterna = Boolean(projectionWindow && !projectionWindow.closed);
 
             if (esPantallaPrincipalSeleccionada() || noHayMasPantallas()) {
@@ -6937,6 +6934,23 @@ async function actualizarModoProyeccion() {
 
             salirFullPantallaPrincipal();
 
+            // 1. CAPTURAR PORTADA ANTES DE BORRAR EL VIDEO LOCAL
+            document.body.classList.add('projecting-external');
+            if (currentHimno) {
+                document.body.classList.add('has-active-hymn');
+                const poster = document.getElementById('posterOverlay');
+                if (poster) poster.style.display = 'none';
+                if (!hymnCoverCache.has(currentHimno.num)) {
+                    capturarFramePortadaDesdeVideo(currentHimno.num);
+                }
+                cargarPortadaHimno(currentHimno);
+            } else {
+                document.body.classList.remove('has-active-hymn');
+                const poster = document.getElementById('posterOverlay');
+                if (poster) poster.style.display = 'flex';
+            }
+
+            // 2. COORDENADAS DEL MONITOR SECUNDARIO (SIN AWAIT PREVIO PARA NO PERDER EL GESTO DEL USUARIO)
             let left = window.screen.availWidth || 1000;
             let top = 0;
             let width = window.screen.availWidth || 1280;
@@ -6951,12 +6965,13 @@ async function actualizarModoProyeccion() {
                 height = targetScr.availHeight;
             }
 
-            const features = `popup=yes,fullscreen=yes,left=${left},top=${top},width=${width},height=${height}`;
+            const features = `popup=yes,left=${left},top=${top},width=${width},height=${height}`;
 
+            // 3. ABRIR VENTANA Y PEDIR FULLSCREEN INMEDIATAMENTE DENTRO DEL CLIC
             if (!projectionWindow || projectionWindow.closed) {
                 projectionWindow = window.open('', 'HimnarioProyeccion', features);
                 if (!projectionWindow) {
-                    alert("El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio en la barra de direcciones.");
+                    alert("El navegador bloqueó la ventana emergente. Permite las ventanas emergentes en la barra de direcciones.");
                     checkbox.checked = false;
                     document.body.classList.remove('projecting-external');
                     return;
@@ -6964,7 +6979,6 @@ async function actualizarModoProyeccion() {
                 projectionWindow.document.open();
                 projectionWindow.document.write(projectionHtmlContent);
                 projectionWindow.document.close();
-                projectionWindow.focus();
 
                 const checkProjClosed = setInterval(() => {
                     if (!projectionWindow || projectionWindow.closed) {
@@ -6981,30 +6995,34 @@ async function actualizarModoProyeccion() {
                 try {
                     projectionWindow.moveTo(left, top);
                     projectionWindow.resizeTo(width, height);
-                    projectionWindow.focus();
                 } catch (e) {}
             }
 
             try {
-                const projDocEl = projectionWindow.document.documentElement;
-                if (projDocEl && projDocEl.requestFullscreen) {
-                    projDocEl.requestFullscreen().catch(() => {});
+                projectionWindow.focus();
+                const projDoc = projectionWindow.document.documentElement;
+                if (projDoc && projDoc.requestFullscreen) {
+                    projDoc.requestFullscreen().catch(() => {});
                 }
             } catch (e) {}
 
-            document.body.classList.add('projecting-external');
-            if (currentHimno) {
-                document.body.classList.add('has-active-hymn');
-                const poster = document.getElementById('posterOverlay');
-                if (poster) poster.style.display = 'none';
-                if (!hymnCoverCache.has(currentHimno.num)) {
-                    capturarFramePortadaDesdeVideo(currentHimno.num);
-                }
-                cargarPortadaHimno(currentHimno);
+            // Si no se habían detectado las pantallas con permiso, pedirlo DESPUÉS de abrir y reubicar si es necesario
+            if (displaysList.length === 0 && 'getScreenDetails' in window) {
+                detectarPantallas(true).then(() => {
+                    const idxActual = parseInt(select.value, 10);
+                    if (!isNaN(idxActual) && displaysList[idxActual] && projectionWindow && !projectionWindow.closed) {
+                        const scr = displaysList[idxActual];
+                        try {
+                            projectionWindow.moveTo(scr.availLeft, scr.availTop);
+                            projectionWindow.resizeTo(scr.availWidth, scr.availHeight);
+                        } catch (e) {}
+                    }
+                });
             }
 
             badge.innerText = "Proyectando";
 
+            // 4. AHORA SÍ LIMPIAR LOS VIDEOS LOCALES PARA AHORRAR RECURSOS
             if (!useVideoAudioFallback) {
                 const v1 = document.getElementById('myMedia1');
                 const v2 = document.getElementById('myMedia2');
