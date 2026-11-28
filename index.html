@@ -2633,6 +2633,27 @@
                     <option value="-1">Cargando pantallas...</option>
                 </select>
 
+                <button type="button" id="multiScreenBtn" class="btn-mini-pl" style="display:none;" onclick="togglePanelMultiPantalla()" title="Elegir varias pantallas a la vez">+ Pantallas</button>
+
+                <div id="multiScreenPopover" style="display:none; position:fixed; z-index:99990; background:#1e150e; border:1px solid rgba(224,185,130,0.35); border-radius:10px; padding:10px 12px; box-shadow:0 12px 30px rgba(0,0,0,0.85); min-width:250px;">
+                    <div style="font-size:0.76rem; font-weight:700; color:#e3a352; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>Salidas simultáneas</span>
+                        <button type="button" onclick="togglePanelMultiPantalla(false)" style="background:none; border:none; color:#cbbba6; cursor:pointer; font-size:1rem;">&times;</button>
+                    </div>
+                    <div id="multiScreenCheckboxes" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
+                </div>
+
+                <!-- BOTÓN INTEGRACIÓN OBS STUDIO (Se muestra solo si OBS está abierto) -->
+                <div id="obsControlGroup" style="display:none; align-items:center; gap:5px; background:rgba(255,255,255,0.06); padding:2px 7px; border-radius:7px; border:1px solid rgba(224,185,130,0.22);">
+                    <button id="obsConnectBtn" type="button" onclick="toggleConexionOBS()" style="background:transparent; color:var(--text-primary); border:none; font-size:0.75rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px; padding:2px 4px;">
+                        <span id="obsStatusDot" style="width:7px; height:7px; border-radius:50%; background:#888; display:inline-block;"></span>
+                        <span id="obsBtnLabel">Enviar a OBS</span>
+                    </button>
+                    <select id="obsHymnSceneSelect" onchange="guardarEscenaHimnarioOBS()" title="Escena de OBS para el Himnario" style="display:none; background:var(--bg-elevated); color:var(--text-primary); border:1px solid var(--border-subtle); border-radius:5px; padding:2px 5px; font-size:0.72rem; max-width:130px;">
+                        <option value="">Escena...</option>
+                    </select>
+                </div>
+
                 <div class="checkbox-right-group">
                     <label style="display:flex; align-items:center; gap:5px; cursor:pointer;" title="Avanzar automáticamente a lo largo de todo el himnario (desactivado por defecto para uso en cultos)">
                         <input type="checkbox" id="autoPlayAllCheckbox" autocomplete="off" onchange="cambiarModoContinuo()">
@@ -5829,7 +5850,10 @@
         }
     });
 
-    /* --- DETECCIÓN DE PANTALLAS --- */
+/* --- DETECCIÓN DE PANTALLAS Y SALIDA MÚLTIPLE --- */
+    let extraSelectedScreenIndices = new Set();
+    let extraProjectionWindows = new Map();
+
     function noHayMasPantallas() {
         if (displaysList.length > 1) return false;
         if (displaysList.length === 1) return true;
@@ -5873,8 +5897,94 @@
         }
     }
 
+    function togglePanelMultiPantalla(forceState = null) {
+        const pop = document.getElementById('multiScreenPopover');
+        const btn = document.getElementById('multiScreenBtn');
+        if (!pop || !btn) return;
+        const show = (forceState !== null) ? forceState : (pop.style.display === 'none');
+        if (show) {
+            const rect = btn.getBoundingClientRect();
+            pop.style.top = `${Math.min(window.innerHeight - 180, rect.bottom + 6)}px`;
+            pop.style.left = `${Math.max(10, Math.min(window.innerWidth - 270, rect.left))}px`;
+            renderOpcionesMultiPantalla();
+            pop.style.display = 'block';
+        } else {
+            pop.style.display = 'none';
+        }
+    }
+
+    function renderOpcionesMultiPantalla() {
+        const container = document.getElementById('multiScreenCheckboxes');
+        const select = document.getElementById('screenSelect');
+        if (!container) return;
+        const primaryIdx = parseInt(select.value, 10);
+
+        let html = '';
+        displaysList.forEach((scr, idx) => {
+            if (scr.isPrimary) return;
+            const isMainTarget = (idx === primaryIdx);
+            const checked = isMainTarget || extraSelectedScreenIndices.has(idx);
+            const name = scr.label || `Pantalla ${idx + 1}`;
+            html += `
+                <label style="display:flex; align-items:center; gap:7px; cursor:${isMainTarget ? 'default' : 'pointer'}; opacity:${isMainTarget ? '0.85' : '1'};">
+                    <input type="checkbox" ${checked ? 'checked' : ''} ${isMainTarget ? 'disabled' : ''} onchange="togglePantallaExtra(${idx}, this.checked)">
+                    <span>${escapeHtml(name)} (${scr.width}x${scr.height})${isMainTarget ? ' • Principal' : ''}</span>
+                </label>
+            `;
+        });
+        container.innerHTML = html || '<span style="color:var(--text-muted);">No hay pantallas adicionales.</span>';
+    }
+
+    function togglePantallaExtra(idx, checked) {
+        if (checked) {
+            extraSelectedScreenIndices.add(idx);
+        } else {
+            extraSelectedScreenIndices.delete(idx);
+            const win = extraProjectionWindows.get(idx);
+            if (win && !win.closed) {
+                try { win.close(); } catch (e) {}
+            }
+            extraProjectionWindows.delete(idx);
+        }
+        if (document.getElementById('secondaryScreenCheckbox').checked) {
+            abrirVentanasPantallasExtra();
+            setTimeout(enviarEstadoProyeccion, 250);
+        }
+    }
+
+    function abrirVentanasPantallasExtra() {
+        const select = document.getElementById('screenSelect');
+        const mainTargetIdx = parseInt(select.value, 10);
+
+        extraSelectedScreenIndices.forEach((idx) => {
+            if (idx === mainTargetIdx || !displaysList[idx] || displaysList[idx].isPrimary) return;
+            const scr = displaysList[idx];
+            const existing = extraProjectionWindows.get(idx);
+            if (!existing || existing.closed) {
+                const features = `popup=yes,left=${scr.availLeft},top=${scr.availTop},width=${scr.availWidth},height=${scr.availHeight}`;
+                const win = window.open('', `HimnarioProyeccion_${idx}`, features);
+                if (win) {
+                    win.document.open();
+                    win.document.write(projectionHtmlContent);
+                    win.document.close();
+                    extraProjectionWindows.set(idx, win);
+                }
+            }
+        });
+    }
+
+    function cerrarVentanasPantallasExtra() {
+        extraProjectionWindows.forEach((win) => {
+            if (win && !win.closed) {
+                try { win.close(); } catch (e) {}
+            }
+        });
+        extraProjectionWindows.clear();
+    }
+
     async function detectarPantallas(solicitarPermiso = false) {
         const select = document.getElementById('screenSelect');
+        const multiBtn = document.getElementById('multiScreenBtn');
         const prevValue = select.value;
         const sinPantallasExtra = ('isExtended' in window.screen && window.screen.isExtended === false) ||
             (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && !('isExtended' in window.screen && window.screen.isExtended));
@@ -5884,6 +5994,7 @@
                 if (!solicitarPermiso && navigator.permissions) {
                     const perm = await navigator.permissions.query({ name: 'window-management' });
                     if (perm.state !== 'granted') {
+                        if (multiBtn) multiBtn.style.display = 'none';
                         if (sinPantallasExtra) {
                             select.innerHTML = `
                                 <option value="primary">Pantalla Principal (Esta pantalla)</option>
@@ -5906,6 +6017,7 @@
                 select.innerHTML = '';
                 let externalIndex = -1;
                 let primaryIndex = 0;
+                let externalCount = 0;
 
                 displaysList.forEach((scr, idx) => {
                     const option = document.createElement('option');
@@ -5916,10 +6028,15 @@
                     select.appendChild(option);
                     if (scr.isPrimary) {
                         primaryIndex = idx;
-                    } else if (externalIndex === -1) {
-                        externalIndex = idx;
+                    } else {
+                        externalCount++;
+                        if (externalIndex === -1) externalIndex = idx;
                     }
                 });
+
+                if (multiBtn) {
+                    multiBtn.style.display = externalCount >= 2 ? 'inline-flex' : 'none';
+                }
 
                 const prevIdx = parseInt(prevValue, 10);
                 if (!isNaN(prevIdx) && displaysList[prevIdx]) {
@@ -5935,6 +6052,7 @@
             } catch (e) {}
         }
 
+        if (multiBtn) multiBtn.style.display = 'none';
         if (sinPantallasExtra) {
             select.innerHTML = `
                 <option value="primary">Pantalla Principal (Esta pantalla)</option>
@@ -6637,6 +6755,7 @@
                     if (requestId !== currentPlayRequestId) return;
                     isCurrentlyPlaying = true;
                     updatePlayButtonUI(true);
+                    activarEscenaHimnarioOBS();
                     if ('mediaSession' in navigator) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -6776,6 +6895,8 @@
             navigator.mediaSession.playbackState = 'none';
         }
 
+        restaurarEscenaAnteriorOBS();
+        
         if (document.getElementById('secondaryScreenCheckbox').checked && !esPantallaPrincipalSeleccionada() && !noHayMasPantallas()) {
             syncChannel.postMessage({ type: 'STOP' });
         }
@@ -6869,9 +6990,10 @@
         document.getElementById('modeBadge').innerText = isInst ? 'Instrumental' : 'Cantado';
         actualizarSelectorListasUI();
         renderList(getFilteredList());
-        if (currentHimno) {
-            const wasPlaying = isCurrentlyPlaying;
-            reproducirHimno(currentHimno, wasPlaying, Boolean(colaReproduccionNums));
+
+        if (currentHimno && isCurrentlyPlaying) {
+            const nextCand = obtenerSiguienteHimnoParaPrebuffer();
+            if (nextCand) prebufferSiguienteHimno(nextCand);
         }
     }
 
@@ -6998,6 +7120,7 @@
             syncChannel.postMessage({ type: 'CLOSE' });
             projectionWindow.close();
         }
+        cerrarVentanasPantallasExtra();
         projectionWindow = null;
     }
 
@@ -7087,7 +7210,7 @@
                         if (v1) { v1.pause(); v1.removeAttribute('src'); v1.dataset.loadedUrl = ''; v1.load(); }
                         if (v2) { v2.pause(); v2.removeAttribute('src'); v2.dataset.loadedUrl = ''; v2.load(); }
                     }
-
+                    abrirVentanasPantallasExtra();
                     enviarEstadoProyeccion();
                     return;
                 } catch (err) {
@@ -7137,6 +7260,205 @@
             }
         }
     });
+
+/* --- INTEGRACIÓN NATIVA CON OBS STUDIO (WEBSOCKET v5) --- */
+    let obsSocket = null;
+    let obsConnected = false;
+    let obsAutoSwitchEnabled = false;
+    let obsPreviousScene = '';
+    let obsHymnScene = localStorage.getItem('himnario_obs_scene') || '';
+    let obsReqIdCounter = 1;
+    const obsPendingRequests = new Map();
+
+    function enviarPeticionOBS(requestType, requestData = {}) {
+        return new Promise((resolve, reject) => {
+            if (!obsSocket || obsSocket.readyState !== WebSocket.OPEN) {
+                return reject(new Error('OBS no conectado'));
+            }
+            const requestId = 'req_' + (obsReqIdCounter++);
+            obsPendingRequests.set(requestId, { resolve, reject });
+            obsSocket.send(JSON.stringify({
+                op: 6,
+                d: { requestType, requestId, requestData }
+            }));
+            setTimeout(() => {
+                if (obsPendingRequests.has(requestId)) {
+                    obsPendingRequests.delete(requestId);
+                    reject(new Error('Timeout OBS'));
+                }
+            }, 3000);
+        });
+    }
+
+    async function sha256Base64(text) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        return btoa(String.fromCharCode(...new Uint8Array(hashBuffer)));
+    }
+
+    async function sondearOBSLocal() {
+        if (obsConnected) return;
+        try {
+            const disponible = await new Promise((resolve) => {
+                const testWs = new WebSocket('ws://127.0.0.1:4455');
+                const timer = setTimeout(() => { try { testWs.close(); } catch (e) {} resolve(false); }, 700);
+                testWs.onopen = () => { clearTimeout(timer); try { testWs.close(); } catch (e) {} resolve(true); };
+                testWs.onerror = () => { clearTimeout(timer); resolve(false); };
+            });
+            const group = document.getElementById('obsControlGroup');
+            if (group) {
+                group.style.display = disponible ? 'inline-flex' : 'none';
+            }
+        } catch (e) {}
+    }
+
+    function guardarEscenaHimnarioOBS() {
+        const sel = document.getElementById('obsHymnSceneSelect');
+        if (sel) {
+            obsHymnScene = sel.value;
+            localStorage.setItem('himnario_obs_scene', obsHymnScene);
+        }
+    }
+
+    function toggleConexionOBS() {
+        if (obsConnected && obsAutoSwitchEnabled) {
+            obsAutoSwitchEnabled = false;
+            actualizarUIOBS(false);
+            if (obsSocket) {
+                try { obsSocket.close(); } catch (e) {}
+            }
+            return;
+        }
+        conectarOBS();
+    }
+
+    function actualizarUIOBS(activo) {
+        const dot = document.getElementById('obsStatusDot');
+        const label = document.getElementById('obsBtnLabel');
+        const sel = document.getElementById('obsHymnSceneSelect');
+        if (dot) dot.style.background = activo ? '#22c55e' : '#888';
+        if (label) label.innerText = activo ? 'OBS Activo' : 'Enviar a OBS';
+        if (sel) sel.style.display = activo ? 'inline-block' : 'none';
+    }
+
+    function conectarOBS() {
+        if (obsSocket) {
+            try { obsSocket.close(); } catch (e) {}
+        }
+
+        obsSocket = new WebSocket('ws://127.0.0.1:4455');
+
+        obsSocket.onmessage = async (event) => {
+            const msg = JSON.parse(event.data);
+
+            if (msg.op === 0) {
+                const identifyPayload = { op: 1, d: { rpcVersion: 1 } };
+                if (msg.d && msg.d.authentication) {
+                    let pass = localStorage.getItem('himnario_obs_pass') || '';
+                    if (!pass) {
+                        pass = prompt('OBS WebSocket tiene contraseña activada. Ingrésala (se guardará en este navegador):') || '';
+                        if (pass) localStorage.setItem('himnario_obs_pass', pass);
+                    }
+                    const secret = await sha256Base64(pass + msg.d.authentication.salt);
+                    identifyPayload.d.authentication = await sha256Base64(secret + msg.d.authentication.challenge);
+                }
+                obsSocket.send(JSON.stringify(identifyPayload));
+            }
+
+            if (msg.op === 2) {
+                obsConnected = true;
+                obsAutoSwitchEnabled = true;
+                actualizarUIOBS(true);
+
+                try {
+                    const sceneResp = await enviarPeticionOBS('GetSceneList');
+                    const sel = document.getElementById('obsHymnSceneSelect');
+                    if (sel && sceneResp && sceneResp.scenes) {
+                        sel.innerHTML = '<option value="">Escena himnario...</option>';
+                        const scenes = [...sceneResp.scenes].reverse();
+                        scenes.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.sceneName;
+                            opt.innerText = s.sceneName;
+                            if (s.sceneName === obsHymnScene) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        if (!obsHymnScene) {
+                            const autoMatch = scenes.find(s => /himn/i.test(s.sceneName));
+                            if (autoMatch) {
+                                obsHymnScene = autoMatch.sceneName;
+                                sel.value = obsHymnScene;
+                                localStorage.setItem('himnario_obs_scene', obsHymnScene);
+                            }
+                        }
+                    }
+
+                    const secCheck = document.getElementById('secondaryScreenCheckbox');
+                    if (secCheck && !secCheck.checked && !noHayMasPantallas()) {
+                        secCheck.checked = true;
+                        await actualizarModoProyeccion();
+                    }
+
+                    if (isCurrentlyPlaying && obsHymnScene) {
+                        await activarEscenaHimnarioOBS();
+                    }
+                } catch (e) {}
+            }
+
+            if (msg.op === 7 && msg.d && obsPendingRequests.has(msg.d.requestId)) {
+                const { resolve, reject } = obsPendingRequests.get(msg.d.requestId);
+                obsPendingRequests.delete(msg.d.requestId);
+                if (msg.d.requestStatus && msg.d.requestStatus.result) {
+                    resolve(msg.d.responseData);
+                } else {
+                    localStorage.removeItem('himnario_obs_pass');
+                    reject(new Error(msg.d.requestStatus?.comment || 'Error OBS'));
+                }
+            }
+        };
+
+        obsSocket.onclose = () => {
+            obsConnected = false;
+            obsAutoSwitchEnabled = false;
+            actualizarUIOBS(false);
+        };
+
+        obsSocket.onerror = () => {
+            obsConnected = false;
+            obsAutoSwitchEnabled = false;
+            actualizarUIOBS(false);
+        };
+    }
+
+    async function activarEscenaHimnarioOBS() {
+        if (!obsConnected || !obsAutoSwitchEnabled || !obsHymnScene) return;
+        try {
+            const current = await enviarPeticionOBS('GetCurrentProgramScene');
+            const activeName = current?.currentProgramSceneName;
+            if (activeName && activeName !== obsHymnScene) {
+                obsPreviousScene = activeName;
+                await enviarPeticionOBS('SetCurrentProgramScene', { sceneName: obsHymnScene });
+            }
+        } catch (e) {}
+    }
+
+    async function restaurarEscenaAnteriorOBS() {
+        if (!obsConnected || !obsAutoSwitchEnabled || !obsPreviousScene) return;
+        try {
+            const current = await enviarPeticionOBS('GetCurrentProgramScene');
+            if (current?.currentProgramSceneName === obsHymnScene) {
+                await enviarPeticionOBS('SetCurrentProgramScene', { sceneName: obsPreviousScene });
+            }
+            obsPreviousScene = '';
+        } catch (e) {}
+    }
+
+    window.addEventListener('load', () => {
+        sondearOBSLocal();
+        setInterval(sondearOBSLocal, 5000);
+    });
+    
     /* --- CATEGORÍAS Y SUBCATEGORÍAS DEL HIMNARIO --- */
     const CATEGORIAS_HIMNARIO = [
         {
