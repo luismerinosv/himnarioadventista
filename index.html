@@ -6931,7 +6931,6 @@
             navigator.mediaSession.playbackState = 'none';
         }
 
-        restaurarEscenaAnteriorOBS();
         enviarMensajeVideoAOBS({ type: 'STOP' });
         
         if (document.getElementById('secondaryScreenCheckbox').checked && !esPantallaPrincipalSeleccionada() && !noHayMasPantallas()) {
@@ -8132,6 +8131,7 @@
     let obsPreviousScene = '';
     let obsTargetScene = localStorage.getItem(OBS_SCENE_STORAGE_KEY) || '';
     let obsProbeTimer = null;
+    let obsSceneActivatedThisSession = false;
 
     function actualizarUIOBS(estado, textoBtn = null) {
         const group = document.getElementById('obsControlGroup');
@@ -8223,12 +8223,13 @@
     }
 
     async function activarEscenaHimnarioOBS() {
-        if (!obsConnected || !obsIdentified || !obsTargetScene) return;
+        if (!obsConnected || !obsIdentified || !obsTargetScene || obsSceneActivatedThisSession) return;
         const cur = await enviarRequestOBS('GetCurrentProgramScene');
         if (cur && cur.currentProgramSceneName && cur.currentProgramSceneName !== obsTargetScene) {
             obsPreviousScene = cur.currentProgramSceneName;
             await enviarRequestOBS('SetCurrentProgramScene', { sceneName: obsTargetScene });
         }
+        obsSceneActivatedThisSession = true;
     }
 
     async function restaurarEscenaAnteriorOBS() {
@@ -8271,13 +8272,16 @@
         }
     }
 
-    function toggleConexionOBS(modoReceptor = false) {
+    async function toggleConexionOBS(modoReceptor = false) {
         if (obsConnected && obsSocket && !modoReceptor) {
+            enviarMensajeVideoAOBS({ type: 'STOP' });
+            await restaurarEscenaAnteriorOBS();
+            obsSceneActivatedThisSession = false;
             obsSocket.close();
             obsConnected = false;
             obsIdentified = false;
             actualizarUIOBS('disponible');
-            mostrarToast('Desconectado de OBS');
+            mostrarToast('Dejó de enviar a OBS');
             return;
         }
 
@@ -8291,7 +8295,6 @@
 
                 // op 0: Hello
                 if (msg.op === 0 && msg.d) {
-                    // eventSubscriptions: 1 = General (incluye CustomEvent)
                     const identifyPayload = { rpcVersion: 1, eventSubscriptions: 1 };
                     if (msg.d.authentication) {
                         let pass = localStorage.getItem(OBS_PASS_STORAGE_KEY) || '';
@@ -8315,7 +8318,6 @@
                     obsIdentified = true;
 
                     if (modoReceptor) {
-                        // El receptor en OBS avisa que ya está listo para recibir el himno activo
                         ws.send(JSON.stringify({
                             op: 6,
                             d: {
@@ -8376,6 +8378,7 @@
                 const estabaConectado = obsConnected;
                 obsConnected = false;
                 obsIdentified = false;
+                obsSceneActivatedThisSession = false;
                 obsSocket = null;
                 if (modoReceptor) {
                     setTimeout(() => toggleConexionOBS(true), 3000);
