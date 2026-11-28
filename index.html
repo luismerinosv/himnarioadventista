@@ -8131,7 +8131,6 @@
     let obsPendingRequests = new Map();
     let obsPreviousScene = '';
     let obsTargetScene = localStorage.getItem(OBS_SCENE_STORAGE_KEY) || '';
-    let obsLastPayload = null;
     let obsProbeTimer = null;
 
     function actualizarUIOBS(estado, textoBtn = null) {
@@ -8151,12 +8150,8 @@
             dot.style.background = '#4cd964';
             label.textContent = textoBtn || 'OBS Conectado';
             if (sceneSel) sceneSel.style.display = 'inline-block';
-        } else if (estado === 'disponible') {
-            dot.style.background = '#e3a352';
-            label.textContent = textoBtn || 'Enviar a OBS';
-            if (sceneSel) sceneSel.style.display = 'none';
         } else {
-            dot.style.background = '#888';
+            dot.style.background = '#e3a352';
             label.textContent = textoBtn || 'Enviar a OBS';
             if (sceneSel) sceneSel.style.display = 'none';
         }
@@ -8243,9 +8238,8 @@
         await enviarRequestOBS('SetCurrentProgramScene', { sceneName: prev });
     }
 
-async function enviarMensajeVideoAOBS(payload) {
+    async function enviarMensajeVideoAOBS(payload) {
         if (!payload) return;
-        obsLastPayload = payload;
 
         const payloadParaOBS = { ...payload };
         if (payloadParaOBS.type === 'LOAD_AND_PLAY' && payloadParaOBS.url && payloadParaOBS.url.startsWith('blob:') && currentHimno) {
@@ -8295,9 +8289,10 @@ async function enviarMensajeVideoAOBS(payload) {
                 let msg;
                 try { msg = JSON.parse(event.data); } catch (e) { return; }
 
-                // op 0: Hello de OBS WebSocket v5
+                // op 0: Hello
                 if (msg.op === 0 && msg.d) {
-                    const identifyPayload = { rpcVersion: 1, eventSubscriptions: 33 };
+                    // eventSubscriptions: 1 = General (incluye CustomEvent)
+                    const identifyPayload = { rpcVersion: 1, eventSubscriptions: 1 };
                     if (msg.d.authentication) {
                         let pass = localStorage.getItem(OBS_PASS_STORAGE_KEY) || '';
                         if (!pass && !modoReceptor) {
@@ -8314,17 +8309,33 @@ async function enviarMensajeVideoAOBS(payload) {
                     }
                     ws.send(JSON.stringify({ op: 1, d: identifyPayload }));
                 }
-                // op 2: Identified (Conexión exitosa)
+                // op 2: Identified
                 else if (msg.op === 2) {
                     obsConnected = true;
                     obsIdentified = true;
-                    if (!modoReceptor) {
+
+                    if (modoReceptor) {
+                        // El receptor en OBS avisa que ya está listo para recibir el himno activo
+                        ws.send(JSON.stringify({
+                            op: 6,
+                            d: {
+                                requestType: 'BroadcastCustomEvent',
+                                requestId: 'rdy_' + (obsReqId++),
+                                requestData: {
+                                    eventData: {
+                                        realm: 'HIMNARIO_ADVENTISTA',
+                                        payload: { type: 'OBS_RECEIVER_READY' }
+                                    }
+                                }
+                            }
+                        }));
+                    } else {
                         actualizarUIOBS('conectado');
                         mostrarToast('Conectado a OBS Studio');
                         await cargarEscenasOBS();
                         if (currentHimno && currentActivePlayUrl) {
                             const engine = getPrimaryAudioEngine();
-                            enviarMensajeVideoAOBS({
+                            await enviarMensajeVideoAOBS({
                                 type: 'LOAD_AND_PLAY',
                                 url: currentActivePlayUrl,
                                 currentTime: engine ? engine.currentTime : 0,
@@ -8335,11 +8346,22 @@ async function enviarMensajeVideoAOBS(payload) {
                         }
                     }
                 }
-                // op 5: Evento recibido (útil en la Fuente de Navegador ?obs=1)
-               else if (msg.op === 5 && msg.d) {
+                // op 5: CustomEvent recibido desde OBS WebSocket
+                else if (msg.op === 5 && msg.d) {
                     const ev = msg.d.eventData || msg.d;
                     if (ev && ev.realm === 'HIMNARIO_ADVENTISTA' && ev.payload) {
-                        actualizarStageProyeccionNativa(ev.payload);
+                        if (modoReceptor) {
+                            actualizarStageProyeccionNativa(ev.payload);
+                        } else if (ev.payload.type === 'OBS_RECEIVER_READY' && currentHimno && currentActivePlayUrl) {
+                            const engine = getPrimaryAudioEngine();
+                            await enviarMensajeVideoAOBS({
+                                type: 'LOAD_AND_PLAY',
+                                url: currentActivePlayUrl,
+                                currentTime: engine ? engine.currentTime : 0,
+                                isPlaying: isCurrentlyPlaying,
+                                playbackRate: currentSpeed
+                            });
+                        }
                     }
                 }
                 // op 7: Respuesta a Request
@@ -8355,7 +8377,9 @@ async function enviarMensajeVideoAOBS(payload) {
                 obsConnected = false;
                 obsIdentified = false;
                 obsSocket = null;
-                if (!modoReceptor) {
+                if (modoReceptor) {
+                    setTimeout(() => toggleConexionOBS(true), 3000);
+                } else {
                     actualizarUIOBS(estabaConectado ? 'disponible' : 'oculto');
                 }
             };
@@ -8370,7 +8394,6 @@ async function enviarMensajeVideoAOBS(payload) {
         }
     }
 
-    // Detectar automáticamente si OBS Studio está abierto en esta PC
     function detectarOBSAutomaticamente() {
         if (window.location.search.includes('obs=1')) return;
         const comprobar = () => {
