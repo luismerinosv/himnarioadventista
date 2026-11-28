@@ -6342,7 +6342,7 @@
                 try { activeVid.currentTime = newTime; } catch (e) {}
             }
 
-    if (document.getElementById('secondaryScreenCheckbox').checked && projectionWindow && !projectionWindow.closed) {
+        if (document.getElementById('secondaryScreenCheckbox').checked && projectionWindow && !projectionWindow.closed) {
                     syncChannel.postMessage({ type: 'SYNC_TIME', currentTime: newTime, playbackRate: currentSpeed });
                 }
                 enviarMensajeVideoAOBS({ type: 'SYNC_TIME', currentTime: newTime, playbackRate: currentSpeed });
