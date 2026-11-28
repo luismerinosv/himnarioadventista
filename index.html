@@ -8117,6 +8117,272 @@
         mostrarToast("Aplicación instalada correctamente");
     });
 
+/* =========================================================================
+       INTEGRACIÓN CON OBS STUDIO (OBS WEBSOCKET v5 - PUERTO 4455)
+       ========================================================================= */
+    const OBS_WS_URL = 'ws://127.0.0.1:4455';
+    const OBS_SCENE_STORAGE_KEY = 'himnario_obs_scene_v1';
+    const OBS_PASS_STORAGE_KEY = 'himnario_obs_pass_v1';
+
+    let obsSocket = null;
+    let obsConnected = false;
+    let obsIdentified = false;
+    let obsReqId = 1;
+    let obsPendingRequests = new Map();
+    let obsPreviousScene = '';
+    let obsTargetScene = localStorage.getItem(OBS_SCENE_STORAGE_KEY) || '';
+    let obsLastPayload = null;
+    let obsProbeTimer = null;
+
+    function actualizarUIOBS(estado, textoBtn = null) {
+        const group = document.getElementById('obsControlGroup');
+        const dot = document.getElementById('obsStatusDot');
+        const label = document.getElementById('obsBtnLabel');
+        const sceneSel = document.getElementById('obsHymnSceneSelect');
+        if (!group || !dot || !label) return;
+
+        if (estado === 'oculto') {
+            group.style.display = 'none';
+            return;
+        }
+        group.style.display = 'inline-flex';
+
+        if (estado === 'conectado') {
+            dot.style.background = '#4cd964';
+            label.textContent = textoBtn || 'OBS Conectado';
+            if (sceneSel) sceneSel.style.display = 'inline-block';
+        } else if (estado === 'disponible') {
+            dot.style.background = '#e3a352';
+            label.textContent = textoBtn || 'Enviar a OBS';
+            if (sceneSel) sceneSel.style.display = 'none';
+        } else {
+            dot.style.background = '#888';
+            label.textContent = textoBtn || 'Enviar a OBS';
+            if (sceneSel) sceneSel.style.display = 'none';
+        }
+    }
+
+    function enviarRequestOBS(requestType, requestData = {}) {
+        return new Promise((resolve) => {
+            if (!obsSocket || obsSocket.readyState !== WebSocket.OPEN || !obsIdentified) {
+                resolve(null);
+                return;
+            }
+            const requestId = 'req_' + (obsReqId++);
+            obsPendingRequests.set(requestId, resolve);
+            obsSocket.send(JSON.stringify({
+                op: 6,
+                d: { requestType, requestId, requestData }
+            }));
+            setTimeout(() => {
+                if (obsPendingRequests.has(requestId)) {
+                    obsPendingRequests.delete(requestId);
+                    resolve(null);
+                }
+            }, 4000);
+        });
+    }
+
+    async function calcularAuthOBS(password, salt, challenge) {
+        const enc = new TextEncoder();
+        const secretBuf = await crypto.subtle.digest('SHA-256', enc.encode(password + salt));
+        const secretB64 = btoa(String.fromCharCode(...new Uint8Array(secretBuf)));
+        const authBuf = await crypto.subtle.digest('SHA-256', enc.encode(secretB64 + challenge));
+        return btoa(String.fromCharCode(...new Uint8Array(authBuf)));
+    }
+
+    async function cargarEscenasOBS() {
+        const res = await enviarRequestOBS('GetSceneList');
+        const sceneSel = document.getElementById('obsHymnSceneSelect');
+        if (!res || !res.scenes || !sceneSel) return;
+
+        const escenas = [...res.scenes].reverse();
+        sceneSel.innerHTML = '<option value="">Escena Himnario...</option>';
+        escenas.forEach(sc => {
+            const opt = document.createElement('option');
+            opt.value = sc.sceneName;
+            opt.textContent = sc.sceneName;
+            sceneSel.appendChild(opt);
+        });
+
+        if (obsTargetScene && escenas.some(s => s.sceneName === obsTargetScene)) {
+            sceneSel.value = obsTargetScene;
+        } else {
+            const autoMatch = escenas.find(s => /himn/i.test(s.sceneName));
+            if (autoMatch) {
+                obsTargetScene = autoMatch.sceneName;
+                sceneSel.value = obsTargetScene;
+                localStorage.setItem(OBS_SCENE_STORAGE_KEY, obsTargetScene);
+            }
+        }
+    }
+
+    function guardarEscenaHimnarioOBS() {
+        const sceneSel = document.getElementById('obsHymnSceneSelect');
+        if (!sceneSel) return;
+        obsTargetScene = sceneSel.value || '';
+        localStorage.setItem(OBS_SCENE_STORAGE_KEY, obsTargetScene);
+        if (obsTargetScene) {
+            mostrarToast(`Escena OBS asignada: ${obsTargetScene}`);
+        }
+    }
+
+    async function activarEscenaHimnarioOBS() {
+        if (!obsConnected || !obsIdentified || !obsTargetScene) return;
+        const cur = await enviarRequestOBS('GetCurrentProgramScene');
+        if (cur && cur.currentProgramSceneName && cur.currentProgramSceneName !== obsTargetScene) {
+            obsPreviousScene = cur.currentProgramSceneName;
+            await enviarRequestOBS('SetCurrentProgramScene', { sceneName: obsTargetScene });
+        }
+    }
+
+    async function restaurarEscenaAnteriorOBS() {
+        if (!obsConnected || !obsIdentified || !obsPreviousScene) return;
+        const prev = obsPreviousScene;
+        obsPreviousScene = '';
+        await enviarRequestOBS('SetCurrentProgramScene', { sceneName: prev });
+    }
+
+    function enviarMensajeVideoAOBS(payload) {
+        if (!payload) return;
+        obsLastPayload = payload;
+        // Sincronizar por BroadcastChannel (cuando la Fuente de Navegador OBS comparte origen)
+        try {
+            syncChannel.postMessage(payload);
+        } catch (e) {}
+
+        // Sincronizar también vía evento custom de OBS WebSocket (funciona entre distintos orígenes/puertos)
+        if (obsConnected && obsIdentified && obsSocket && obsSocket.readyState === WebSocket.OPEN) {
+            obsSocket.send(JSON.stringify({
+                op: 6,
+                d: {
+                    requestType: 'BroadcastCustomEvent',
+                    requestId: 'evt_' + (obsReqId++),
+                    requestData: {
+                        eventData: {
+                            realm: 'HIMNARIO_ADVENTISTA',
+                            payload: payload
+                        }
+                    }
+                }
+            }));
+        }
+    }
+
+    function toggleConexionOBS(modoReceptor = false) {
+        if (obsConnected && obsSocket && !modoReceptor) {
+            obsSocket.close();
+            obsConnected = false;
+            obsIdentified = false;
+            actualizarUIOBS('disponible');
+            mostrarToast('Desconectado de OBS');
+            return;
+        }
+
+        try {
+            const ws = new WebSocket(OBS_WS_URL);
+            obsSocket = ws;
+
+            ws.onmessage = async (event) => {
+                let msg;
+                try { msg = JSON.parse(event.data); } catch (e) { return; }
+
+                // op 0: Hello de OBS WebSocket v5
+                if (msg.op === 0 && msg.d) {
+                    const identifyPayload = { rpcVersion: 1, eventSubscriptions: 33 };
+                    if (msg.d.authentication) {
+                        let pass = localStorage.getItem(OBS_PASS_STORAGE_KEY) || '';
+                        if (!pass && !modoReceptor) {
+                            pass = prompt('OBS WebSocket solicita contraseña (déjalo vacío si la desactivaste en OBS):') || '';
+                            localStorage.setItem(OBS_PASS_STORAGE_KEY, pass);
+                        }
+                        if (pass) {
+                            identifyPayload.authentication = await calcularAuthOBS(
+                                pass,
+                                msg.d.authentication.salt,
+                                msg.d.authentication.challenge
+                            );
+                        }
+                    }
+                    ws.send(JSON.stringify({ op: 1, d: identifyPayload }));
+                }
+                // op 2: Identified (Conexión exitosa)
+                else if (msg.op === 2) {
+                    obsConnected = true;
+                    obsIdentified = true;
+                    if (!modoReceptor) {
+                        actualizarUIOBS('conectado');
+                        mostrarToast('Conectado a OBS Studio');
+                        await cargarEscenasOBS();
+                        if (currentHimno && currentActivePlayUrl) {
+                            const engine = getPrimaryAudioEngine();
+                            enviarMensajeVideoAOBS({
+                                type: 'LOAD_AND_PLAY',
+                                url: currentActivePlayUrl,
+                                currentTime: engine ? engine.currentTime : 0,
+                                isPlaying: isCurrentlyPlaying,
+                                playbackRate: currentSpeed
+                            });
+                            if (isCurrentlyPlaying) await activarEscenaHimnarioOBS();
+                        }
+                    }
+                }
+                // op 5: Evento recibido (útil en la Fuente de Navegador ?obs=1)
+                else if (msg.op === 5 && msg.d && msg.d.eventType === 'CustomEvent') {
+                    const ev = msg.d.eventData;
+                    if (ev && ev.realm === 'HIMNARIO_ADVENTISTA' && ev.payload) {
+                        actualizarStageProyeccionNativa(ev.payload);
+                    }
+                }
+                // op 7: Respuesta a Request
+                else if (msg.op === 7 && msg.d && obsPendingRequests.has(msg.d.requestId)) {
+                    const resolver = obsPendingRequests.get(msg.d.requestId);
+                    obsPendingRequests.delete(msg.d.requestId);
+                    resolver(msg.d.requestStatus && msg.d.requestStatus.result ? msg.d.responseData : null);
+                }
+            };
+
+            ws.onclose = () => {
+                const estabaConectado = obsConnected;
+                obsConnected = false;
+                obsIdentified = false;
+                obsSocket = null;
+                if (!modoReceptor) {
+                    actualizarUIOBS(estabaConectado ? 'disponible' : 'oculto');
+                }
+            };
+
+            ws.onerror = () => {
+                if (!modoReceptor && !obsConnected) {
+                    actualizarUIOBS('oculto');
+                }
+            };
+        } catch (e) {
+            if (!modoReceptor) actualizarUIOBS('oculto');
+        }
+    }
+
+    // Detectar automáticamente si OBS Studio está abierto en esta PC
+    function detectarOBSAutomaticamente() {
+        if (window.location.search.includes('obs=1')) return;
+        const comprobar = () => {
+            if (obsConnected) return;
+            try {
+                const probe = new WebSocket(OBS_WS_URL);
+                probe.onopen = () => {
+                    probe.close();
+                    actualizarUIOBS('disponible');
+                };
+                probe.onerror = () => {
+                    actualizarUIOBS('oculto');
+                };
+            } catch (e) {}
+        };
+        comprobar();
+        obsProbeTimer = setInterval(comprobar, 8000);
+    }
+    window.addEventListener('load', detectarOBSAutomaticamente);
+    
     /* --- REGISTRO DE SERVICE WORKER PARA CACHÉ OFFLINE Y PWA --- */
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
