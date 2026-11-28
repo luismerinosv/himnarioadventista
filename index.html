@@ -2502,6 +2502,15 @@
             background: rgba(216, 144, 62, 0.14);
             border-left: 3px solid var(--accent-gold);
         }
+
+        /* MODO RECEPTOR PARA FUENTE DE NAVEGADOR EN OBS (?obs=1) */
+        body.obs-browser-source #hymn-player-wrapper,
+        body.obs-browser-source #ptrIndicator {
+            display: none !important;
+        }
+        body.obs-browser-source #nativeProjectionStage {
+            display: flex !important;
+        }
     </style>
 </head>
 <body>
@@ -6784,14 +6793,20 @@
             }
         }
 
-        if (isSecondScreen) {
-            syncChannel.postMessage({
+        const isObsActive = (obsConnected && obsAutoSwitchEnabled);
+        if (isSecondScreen || isObsActive) {
+            const payloadSync = {
                 type: 'LOAD_AND_PLAY',
                 url: playUrl,
                 currentTime: 0,
                 isPlaying: autoPlay,
                 playbackRate: currentSpeed
-            });
+            };
+            if (isSecondScreen) {
+                syncChannel.postMessage(payloadSync);
+            } else if (isObsActive) {
+                enviarMensajeVideoAOBS(payloadSync);
+            }
         }
 
         renderList(getFilteredList());
@@ -7234,11 +7249,14 @@
         }
     }
 
-    // Interceptar mensajes de reproducción para reflejarlos también en el escenario nativo
+    // Interceptar mensajes de reproducción para reflejarlos también en el escenario nativo y en OBS
     const _origPostMessage = syncChannel.postMessage.bind(syncChannel);
     syncChannel.postMessage = (msg) => {
         if (nativeProjectionActive && msg && msg.type) {
             actualizarStageProyeccionNativa(msg);
+        }
+        if (obsConnected && obsAutoSwitchEnabled && msg && msg.type) {
+            enviarMensajeVideoAOBS(msg);
         }
         _origPostMessage(msg);
     };
@@ -7394,14 +7412,17 @@
                         }
                     }
 
-                    const secCheck = document.getElementById('secondaryScreenCheckbox');
-                    if (secCheck && !secCheck.checked && !noHayMasPantallas()) {
-                        secCheck.checked = true;
-                        await actualizarModoProyeccion();
-                    }
-
-                    if (isCurrentlyPlaying && obsHymnScene) {
-                        await activarEscenaHimnarioOBS();
+                    // NO activar pantalla completa local al conectar OBS; enviar video directo a OBS
+                    if (isCurrentlyPlaying && currentHimno && currentActivePlayUrl) {
+                        const engine = getPrimaryAudioEngine();
+                        enviarMensajeVideoAOBS({
+                            type: 'LOAD_AND_PLAY',
+                            url: currentActivePlayUrl,
+                            currentTime: engine ? engine.currentTime : 0,
+                            isPlaying: true,
+                            playbackRate: currentSpeed
+                        });
+                        if (obsHymnScene) await activarEscenaHimnarioOBS();
                     }
                 } catch (e) {}
             }
@@ -7458,6 +7479,63 @@
         sondearOBSLocal();
         setInterval(sondearOBSLocal, 5000);
     });
+
+    function enviarMensajeVideoAOBS(payload) {
+        if (!obsSocket || obsSocket.readyState !== WebSocket.OPEN) return;
+        obsSocket.send(JSON.stringify({
+            op: 6,
+            d: {
+                requestType: 'BroadcastCustomEvent',
+                requestId: 'himno_video_' + Date.now(),
+                requestData: {
+                    eventData: {
+                        app: 'himnario-adventista',
+                        payload
+                    }
+                }
+            }
+        }));
+    }
+
+    // --- MODO RECEPTOR DENTRO DE OBS STUDIO (?obs=1) ---
+    const _obsUrlParams = new URLSearchParams(window.location.search);
+    const ES_FUENTE_OBS = _obsUrlParams.get('obs') === '1';
+
+    if (ES_FUENTE_OBS) {
+        document.body.classList.add('obs-browser-source');
+        window.addEventListener('DOMContentLoaded', () => {
+            iniciarReceptorFuenteOBS();
+        });
+    }
+
+    function iniciarReceptorFuenteOBS() {
+        const ws = new WebSocket('ws://127.0.0.1:4455');
+        const passParam = _obsUrlParams.get('pass') || localStorage.getItem('himnario_obs_pass') || '';
+
+        ws.onmessage = async (event) => {
+            const msg = JSON.parse(event.data);
+
+            // Saludo WebSocket v5 (op: 0) -> Suscribirse a CustomEvent (1024)
+            if (msg.op === 0) {
+                const identify = { op: 1, d: { rpcVersion: 1, eventSubscriptions: 1024 } };
+                if (msg.d && msg.d.authentication && passParam) {
+                    const secret = await sha256Base64(passParam + msg.d.authentication.salt);
+                    identify.d.authentication = await sha256Base64(secret + msg.d.authentication.challenge);
+                }
+                ws.send(JSON.stringify(identify));
+            }
+
+            // Recibir video/pausa/stop desde el panel principal (op: 5 -> CustomEvent)
+            if (msg.op === 5 && msg.d && msg.d.eventType === 'CustomEvent') {
+                const ev = msg.d.eventData;
+                if (ev && ev.app === 'himnario-adventista' && ev.payload) {
+                    actualizarStageProyeccionNativa(ev.payload);
+                }
+            }
+        };
+
+        ws.onclose = () => setTimeout(iniciarReceptorFuenteOBS, 3000);
+    }
     
     /* --- CATEGORÍAS Y SUBCATEGORÍAS DEL HIMNARIO --- */
     const CATEGORIAS_HIMNARIO = [
